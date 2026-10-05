@@ -94,7 +94,7 @@ old one — and if not, where and why?"*
 ### M3 – Data validation (week 4)
 - Visual → DAX query generator (SUMMARIZECOLUMNS + filters + slicer state) for
   common visual types (card, table/matrix, bar/column/line, slicer).
-- `io` client for `executeQueries` with service principal auth (MSAL).
+- `integrations` client for `executeQueries` with service principal auth (MSAL).
 - Result comparison with tolerances; data findings in all outputs.
 - Mocked API tests; manual test against a personal/trial workspace.
 
