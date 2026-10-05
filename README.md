@@ -40,6 +40,18 @@ Built with Python, uv, Typer and Pydantic. See [CLAUDE.md](CLAUDE.md) for
 architecture and contribution rules, and [docs/PROJECT.md](docs/PROJECT.md) for
 scope and milestones.
 
+## Working with Claude
+
+Issues and pull requests can be handed to [Claude Code](https://github.com/anthropics/claude-code-action):
+
+- Mention `@claude` in an issue or PR comment to have it implement or change
+  something. It follows [CLAUDE.md](CLAUDE.md) (feature branch, one issue per PR).
+- New non-draft PRs get one automated review.
+
+Only the repository owner can trigger these runs. They authenticate with the
+owner's Claude subscription (`CLAUDE_CODE_OAUTH_TOKEN`), not an API key, so
+they cost nothing extra.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
