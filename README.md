@@ -36,6 +36,16 @@ pull requests that change a report.
 
 ## Development
 
+Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 for you).
+
+```bash
+uv sync                        # install runtime and dev dependencies
+uv run pbi-validate --version  # run the CLI
+uv run pytest                  # tests
+uv run ruff check . && uv run ruff format --check .
+uv run mypy src
+```
+
 Built with Python, uv, Typer and Pydantic. See [CLAUDE.md](CLAUDE.md) for
 architecture and contribution rules, and [docs/PROJECT.md](docs/PROJECT.md) for
 scope and milestones.
