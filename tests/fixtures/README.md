@@ -30,3 +30,9 @@ Report `Sales.Report`:
 
 Page and visual folder names are readable on purpose, so tests and
 expected-change lists can refer to them directly.
+
+## `sales_v2/` – the "new" report
+
+A copy of `sales_v1` with seven deliberate changes, listed with old and new
+values in [`EXPECTED_CHANGES.md`](EXPECTED_CHANGES.md). Keep that file in sync
+whenever either fixture changes.

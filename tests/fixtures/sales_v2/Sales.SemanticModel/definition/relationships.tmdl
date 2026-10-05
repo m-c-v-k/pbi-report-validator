@@ -1,0 +1,7 @@
+relationship 010b578b-54f5-50b6-afba-546762e415fb
+	fromColumn: Sales.ProductKey
+	toColumn: Product.ProductKey
+
+relationship 4540dac0-3711-5ee3-ae9c-0c893f7164b9
+	fromColumn: Sales.DateKey
+	toColumn: Date.DateKey
