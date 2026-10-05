@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets / local config
+.env
+.env.*
+!.env.example
+
+# Power BI binaries and local caches (only fixtures in tests/fixtures are allowed)
+*.pbix
+*.pbit
+**/.pbi/localSettings.json
+**/.pbi/cache.abf
+
+# Tool output
+out/
+reports/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
