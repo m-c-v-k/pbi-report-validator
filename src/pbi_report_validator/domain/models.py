@@ -166,6 +166,45 @@ class SemanticModel(DomainModel):
     issues: tuple[ParseIssue, ...] = ()
 
 
+# --- Matching ----------------------------------------------------------------
+
+
+class MatchMethod(StrEnum):
+    """How an old object was paired with a new one."""
+
+    ID = "id"
+    DISPLAY_NAME = "display_name"
+    SIMILARITY = "similarity"
+
+
+class VisualMatch(DomainModel):
+    """An old visual paired with its counterpart in the new version."""
+
+    old: Visual
+    new: Visual
+    method: MatchMethod
+    score: float = Field(ge=0, le=1)
+
+
+class PageMatch(DomainModel):
+    """An old page paired with a new page, with its visuals matched."""
+
+    old: Page
+    new: Page
+    method: MatchMethod
+    visuals: tuple[VisualMatch, ...] = ()
+    removed_visuals: tuple[Visual, ...] = ()
+    added_visuals: tuple[Visual, ...] = ()
+
+
+class ReportMatch(DomainModel):
+    """Pairing of all pages and visuals between two report versions."""
+
+    pages: tuple[PageMatch, ...] = ()
+    removed_pages: tuple[Page, ...] = ()
+    added_pages: tuple[Page, ...] = ()
+
+
 # --- Diff side ---------------------------------------------------------------
 
 
