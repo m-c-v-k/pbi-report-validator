@@ -70,15 +70,15 @@ class Filter(DomainModel):
 
     name: str
     level: FilterLevel
-    field: FieldRef | None
     filter_type: str
+    field: FieldRef | None = None
     condition: str | None = None
 
 
 class SlicerState(DomainModel):
     """The selection of a slicer visual, normalised like a filter condition."""
 
-    field: FieldRef | None
+    field: FieldRef | None = None
     condition: str | None = None
 
 
@@ -209,14 +209,22 @@ class Finding(DomainModel):
     new: str | None = None
 
     @property
-    def sort_key(self) -> tuple[str, str, str]:
-        """Key giving a stable, readable order of findings."""
-        return (self.path, self.category.value, self.change.value)
+    def sort_key(self) -> tuple[str, str, str, str, str, str]:
+        """Key giving a total, readable order of findings."""
+        return (
+            self.path,
+            self.category.value,
+            self.change.value,
+            self.message,
+            self.old or "",
+            self.new or "",
+        )
 
 
 class DiffResult(DomainModel):
     """The result of comparing two report versions; the JSON output root."""
 
+    # Keep the Literal in sync with SCHEMA_VERSION (enforced by a test).
     schema_version: Literal["1.0"] = SCHEMA_VERSION
     old_source: str
     new_source: str

@@ -1,3 +1,5 @@
+from typing import get_args
+
 import pytest
 from pydantic import ValidationError
 
@@ -13,6 +15,7 @@ from pbi_report_validator.domain.models import (
     Finding,
     Measure,
     Page,
+    ParseIssue,
     Position,
     Projection,
     Report,
@@ -130,3 +133,39 @@ def test_diff_result_sorts_findings_and_sets_schema_version() -> None:
     assert result.findings == (earlier, later)
     assert result.schema_version == SCHEMA_VERSION
     assert DiffResult.model_validate_json(result.model_dump_json()) == result
+
+
+def test_diff_result_order_is_independent_of_input_order() -> None:
+    first = Finding(
+        category=Category.FILTER,
+        change=ChangeKind.MODIFIED,
+        path="overview/card",
+        message="Filter changed",
+        old="a",
+        new="b",
+    )
+    second = first.model_copy(update={"old": "c", "new": "d"})
+
+    forward = DiffResult(old_source="o", new_source="n", findings=(first, second))
+    backward = DiffResult(old_source="o", new_source="n", findings=(second, first))
+
+    assert forward.findings == backward.findings == (first, second)
+
+
+def test_schema_version_literal_matches_constant() -> None:
+    annotation = DiffResult.model_fields["schema_version"].annotation
+
+    assert get_args(annotation) == (SCHEMA_VERSION,)
+
+
+def test_page_rejects_negative_ordinal() -> None:
+    with pytest.raises(ValidationError):
+        Page(name="p", display_name="P", ordinal=-1, width=1280, height=720)
+
+
+def test_report_keeps_parse_issues() -> None:
+    issue = ParseIssue(path="pages/p/visuals/v/visual.json", message="invalid JSON")
+
+    report = Report(issues=(issue,))
+
+    assert Report.model_validate_json(report.model_dump_json()).issues == (issue,)
