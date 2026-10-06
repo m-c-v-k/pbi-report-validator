@@ -35,6 +35,10 @@ Or run it once without installing:
 uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.0.1 pbi-validate --help
 ```
 
+From the next release on, each [GitHub release](https://github.com/m-c-v-k/pbi-report-validator/releases)
+also has the wheel attached, which `pip install` or `uv tool install` accept
+directly.
+
 ### Docker
 
 From v0.1.0 an image is published to GitHub Container Registry. Mount the
