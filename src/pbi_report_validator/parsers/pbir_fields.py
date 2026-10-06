@@ -41,10 +41,10 @@ def parse_field(
     if not isinstance(expression, dict):
         return None
     aliases = aliases or {}
-    if "Column" in expression or "Measure" in expression:
-        kind = FieldKind.COLUMN if "Column" in expression else FieldKind.MEASURE
-        body = expression.get("Column") or expression.get("Measure")
-        return _property_field(body, kind, aliases)
+    if "Column" in expression:
+        return _property_field(expression["Column"], FieldKind.COLUMN, aliases)
+    if "Measure" in expression:
+        return _property_field(expression["Measure"], FieldKind.MEASURE, aliases)
     if "Aggregation" in expression:
         return _aggregation_field(expression["Aggregation"], aliases)
     if "HierarchyLevel" in expression:
@@ -65,29 +65,33 @@ def _property_field(
 
 
 def _aggregation_field(body: Any, aliases: Mapping[str, str]) -> FieldRef | None:
+    """Aggregated column; the aggregated field's own kind is not kept."""
     if not isinstance(body, dict):
         return None
     inner = parse_field(body.get("Expression"), aliases)
     if inner is None:
         return None
-    function = body.get("Function")
-    aggregation = (
-        AGGREGATION_FUNCTIONS.get(function, str(function))
-        if isinstance(function, int)
-        else str(function)
-    )
     return FieldRef(
         table=inner.table,
         name=inner.name,
         kind=FieldKind.AGGREGATION,
-        aggregation=aggregation,
+        aggregation=_aggregation_name(body.get("Function")),
     )
+
+
+def _aggregation_name(function: Any) -> str | None:
+    if isinstance(function, bool) or function is None:
+        return None
+    if isinstance(function, int):
+        return AGGREGATION_FUNCTIONS.get(function, str(function))
+    return str(function)
 
 
 def _hierarchy_level_field(body: Any, aliases: Mapping[str, str]) -> FieldRef | None:
     if not isinstance(body, dict):
         return None
-    hierarchy = body.get("Expression", {}).get("Hierarchy", {})
+    expression = body.get("Expression")
+    hierarchy = expression.get("Hierarchy") if isinstance(expression, dict) else None
     if not isinstance(hierarchy, dict):
         return None
     table = _table(hierarchy.get("Expression"), aliases)

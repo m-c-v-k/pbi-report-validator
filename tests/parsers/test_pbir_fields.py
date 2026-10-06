@@ -29,9 +29,10 @@ def test_measure() -> None:
 
 
 @pytest.mark.parametrize(
-    ("function", "expected"), [(0, "Sum"), (2, "DistinctCount"), (99, "99")]
+    ("function", "expected"),
+    [(0, "Sum"), (2, "DistinctCount"), (99, "99"), (None, None), (True, None)],
 )
-def test_aggregation(function: int, expected: str) -> None:
+def test_aggregation(function: Any, expected: str | None) -> None:
     field = {
         "Aggregation": {"Expression": column("Sales", "Amount"), "Function": function}
     }
@@ -69,6 +70,23 @@ def test_source_alias_is_resolved() -> None:
     )
 
 
+def test_unknown_alias_gives_none() -> None:
+    field = {
+        "Column": {"Expression": {"SourceRef": {"Source": "x"}}, "Property": "Year"}
+    }
+
+    assert parse_field(field, {"d": "Date"}) is None
+
+
+def test_aggregation_over_measure_is_an_aggregation() -> None:
+    measure = {"Measure": {"Expression": entity("Sales"), "Property": "Total"}}
+    field = {"Aggregation": {"Expression": measure, "Function": 3}}
+
+    assert parse_field(field) == FieldRef(
+        table="Sales", name="Total", kind=FieldKind.AGGREGATION, aggregation="Min"
+    )
+
+
 @pytest.mark.parametrize(
     "expression",
     [
@@ -80,6 +98,9 @@ def test_source_alias_is_resolved() -> None:
         {"Column": {"Expression": {"SourceRef": {"Source": "x"}}, "Property": "Y"}},
         {"Aggregation": {"Expression": {"Unsupported": {}}, "Function": 0}},
         {"HierarchyLevel": {"Expression": {}, "Level": "Year"}},
+        {"HierarchyLevel": {"Expression": None, "Level": "Year"}},
+        {"HierarchyLevel": {"Expression": "Calendar", "Level": "Year"}},
+        {"Measure": "Total"},
     ],
 )
 def test_unrecognised_expressions_give_none(expression: Any) -> None:
