@@ -1,5 +1,7 @@
 # pbi-report-validator
 
+[![CI](https://github.com/m-c-v-k/pbi-report-validator/actions/workflows/ci.yml/badge.svg)](https://github.com/m-c-v-k/pbi-report-validator/actions/workflows/ci.yml)
+
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
 
@@ -35,6 +37,16 @@ pull requests that change a report.
   definitions), never row-level data, unless you explicitly opt in.
 
 ## Development
+
+Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 for you).
+
+```bash
+uv sync                        # install runtime and dev dependencies
+uv run pbi-validate --version  # run the CLI
+uv run pytest                  # tests
+uv run ruff check . && uv run ruff format --check .
+uv run mypy src
+```
 
 Built with Python, uv, Typer and Pydantic. See [CLAUDE.md](CLAUDE.md) for
 architecture and contribution rules, and [docs/PROJECT.md](docs/PROJECT.md) for
