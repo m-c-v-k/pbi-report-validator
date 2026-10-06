@@ -1,4 +1,5 @@
 import re
+import shutil
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ from pbi_report_validator.reporting.html import (
     CATEGORY_LABELS,
     REPORT_TEMPLATE,
     to_html,
+    visual_key,
 )
 from pbi_report_validator.services.validate import validate
 
@@ -213,3 +215,71 @@ def test_unchanged_label_has_no_leading_space() -> None:
     html = fixture_html()
 
     assert ">Total sales</text>" in html
+
+
+def detail(html: str, key: str) -> str:
+    start = html.index(f'<details class="visual-detail" id="{key}">')
+    return html[start : html.index("</details>", start)]
+
+
+def test_visuals_with_findings_get_a_detail_section() -> None:
+    html = fixture_html()
+
+    assert html.count('<details class="visual-detail"') == 4
+    table = detail(html, "details/table_product_sales")
+    assert "Filter visual_filter_category removed" in table
+    assert "Product[Category] in (&#39;Bikes&#39;, &#39;Clothing&#39;)" in table
+    moved = detail(html, "details/chart_sales_by_region")
+    assert "x 840, y 40, 400 &times; 320 &rarr; x 840, y 360, 400 &times; 320" in moved
+
+
+def test_wireframe_and_table_link_to_details() -> None:
+    html = fixture_html()
+
+    assert '<a href="#overview/slicer_year" data-open="overview/slicer_year">' in html
+    key = "details/table_product_sales"
+    link = (
+        f'<a href="#{key}" data-open="{key}">{key}/filters/visual_filter_category</a>'
+    )
+    assert link in html
+    assert 'href="#model/Sales/Total Sales"' not in html
+    assert 'href="#trends"' not in html
+
+
+def test_parse_issue_is_shown_on_its_visual(tmp_path: Path) -> None:
+    new = tmp_path / "new"
+    shutil.copytree(FIXTURES / "sales_v1", new)
+    broken = (
+        new / "Sales.Report/definition/pages/overview/visuals/card_margin/visual.json"
+    )
+    broken.write_text("{")
+
+    html = render(validate(FIXTURES / "sales_v1", new))
+
+    assert "Could not fully parse the new version" in detail(
+        html, "overview/card_margin"
+    )
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("overview/slicer_year", "overview/slicer_year"),
+        ("details/table_product_sales/filters/f", "details/table_product_sales"),
+        (
+            "new/Sales.Report/definition/pages/overview/visuals/card_margin/visual.json",
+            "overview/card_margin",
+        ),
+        ("overview/filters/page_filter", None),
+        ("model/Sales/Total Sales", None),
+        ("trends", None),
+    ],
+)
+def test_visual_key(path: str, expected: str | None) -> None:
+    keys = {
+        "overview/slicer_year",
+        "details/table_product_sales",
+        "overview/card_margin",
+    }
+
+    assert visual_key(path, keys) == expected
