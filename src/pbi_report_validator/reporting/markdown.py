@@ -56,7 +56,8 @@ def to_markdown(result: DiffResult, limit: int = GITHUB_COMMENT_LIMIT) -> str:
         current = finding.category
         shown += 1
     hidden = len(result.findings) - shown
-    footer = f"\n_{hidden} more findings not shown; {SEE_JSON}_\n" if hidden else ""
+    noun = "finding" if hidden == 1 else "findings"
+    footer = f"\n_{hidden} more {noun} not shown; {SEE_JSON}_\n" if hidden else ""
     return header + "".join(sections) + footer
 
 
@@ -83,7 +84,8 @@ def _grouped(findings: tuple[Finding, ...]) -> list[Finding]:
 
 
 def _finding(finding: Finding) -> str:
-    path, message = _code(finding.path), escape(finding.message)
+    path = _code(finding.path)
+    message = escape(" ".join(finding.message.split()))
     line = f"- **{finding.change.value}** `{path}`: {message}"
     if finding.old is None and finding.new is None:
         return line + "\n"
@@ -100,7 +102,7 @@ def _details(old: str | None, new: str | None) -> str:
         if value is None:
             parts.append("  _(none)_")
         else:
-            fence = "~~~~" if "```" in value else "```"
+            fence = _fence(value)
             parts += [
                 f"  {fence}",
                 *[f"  {v}" for v in value.splitlines()],
@@ -109,6 +111,12 @@ def _details(old: str | None, new: str | None) -> str:
         parts.append("")
     parts.append("  </details>")
     return "\n".join(parts) + "\n"
+
+
+def _fence(value: str) -> str:
+    """A backtick fence longer than any backtick run inside ``value``."""
+    longest = max((len(run) for run in re.findall(r"`+", value)), default=0)
+    return "`" * max(3, longest + 1)
 
 
 def _is_short(value: str | None) -> bool:
@@ -125,5 +133,9 @@ def _code(value: str) -> str:
 
 
 def escape(text: str) -> str:
-    """Escape Markdown and HTML special characters in plain text."""
-    return MARKDOWN_SPECIAL.sub(r"\\\1", text)
+    """Escape Markdown and HTML special characters in plain text.
+
+    ``&`` becomes ``&amp;`` (a backslash does not stop entity decoding);
+    the other special characters get a backslash.
+    """
+    return MARKDOWN_SPECIAL.sub(r"\\\1", text.replace("&", "&amp;"))

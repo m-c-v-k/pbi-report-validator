@@ -1,3 +1,5 @@
+import pytest
+
 from pbi_report_validator.domain.models import Category, ChangeKind, DiffResult, Finding
 from pbi_report_validator.reporting.markdown import escape, to_markdown
 
@@ -44,11 +46,43 @@ def test_long_or_multiline_values_are_collapsible() -> None:
     assert "  ```\n  DIVIDE(\n      SUM(Sales[Amount]),\n      2\n  )\n  ```" in text
 
 
-def test_value_containing_fence_uses_tildes() -> None:
-    text = to_markdown(result(finding("m", old="a ```b``` " + "x" * 90, new=None)))
+def test_fence_is_longer_than_backtick_runs_in_value() -> None:
+    value = "a ```b``` ~~~~ ````c```` " + "x" * 90
 
-    assert "  ~~~~\n" in text
+    text = to_markdown(result(finding("m", old=value, new=None)))
+
+    assert "  `````\n" in text
     assert "  _(none)_" in text
+
+
+def test_ampersand_is_escaped_as_entity() -> None:
+    text = to_markdown(result(finding("p/v", message="Sales &amp; Cost & more")))
+
+    assert "Sales &amp;amp; Cost &amp; more" in text
+
+
+def test_multiline_message_stays_on_one_list_line() -> None:
+    text = to_markdown(result(finding("p/v", message="first\n# heading\n- item")))
+
+    assert "first \\# heading - item" in text
+
+
+@pytest.mark.parametrize(("count", "noun"), [(2, "finding"), (3, "findings")])
+def test_footer_noun_matches_count(count: int, noun: str) -> None:
+    many = [finding(f"m{i}", old="x" * 50, new="y" * 50) for i in range(count)]
+    header_only = len(to_markdown(result(*many), limit=10**6).split("### ")[0])
+
+    text = to_markdown(result(*many), limit=header_only + 1_200)
+
+    assert f"_{count - 1} more {noun} not shown;" in text
+
+
+def test_default_limit_keeps_output_under_github_maximum() -> None:
+    many = [
+        finding(f"model/T/m{i:05}", old="x" * 70, new="y" * 70) for i in range(5000)
+    ]
+
+    assert len(to_markdown(result(*many))) < 65_536
 
 
 def test_truncates_to_limit_with_note() -> None:
