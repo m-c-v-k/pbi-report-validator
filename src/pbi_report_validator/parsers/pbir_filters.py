@@ -29,6 +29,8 @@ from pbi_report_validator.parsers.pbir_fields import parse_field
 
 Operator = Literal["=", ">", ">=", "<", "<="]
 COMPARISON_OPERATORS: dict[int, Operator] = {0: "=", 1: ">", 2: ">=", 3: "<", 4: "<="}
+# The L/D/M type suffix (integer/decimal/currency) is dropped: DAX number
+# literals do not need it, and the text form never showed it.
 NUMBER_LITERAL = re.compile(r"^(-?\d+(?:\.\d+)?)[LDM]?$")
 DATETIME_LITERAL = re.compile(r"^datetime'(?P<value>[^']*)'$")
 
@@ -241,8 +243,14 @@ def _condition(node: Any, aliases: dict[str, str]) -> Condition:
 def _in(body: dict[str, Any], aliases: dict[str, str]) -> InCondition:
     expressions = body.get("Expressions", [])
     rows = body.get("Values", [])
-    if not isinstance(expressions, list) or not isinstance(rows, list):
+    if (
+        not isinstance(expressions, list)
+        or not isinstance(rows, list)
+        or not expressions
+    ):
         raise UnsupportedConditionError("In")
+    if any(not isinstance(row, list) or len(row) != len(expressions) for row in rows):
+        raise UnsupportedConditionError("In with rows that do not match its fields")
     return InCondition(
         fields=tuple(_field(e, aliases) for e in expressions),
         rows=tuple(tuple(_literal(v) for v in row) for row in rows),

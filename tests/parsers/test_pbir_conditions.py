@@ -10,6 +10,7 @@ from pbi_report_validator.domain.models import (
     FieldKind,
     FieldRef,
     Filter,
+    FilterLevel,
     InCondition,
     LiteralKind,
     LiteralValue,
@@ -18,9 +19,12 @@ from pbi_report_validator.domain.models import (
 from pbi_report_validator.integrations.files import load_project
 from pbi_report_validator.parsers.pbir import parse_report
 from pbi_report_validator.parsers.pbir_filters import (
+    UnsupportedConditionError,
     parse_condition,
+    parse_filters,
     parse_literal,
     render,
+    render_literal,
 )
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -140,9 +144,6 @@ def test_structured_conditions_round_trip_through_json() -> None:
 
 
 def test_unsupported_filter_has_neither_condition_nor_expression() -> None:
-    from pbi_report_validator.domain.models import FilterLevel
-    from pbi_report_validator.parsers.pbir_filters import parse_filters
-
     container = {
         "filterConfig": {"filters": [{"name": "f", "filter": query({"Between": {}})}]}
     }
@@ -150,3 +151,33 @@ def test_unsupported_filter_has_neither_condition_nor_expression() -> None:
     (parsed,) = parse_filters(container, FilterLevel.PAGE, [])
 
     assert (parsed.condition, parsed.expression) == (None, None)
+
+
+def test_filter_with_expression_round_trips_through_json() -> None:
+    (fixture_filter,) = [
+        f for f in all_filters("sales_v1") if f.name == "page_filter_category"
+    ]
+
+    assert (
+        Filter.model_validate_json(fixture_filter.model_dump_json()) == fixture_filter
+    )
+
+
+@pytest.mark.parametrize(
+    "raw", ["datetime'2025-01-01T00:00:00'", "infD", "'it''s'", "null", "false"]
+)
+def test_literals_render_back_to_their_text(raw: str) -> None:
+    assert render_literal(parse_literal(raw)) == raw
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        {"In": {"Expressions": [], "Values": [[lit("1L")]]}},
+        {"In": {"Expressions": [col("A")], "Values": [[lit("1L"), lit("2L")]]}},
+        {"In": {"Expressions": [col("A"), col("B")], "Values": [[lit("1L")]]}},
+    ],
+)
+def test_malformed_in_is_unsupported(condition: dict[str, Any]) -> None:
+    with pytest.raises(UnsupportedConditionError):
+        parse_condition(query(condition))
