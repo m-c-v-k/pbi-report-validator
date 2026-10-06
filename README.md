@@ -52,6 +52,16 @@ Built with Python, uv, Typer and Pydantic. See [CLAUDE.md](CLAUDE.md) for
 architecture and contribution rules, and [docs/PROJECT.md](docs/PROJECT.md) for
 scope and milestones.
 
+## Branching
+
+- `develop` is the default branch where work is integrated.
+- Feature branches (`feat/<issue>-slug`, `fix/<issue>-slug`) start from
+  `develop`, and pull requests target `develop`.
+- `main` holds released versions only. It is updated by a release PR from
+  `develop`, followed by a version tag.
+- Both branches are protected: changes go through pull requests and need
+  green CI.
+
 ## Working with Claude
 
 Issues and pull requests can be handed to [Claude Code](https://github.com/anthropics/claude-code-action):
