@@ -273,7 +273,8 @@ class VisualView(DomainModel):
     """A visual as shown in reports: both positions and a status.
 
     ``name`` is the old name for matched and removed visuals and the new
-    name for added ones, so it matches the paths used in findings.
+    name for added ones, so it matches the paths used in findings. For
+    matched visuals, ``visual_type`` and ``title`` come from the new version.
     """
 
     name: str

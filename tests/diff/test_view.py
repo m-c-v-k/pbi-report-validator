@@ -133,3 +133,19 @@ def test_unparseable_visual_is_modified_not_removed(tmp_path: Path) -> None:
     overview = next(p for p in result.pages if p.name == "overview")
     card = next(v for v in overview.visuals if v.name == "card_margin")
     assert card.status == ItemStatus.MODIFIED
+
+
+def test_page_level_change_marks_only_the_page() -> None:
+    old = [page("a", 0, visual("v"))]
+    new = [
+        Page(
+            name="a",
+            display_name="Renamed",
+            ordinal=0,
+            width=1000,
+            height=1000,
+            visuals=(visual("v"),),
+        )
+    ]
+
+    assert statuses(old, new) == [("a", "modified", [("v", "unchanged")])]

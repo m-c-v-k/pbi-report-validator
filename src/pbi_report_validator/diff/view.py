@@ -29,8 +29,8 @@ def build_page_views(
     removed pages their old one. Ties sort removed pages last, then by name.
     """
     paths = {f.path for f in findings}
-    unmatched = {(f.path, f.change) for f in findings}
-    views = [_matched_page(m, paths, unmatched) for m in match.pages]
+    changes = {(f.path, f.change) for f in findings}
+    views = [_matched_page(m, paths, changes) for m in match.pages]
     views += [_whole_page(p, ItemStatus.ADDED) for p in match.added_pages]
     views += [_whole_page(p, ItemStatus.REMOVED) for p in match.removed_pages]
     return tuple(
@@ -39,7 +39,7 @@ def build_page_views(
 
 
 def _matched_page(
-    match: PageMatch, paths: set[str], unmatched: set[tuple[str, ChangeKind]]
+    match: PageMatch, paths: set[str], changes: set[tuple[str, ChangeKind]]
 ) -> PageView:
     page = match.old.name
     visuals = [
@@ -54,11 +54,11 @@ def _matched_page(
         for v in match.visuals
     ]
     visuals += [
-        _unmatched_visual(page, v, ChangeKind.REMOVED, unmatched)
+        _unmatched_visual(page, v, ChangeKind.REMOVED, changes)
         for v in match.removed_visuals
     ]
     visuals += [
-        _unmatched_visual(page, v, ChangeKind.ADDED, unmatched)
+        _unmatched_visual(page, v, ChangeKind.ADDED, changes)
         for v in match.added_visuals
     ]
     return PageView(
@@ -76,7 +76,7 @@ def _unmatched_visual(
     page: str,
     visual: Visual,
     change: ChangeKind,
-    unmatched: set[tuple[str, ChangeKind]],
+    changes: set[tuple[str, ChangeKind]],
 ) -> VisualView:
     """A visual on one side only.
 
@@ -84,7 +84,7 @@ def _unmatched_visual(
     versions but failed to parse in one; it is shown as modified.
     """
     path = f"{page}/{visual.name}"
-    if (path, change) not in unmatched:
+    if (path, change) not in changes:
         status = ItemStatus.MODIFIED
     else:
         status = ItemStatus.ADDED if change == ChangeKind.ADDED else ItemStatus.REMOVED
