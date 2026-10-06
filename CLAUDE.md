@@ -121,7 +121,11 @@ integrations/ ALL I/O: filesystem, Power BI REST API, Anthropic API, env config.
   in the PR description; propose a split if an issue grows beyond that.
 - `main` holds released versions only. It changes solely through a release PR
   from `develop` to `main`, followed by a version tag. Do not open PRs against
-  `main` unless the issue is a release.
+  `main` unless the issue is a release. After tagging, open a PR from `main`
+  to `develop` and merge it with a merge commit (not squash) once CI is
+  green, so `develop` contains the release merge commit and the next release
+  PR is not behind `main`. This sync PR is the only PR into `develop` that
+  does not come from a feature branch.
 - Do not modify CI workflows or this file unless that is the subject of the issue.
 - Do not weaken checks to make them pass (no blanket `# type: ignore`, `noqa`,
   skipped tests or lowered thresholds without justification in the PR).
