@@ -237,7 +237,7 @@ def test_aggregations_and_duplicate_names() -> None:
                     flt(ComparisonCondition(field=TOTAL, operator=">", value=num("1"))),
                 ),
             ),
-            "filters on measures are not supported yet",
+            "filters on measure fields are not supported yet",
         ),
         (
             visual(
@@ -302,3 +302,65 @@ def test_names_are_quoted_safely() -> None:
 
     assert column(odd) == "'Bob''s Orders'[Net [EUR]]]"
     assert text('a"b') == '"a""b"'
+
+
+@pytest.mark.parametrize(
+    ("value", "reason"),
+    [
+        (
+            LiteralValue(kind=LiteralKind.NUMBER, value="1) + EVIL("),
+            "is not a plain number",
+        ),
+        (
+            LiteralValue(kind=LiteralKind.DATETIME, value="2025-01-01T00:00:00.5"),
+            "fractions",
+        ),
+        (
+            LiteralValue(kind=LiteralKind.DATETIME, value="2025-01-01T00:00:00+02:00"),
+            "time zone",
+        ),
+    ],
+)
+def test_unsafe_literals_are_unsupported(value: LiteralValue, reason: str) -> None:
+    v = visual(TOTAL, filters=(flt(InCondition(fields=(YEAR,), rows=((value,),))),))
+
+    result = query_for(v)
+
+    assert isinstance(result, UnsupportedQuery)
+    assert reason in result.reason
+
+
+def test_filter_on_aggregation_names_the_field_kind() -> None:
+    amount = FieldRef(
+        table="Sales", name="Amount", kind=FieldKind.AGGREGATION, aggregation="Sum"
+    )
+    v = visual(
+        TOTAL,
+        filters=(flt(ComparisonCondition(field=amount, operator=">", value=num("1"))),),
+    )
+
+    assert query_for(v) == UnsupportedQuery(
+        reason="filters on aggregation fields are not supported yet"
+    )
+
+
+def test_unsupported_report_filter_makes_the_query_unsupported() -> None:
+    bad = flt(
+        InCondition(
+            fields=(YEAR,), rows=((LiteralValue(kind=LiteralKind.OTHER, value="x"),),)
+        )
+    )
+
+    result = build_query(visual(TOTAL), page(visual(TOTAL)), [bad])
+
+    assert result == UnsupportedQuery(reason="literal x is not supported")
+
+
+def test_slicer_without_selection_adds_no_filter() -> None:
+    empty = Visual(
+        name="s", visual_type="slicer", position=POS, slicer=SlicerState(field=YEAR)
+    )
+
+    assert "TREATAS" not in dax(visual(TOTAL)) and query_for(
+        visual(TOTAL), empty
+    ) == query_for(visual(TOTAL))

@@ -17,9 +17,12 @@ reason instead of a query that might return the wrong numbers.
 
 Known limitations: slicer interactions edited in Power BI ("edit
 interactions"), slicers synced from other pages and filter cards that
-could not be parsed are not taken into account.
+could not be parsed are not taken into account. Like a visual,
+``SUMMARIZECOLUMNS`` leaves out rows where every value is blank, so such a
+row shows as missing rather than as blank in a data comparison.
 """
 
+import re
 from collections.abc import Sequence
 from datetime import datetime
 
@@ -75,6 +78,7 @@ AGGREGATIONS = {
     "Median": "MEDIAN",
 }
 INDENT = "    "
+PLAIN_NUMBER = re.compile(r"-?[0-9]+(?:[.][0-9]+)?")
 
 
 class UnsupportedError(ValueError):
@@ -153,8 +157,11 @@ def _conditions(
 def _filter_table(condition: Condition) -> str:
     """A table expression that applies ``condition`` as a filter."""
     fields = _fields(condition)
-    if any(f.kind != FieldKind.COLUMN for f in fields):
-        raise UnsupportedError("filters on measures are not supported yet")
+    for field in fields:
+        if field.kind != FieldKind.COLUMN:
+            raise UnsupportedError(
+                f"filters on {field.kind.value} fields are not supported yet"
+            )
     if isinstance(condition, InCondition):
         rows = ", ".join(_row(r, len(condition.fields)) for r in condition.rows)
         targets = ", ".join(column(f) for f in condition.fields)
@@ -240,6 +247,8 @@ def literal(value: LiteralValue) -> str:
         UnsupportedError: The literal has no safe DAX equivalent.
     """
     if value.kind == LiteralKind.NUMBER:
+        if not PLAIN_NUMBER.fullmatch(value.value):
+            raise UnsupportedError(f"number {value.value!r} is not a plain number")
         return value.value
     if value.kind == LiteralKind.TEXT:
         return text(value.value)
@@ -257,6 +266,8 @@ def _datetime(value: str) -> str:
         moment = datetime.fromisoformat(value)
     except ValueError as exc:
         raise UnsupportedError(f"date {value} is not supported") from exc
+    if moment.microsecond or moment.tzinfo is not None:
+        raise UnsupportedError(f"date {value} with fractions or time zone")
     date = f"DATE({moment.year}, {moment.month}, {moment.day})"
     if (moment.hour, moment.minute, moment.second) == (0, 0, 0):
         return date
