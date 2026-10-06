@@ -1,0 +1,55 @@
+name: Pages
+
+# Publish the demo: the HTML report for the synthetic fixtures, built by CI
+# on every push to main. PRs that change the demo only build it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - docs/demo/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Generate reports from the fixtures
+        run: |
+          mkdir -p site
+          cp docs/demo/index.html site/
+          uv run pbi-validate diff tests/fixtures/sales_v1 tests/fixtures/sales_v2 \
+            --html site/report.html --json site/diff.json --markdown site/diff.md
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

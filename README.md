@@ -1,6 +1,7 @@
 # pbi-report-validator
 
 [![CI](https://github.com/m-c-v-k/pbi-report-validator/actions/workflows/ci.yml/badge.svg)](https://github.com/m-c-v-k/pbi-report-validator/actions/workflows/ci.yml)
+[![Demo](https://img.shields.io/badge/demo-live%20report-2457c5)](https://m-c-v-k.github.io/pbi-report-validator/)
 
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
