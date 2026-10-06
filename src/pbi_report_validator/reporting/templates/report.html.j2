@@ -84,6 +84,19 @@ footer a { color: var(--accent); }
 .wireframe .ghost text { opacity: 0.6; }
 .wireframe .previous { fill: none; stroke: var(--modified); stroke-width: 2; stroke-dasharray: 4 6; }
 .page[data-layout="new"] .layout-old, .page[data-layout="old"] .layout-new { display: none; }
+.wireframe a { cursor: pointer; }
+.wireframe a:hover rect, .wireframe a:focus rect { stroke-width: 6; }
+.visual-detail { border: 1px solid var(--border); border-radius: 8px; margin: 0 0 10px; background: var(--surface); }
+.visual-detail > summary { cursor: pointer; padding: 10px 12px; font-weight: 600; }
+.visual-detail[open] > summary { border-bottom: 1px solid var(--border); }
+.visual-detail:target { outline: 2px solid var(--accent); }
+.detail-body { padding: 8px 12px 12px; }
+.detail-body dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 8px; }
+.detail-body dt { color: var(--muted); }
+.detail-body dd { margin: 0; }
+.detail-body ul { margin: 0; padding-left: 18px; }
+.detail-body li { margin: 6px 0; }
+td a, .detail-body a { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -107,14 +120,19 @@ footer a { color: var(--accent); }
 {% endif %}
 </section>
 
-{% macro visual_box(v, pos, ghost) %}
+{% macro visual_box(page, v, pos, ghost) %}
 {% if pos %}
+{% set key = page.name ~ '/' ~ v.name %}
+{% if key in details %}        <a href="#{{ key }}" data-open="{{ key }}">
+{% endif %}
         <g class="visual status-{{ v.status.value }}{{ ' ghost' if ghost }}" data-visual="{{ v.name }}">
           <title>{{ v.visual_type }}{{ ': ' ~ v.title if v.title }} ({{ v.name }}) &ndash; {{ status_labels[v.status.value] }}{{ ', not in this version' if ghost }}</title>
           <rect x="{{ pos.x }}" y="{{ pos.y }}" width="{{ pos.width }}" height="{{ pos.height }}" rx="6"></rect>
           <text x="{{ pos.x + 10 }}" y="{{ pos.y + 30 }}">{{ (status_marks[v.status.value] ~ ' ' ~ (v.title or v.visual_type)) | trim }}</text>
           <text class="sub" x="{{ pos.x + 10 }}" y="{{ pos.y + 56 }}">{{ v.visual_type }}</text>
         </g>
+{% if key in details %}        </a>
+{% endif %}
 {% endif %}
 {% endmacro %}
 {% if result.pages %}
@@ -148,16 +166,54 @@ footer a { color: var(--accent); }
 {% if v.new_position and v.old_position and v.new_position != v.old_position %}
         <rect class="previous" x="{{ v.old_position.x }}" y="{{ v.old_position.y }}" width="{{ v.old_position.width }}" height="{{ v.old_position.height }}" rx="6"></rect>
 {% endif %}
-{{ visual_box(v, v.new_position or v.old_position, v.new_position is none) }}
+{{ visual_box(page, v, v.new_position or v.old_position, v.new_position is none) }}
 {% endfor %}
       </g>
       <g class="layout-old">
 {% for v in page.visuals %}
-{{ visual_box(v, v.old_position or v.new_position, v.old_position is none) }}
+{{ visual_box(page, v, v.old_position or v.new_position, v.old_position is none) }}
 {% endfor %}
       </g>
     </svg>
   </figure>
+{% endfor %}
+</section>
+{% endif %}
+
+{% macro position(pos) %}{% if pos %}x {{ pos.x | round | int }}, y {{ pos.y | round | int }}, {{ pos.width | round | int }} &times; {{ pos.height | round | int }}{% else %}&ndash;{% endif %}{% endmacro %}
+{% if details %}
+<section aria-labelledby="details-title">
+  <h2 id="details-title">Visual details</h2>
+{% for page in result.pages %}
+{% for v in page.visuals %}
+{% set key = page.name ~ '/' ~ v.name %}
+{% if key in details %}
+  <details class="visual-detail" id="{{ key }}">
+    <summary>{{ status_marks[v.status.value] }} {{ v.title or v.visual_type }} <span class="mono">{{ key }}</span> &ndash; {{ status_labels[v.status.value] }}</summary>
+    <div class="detail-body">
+      <dl>
+        <dt>Page</dt><dd><a href="#page-{{ page.name }}">{{ page.display_name }}</a></dd>
+        <dt>Type</dt><dd>{{ v.visual_type }}</dd>
+        <dt>Position</dt><dd>{{ position(v.old_position) }} &rarr; {{ position(v.new_position) }}</dd>
+      </dl>
+      <ul>
+{% for f in details[key] %}
+        <li><span class="change change-{{ f.change.value }}">{{ f.change.value }}</span> {{ labels[f.category.value] }}: {{ f.message }}
+{% if f.old is not none or f.new is not none %}
+          <div class="values">
+{% if f.old is not none %}            <pre class="old">{{ f.old }}</pre>
+{% endif %}
+{% if f.new is not none %}            <pre class="new">{{ f.new }}</pre>
+{% endif %}
+          </div>
+{% endif %}
+        </li>
+{% endfor %}
+      </ul>
+    </div>
+  </details>
+{% endif %}
+{% endfor %}
 {% endfor %}
 </section>
 {% endif %}
@@ -179,7 +235,8 @@ footer a { color: var(--accent); }
         <tr data-category="{{ f.category.value }}">
           <td class="change change-{{ f.change.value }}">{{ f.change.value }}</td>
           <td>{{ labels[f.category.value] }}</td>
-          <td class="mono">{{ f.path }}</td>
+{% set target = visual_key(f.path) %}
+          <td class="mono">{% if target %}<a href="#{{ target }}" data-open="{{ target }}">{{ f.path }}</a>{% else %}{{ f.path }}{% endif %}</td>
           <td>{{ f.message }}</td>
           <td class="values">
 {% if f.old is not none %}            <pre class="old">{{ f.old }}</pre>
@@ -201,6 +258,20 @@ footer a { color: var(--accent); }
 </footer>
 </main>
 <script>
+(function () {
+  function openDetail(id) {
+    var detail = document.getElementById(id);
+    if (detail && detail.tagName === "DETAILS") { detail.open = true; }
+  }
+  document.querySelectorAll("[data-open]").forEach(function (link) {
+    link.addEventListener("click", function () { openDetail(link.getAttribute("data-open")); });
+  });
+  function openFromHash() {
+    if (location.hash.length > 1) { openDetail(decodeURIComponent(location.hash.slice(1))); }
+  }
+  window.addEventListener("hashchange", openFromHash);
+  openFromHash();
+})();
 (function () {
   document.querySelectorAll(".page .layout-toggle button").forEach(function (button) {
     button.addEventListener("click", function () {
