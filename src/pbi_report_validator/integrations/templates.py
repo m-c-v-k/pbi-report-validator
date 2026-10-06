@@ -13,10 +13,9 @@ def read_template(name: str) -> str:
     """Return the source of a template in ``reporting/templates``.
 
     Raises:
-        TemplateNotFoundError: The template is not part of the package.
+        TemplateNotFoundError: The template (or its package) is not installed.
     """
-    resource = files(TEMPLATE_PACKAGE).joinpath(name)
     try:
-        return resource.read_text(encoding="utf-8")
-    except (FileNotFoundError, OSError) as exc:
+        return files(TEMPLATE_PACKAGE).joinpath(name).read_text(encoding="utf-8")
+    except (OSError, ModuleNotFoundError) as exc:
         raise TemplateNotFoundError(f"template {name} not found") from exc

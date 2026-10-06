@@ -8,7 +8,11 @@ from pbi_report_validator.integrations.templates import (
     TemplateNotFoundError,
     read_template,
 )
-from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
+from pbi_report_validator.reporting.html import (
+    CATEGORY_LABELS,
+    REPORT_TEMPLATE,
+    to_html,
+)
 from pbi_report_validator.services.validate import validate
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -72,3 +76,12 @@ def test_no_findings_shows_message_and_no_table() -> None:
 def test_missing_template_raises() -> None:
     with pytest.raises(TemplateNotFoundError):
         read_template("does-not-exist.j2")
+
+
+def test_every_category_has_a_label() -> None:
+    assert set(CATEGORY_LABELS) == set(Category)
+
+
+def test_every_change_kind_has_a_colour_rule() -> None:
+    for change in ChangeKind:
+        assert f".change-{change.value}" in TEMPLATE
