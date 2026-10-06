@@ -35,6 +35,18 @@ Or run it once without installing:
 uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.0.1 pbi-validate --help
 ```
 
+### Docker
+
+From v0.1.0 an image is published to GitHub Container Registry. Mount the
+folder that holds both reports at `/work`:
+
+```bash
+docker run --rm -v "$PWD:/work" ghcr.io/m-c-v-k/pbi-report-validator diff old new
+```
+
+To write `--json` or `--markdown` files into the mounted folder on Linux,
+add `--user "$(id -u):$(id -g)"` so the files are owned by you.
+
 ## Quick start
 
 1. Save both report versions as Power BI Projects (*File → Save as → Power BI

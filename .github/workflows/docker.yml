@@ -1,0 +1,75 @@
+name: Docker
+
+# Build and smoke-test the image on PRs that change it; on version tags,
+# publish it to GitHub Container Registry (free for public repositories).
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/docker.yml
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  image:
+    name: Build image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build for testing
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: pbi-validate:test
+
+      - name: Smoke test
+        run: |
+          docker run --rm pbi-validate:test --version
+          docker run --rm -v "$PWD:/work" pbi-validate:test \
+            diff tests/fixtures/sales_v1 tests/fixtures/sales_v2 | tee out.txt
+          grep -q "7 findings" out.txt
+          docker image inspect pbi-validate:test --format 'Image size: {{.Size}} bytes'
+
+      - name: Image metadata
+        if: startsWith(github.ref, 'refs/tags/')
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Log in to GHCR
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
