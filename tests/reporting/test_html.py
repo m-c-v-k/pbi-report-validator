@@ -172,3 +172,44 @@ def test_visual_missing_in_one_version_is_a_ghost_in_that_layout() -> None:
 
     assert 'class="visual status-removed ghost" data-visual="gone"' in svg
     assert 'class="visual status-removed" data-visual="gone"' in svg
+
+
+def single_visual_page(visual: VisualView) -> DiffResult:
+    page = PageView(
+        name="p",
+        display_name="P",
+        status=ItemStatus.MODIFIED,
+        ordinal=0,
+        width=100,
+        height=100,
+        visuals=(visual,),
+    )
+    return DiffResult(old_source="o", new_source="n", pages=(page,))
+
+
+def test_added_visual_is_a_ghost_in_the_old_layout() -> None:
+    added = VisualView(
+        name="fresh",
+        visual_type="card",
+        status=ItemStatus.ADDED,
+        new_position=Position(x=1, y=2, width=3, height=4),
+    )
+
+    svg = page_svg(render(single_visual_page(added)), "p")
+
+    old_layer = svg[svg.index('class="layout-old"') :]
+    assert 'class="visual status-added ghost" data-visual="fresh"' in old_layer
+
+
+def test_visual_without_any_position_is_skipped_not_a_crash() -> None:
+    nowhere = VisualView(name="lost", visual_type="card", status=ItemStatus.MODIFIED)
+
+    svg = page_svg(render(single_visual_page(nowhere)), "p")
+
+    assert 'data-visual="lost"' not in svg
+
+
+def test_unchanged_label_has_no_leading_space() -> None:
+    html = fixture_html()
+
+    assert ">Total sales</text>" in html

@@ -108,12 +108,14 @@ footer a { color: var(--accent); }
 </section>
 
 {% macro visual_box(v, pos, ghost) %}
+{% if pos %}
         <g class="visual status-{{ v.status.value }}{{ ' ghost' if ghost }}" data-visual="{{ v.name }}">
           <title>{{ v.visual_type }}{{ ': ' ~ v.title if v.title }} ({{ v.name }}) &ndash; {{ status_labels[v.status.value] }}{{ ', not in this version' if ghost }}</title>
           <rect x="{{ pos.x }}" y="{{ pos.y }}" width="{{ pos.width }}" height="{{ pos.height }}" rx="6"></rect>
-          <text x="{{ pos.x + 10 }}" y="{{ pos.y + 30 }}">{{ status_marks[v.status.value] }} {{ v.title or v.visual_type }}</text>
+          <text x="{{ pos.x + 10 }}" y="{{ pos.y + 30 }}">{{ (status_marks[v.status.value] ~ ' ' ~ (v.title or v.visual_type)) | trim }}</text>
           <text class="sub" x="{{ pos.x + 10 }}" y="{{ pos.y + 56 }}">{{ v.visual_type }}</text>
         </g>
+{% endif %}
 {% endmacro %}
 {% if result.pages %}
 <section aria-labelledby="pages-title">
