@@ -5,7 +5,7 @@
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
 
-**Status:** early development. See the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
+**Status:** early development. Structural diff works; see the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time) for what comes next.
 
 ## Why
 
@@ -20,15 +20,40 @@ old and new versions side by side and clicking through every page and slicer.
   page wireframes coloured by status
 - **Explanations (optional)** – AI-written summaries of why numbers differ
 
-## Planned usage
+## Quick start
+
+Save both report versions as Power BI Projects (*File → Save as → Power BI
+project (.pbip)*) with the PBIR report format enabled. Then, from a clone of
+this repository (requires [uv](https://docs.astral.sh/uv/)):
 
 ```bash
-# Save both reports as Power BI Projects (File → Save as → .pbip), then:
-pbi-validate diff ./old/Sales.Report ./new/Sales.Report --html report.html
+uv sync
+uv run pbi-validate diff tests/fixtures/sales_v1 tests/fixtures/sales_v2 --json out/diff.json
 ```
 
-It will also be available as a Docker image and a GitHub Action that comments on
-pull requests that change a report.
+```text
+Compared tests/fixtures/sales_v1 -> tests/fixtures/sales_v2
+7 findings:
+  page         1
+  visual       2
+  filter       1
+  slicer       1
+  measure      2
+
+  [moved] details/chart_sales_by_region: clusteredBarChart 'Sales by region' (chart_sales_by_region) moved
+  [removed] details/table_product_sales/filters/visual_filter_category: Filter visual_filter_category removed
+  [renamed] model/Sales/Margin %: Measure Sales[Margin %] renamed to Sales[Gross Margin %]
+  ...
+```
+
+Each argument is a PBIP project folder (containing one `<Name>.Report` folder)
+or the `.Report` folder itself. `--json` writes every finding with old and new
+values; the JSON has a `schema_version`. The command exits with `1` if a
+project cannot be loaded. No credentials or environment variables are needed.
+
+Coming next: Markdown and HTML reports, data validation against published
+semantic models, a Docker image and a GitHub Action that comments on pull
+requests that change a report.
 
 ## Data handling
 

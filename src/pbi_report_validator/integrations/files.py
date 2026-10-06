@@ -55,6 +55,10 @@ class UnreadableFileError(ProjectLoadError):
         self.path = path
 
 
+class OutputWriteError(Exception):
+    """An output file (e.g. the JSON report) could not be written."""
+
+
 def load_project(path: Path) -> RawProject:
     """Load a PBIP project.
 
@@ -82,6 +86,19 @@ def load_project(path: Path) -> RawProject:
         report=_load_report(report_dir, root),
         semantic_model=_load_semantic_model(model_dir, root) if model_dir else None,
     )
+
+
+def write_text(path: Path, text: str) -> None:
+    """Write UTF-8 text with LF line endings, creating parent folders.
+
+    Raises:
+        OutputWriteError: The file could not be written.
+    """
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8", newline="\n")
+    except OSError as exc:
+        raise OutputWriteError(f"could not write {path}: {exc}") from exc
 
 
 def _find_report_dir(path: Path) -> Path:
