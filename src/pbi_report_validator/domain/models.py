@@ -237,6 +237,23 @@ class SemanticModel(DomainModel):
     issues: tuple[ParseIssue, ...] = ()
 
 
+# --- Data validation ---------------------------------------------------------
+
+CellValue = str | int | float | bool | None
+
+
+class QueryResult(DomainModel):
+    """The table returned by a DAX query, as returned by the Power BI API.
+
+    ``columns`` keeps the column names in the order the API returned them
+    (e.g. ``Date[Month]``, ``[Total Sales]``); each row has one value per
+    column, ``None`` for blanks.
+    """
+
+    columns: tuple[str, ...] = ()
+    rows: tuple[tuple[CellValue, ...], ...] = ()
+
+
 # --- Matching ----------------------------------------------------------------
 
 
