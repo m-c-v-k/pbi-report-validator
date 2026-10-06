@@ -90,3 +90,16 @@ def test_verbose_logs_progress(caplog: pytest.LogCaptureFixture) -> None:
 
     assert result.exit_code == 0
     assert "Found 7 findings" in caplog.text
+
+
+def test_diff_markdown_matches_snapshot(tmp_path: Path) -> None:
+    # Update with: uv run pbi-validate diff tests/fixtures/sales_v1
+    #   tests/fixtures/sales_v2 --markdown tests/snapshots/diff_sales_v1_v2.md
+    target = tmp_path / "diff.md"
+
+    result = runner.invoke(app, ["diff", OLD, NEW, "--markdown", str(target)])
+
+    assert result.exit_code == 0
+    assert "Markdown written to" in result.stdout
+    expected = REPO_ROOT / "tests/snapshots/diff_sales_v1_v2.md"
+    assert target.read_bytes() == expected.read_bytes()

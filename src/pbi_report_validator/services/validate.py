@@ -22,6 +22,7 @@ from pbi_report_validator.matching.matcher import match_reports
 from pbi_report_validator.parsers.pbir import parse_report
 from pbi_report_validator.parsers.tmdl import parse_semantic_model
 from pbi_report_validator.reporting.json_out import to_json
+from pbi_report_validator.reporting.markdown import to_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,15 @@ def write_json(result: DiffResult, path: Path) -> None:
         OutputWriteError: The file could not be written.
     """
     write_text(path, to_json(result))
+
+
+def write_markdown(result: DiffResult, path: Path) -> None:
+    """Write the result as a Markdown summary to ``path``.
+
+    Raises:
+        OutputWriteError: The file could not be written.
+    """
+    write_text(path, to_markdown(result))
 
 
 def _parse(project: RawProject) -> tuple[Report, SemanticModel | None]:
