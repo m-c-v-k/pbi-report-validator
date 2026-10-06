@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from pbi_report_validator.domain.models import Column, Measure
+from pbi_report_validator.domain.raw import RawSemanticModel, RawTextFile
 from pbi_report_validator.integrations.files import load_project
 from pbi_report_validator.parsers.tmdl import parse_semantic_model, parse_tmdl
 
@@ -124,3 +125,70 @@ def test_space_indentation_is_supported() -> None:
     tables, _ = parse_tmdl(text, "t.tmdl")
 
     assert tables[0].measures[0].expression == "1 +\n    2"
+
+
+def test_measure_with_empty_expression_is_an_issue() -> None:
+    text = "table T\n\tmeasure Empty =\n\t\tformatString: 0\n"
+
+    tables, issues = parse_tmdl(text, "t.tmdl")
+
+    assert tables[0].measures == ()
+    assert issues[0].path == "t.tmdl:2"
+    assert "T[Empty]" in issues[0].message
+
+
+def test_calculated_column_is_read_without_expression() -> None:
+    text = "table T\n\tcolumn Double = T[A] * 2\n\t\tdataType: int64\n"
+
+    tables, _ = parse_tmdl(text, "t.tmdl")
+
+    assert tables[0].columns == (Column(name="Double", data_type="int64"),)
+
+
+def test_triple_slash_inside_expression_is_kept() -> None:
+    text = "table T\n\tmeasure M =\n\t\t\t1\n\t\t\t/// not a description\n"
+
+    tables, _ = parse_tmdl(text, "t.tmdl")
+
+    assert tables[0].measures[0].expression == "1\n/// not a description"
+
+
+def test_fence_keeps_relative_indentation() -> None:
+    text = (
+        "table T\n"
+        "\tmeasure M = ```\n"
+        "\t\t\tIF(\n"
+        "\t\t\t\tTRUE,\n"
+        "\t\t\t\t1\n"
+        "\t\t\t)\n"
+        "\t\t\t```\n"
+    )
+
+    tables, _ = parse_tmdl(text, "t.tmdl")
+
+    assert tables[0].measures[0].expression == "IF(\n\tTRUE,\n\t1\n)"
+
+
+def test_ref_table_lines_are_not_tables() -> None:
+    text = "model Model\n\tculture: en-US\n\nref table Sales\nref table Date\n"
+
+    tables, issues = parse_tmdl(text, "model.tmdl")
+
+    assert tables == []
+    assert issues == []
+
+
+def test_semantic_model_combines_files_in_order() -> None:
+    raw = RawSemanticModel(
+        path="M.SemanticModel",
+        files=(
+            RawTextFile(path="a.tmdl", text="table A\n\tmeasure Bad\n"),
+            RawTextFile(path="b.tmdl", text="table B\n\tmeasure Ok = 1\n"),
+            RawTextFile(path="c.tmdl", text="table C\n\tmeasure Bad =\n"),
+        ),
+    )
+
+    model = parse_semantic_model(raw)
+
+    assert [t.name for t in model.tables] == ["A", "B", "C"]
+    assert [i.path for i in model.issues] == ["a.tmdl:2", "c.tmdl:2"]

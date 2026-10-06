@@ -6,7 +6,9 @@ groups, ...) is skipped without error.
 
 TMDL is indentation based: an object's properties are indented one level
 deeper than the object, and a multi-line expression one level deeper than
-the properties. Blank lines inside an expression are not kept.
+the properties. Blank lines inside an expression are not kept. ``///``
+description lines are skipped above expression depth; inside an expression
+they are kept as part of the DAX.
 """
 
 import re
@@ -22,6 +24,7 @@ from pbi_report_validator.domain.models import (
 from pbi_report_validator.domain.raw import RawSemanticModel
 
 SPACES_PER_LEVEL = 4
+EXPRESSION_DEPTH = 3  # table (0) > measure (1) > properties (2) > expression
 FENCE = "```"
 OBJECT_LINE = re.compile(
     r"^(?P<kind>table|column|measure)\s+"
@@ -118,7 +121,10 @@ def _read_measure(
     name = _unquote(match["name"])
     start = lines[index]
     body, index = _collect_body(lines, index + 1, start.depth)
-    if match["assign"] is None:
+    expression = (
+        _expression(match["expr"], body, start.depth) if match["assign"] else ""
+    )
+    if not expression:
         issues.append(
             ParseIssue(
                 path=f"{path}:{start.number}",
@@ -126,7 +132,6 @@ def _read_measure(
             )
         )
         return index
-    expression = _expression(match["expr"], body, start.depth)
     table.measures.append(Measure(name=name, expression=expression))
     return index
 
@@ -174,11 +179,11 @@ def _split_lines(text: str) -> list[_Line]:
     lines: list[_Line] = []
     for number, raw in enumerate(text.splitlines(), start=1):
         stripped = raw.strip()
-        if not stripped or stripped.startswith("///"):
+        depth = _depth(raw)
+        is_description = stripped.startswith("///") and depth < EXPRESSION_DEPTH
+        if not stripped or is_description:
             continue
-        lines.append(
-            _Line(number=number, depth=_depth(raw), text=stripped, raw=raw.rstrip())
-        )
+        lines.append(_Line(number=number, depth=depth, text=stripped, raw=raw.rstrip()))
     return lines
 
 
