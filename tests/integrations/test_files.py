@@ -3,10 +3,12 @@ from pathlib import Path
 
 import pytest
 
+from pbi_report_validator.domain.raw import RawPage, RawProject
 from pbi_report_validator.integrations.files import (
     InvalidJsonError,
     MissingDefinitionError,
     ProjectNotFoundError,
+    UnreadableFileError,
     load_project,
 )
 
@@ -117,3 +119,100 @@ def test_model_is_none_without_dataset_path(project_copy: Path) -> None:
     project = load_project(project_copy)
 
     assert project.semantic_model is None
+
+
+def overview_visual(project_copy: Path, name: str) -> Path:
+    pages = project_copy / "Sales.Report/definition/pages"
+    return pages / "overview/visuals" / name / "visual.json"
+
+
+def overview_page(project: RawProject) -> RawPage:
+    return next(p for p in project.report.pages if p.name == "overview")
+
+
+def test_broken_page_json_is_kept_with_error(project_copy: Path) -> None:
+    (project_copy / "Sales.Report/definition/pages/details/page.json").write_text("{")
+
+    project = load_project(project_copy)
+
+    details = next(p for p in project.report.pages if p.name == "details")
+    assert details.page.error is not None
+
+
+def test_broken_pages_json_raises(project_copy: Path) -> None:
+    (project_copy / "Sales.Report/definition/pages/pages.json").write_text("[")
+
+    with pytest.raises(InvalidJsonError):
+        load_project(project_copy)
+
+
+def test_broken_definition_pbir_raises(project_copy: Path) -> None:
+    (project_copy / "Sales.Report/definition.pbir").write_text("{")
+
+    with pytest.raises(InvalidJsonError):
+        load_project(project_copy)
+
+
+def test_non_object_json_is_an_error(project_copy: Path) -> None:
+    overview_visual(project_copy, "card_margin").write_text("[1, 2]")
+
+    visual = overview_page(load_project(project_copy)).visuals[0]
+
+    assert visual.error == "top-level value is not an object"
+
+
+def test_non_utf8_visual_is_kept_with_error(project_copy: Path) -> None:
+    overview_visual(project_copy, "card_margin").write_bytes(b'{"name": "\xff"}')
+
+    visual = overview_page(load_project(project_copy)).visuals[0]
+
+    assert visual.error is not None
+
+
+def test_non_utf8_tmdl_raises(project_copy: Path) -> None:
+    tmdl = project_copy / "Sales.SemanticModel/definition/tables/Sales.tmdl"
+    tmdl.write_bytes(b"table \xff")
+
+    with pytest.raises(UnreadableFileError):
+        load_project(project_copy)
+
+
+def test_json_with_bom_is_read(project_copy: Path) -> None:
+    path = overview_visual(project_copy, "card_margin")
+    path.write_bytes(b"\xef\xbb\xbf" + path.read_bytes())
+
+    visual = overview_page(load_project(project_copy)).visuals[0]
+
+    assert visual.error is None
+    assert visual.content["name"] == "card_margin"
+
+
+def test_sibling_model_is_used_without_definition_pbir(project_copy: Path) -> None:
+    (project_copy / "Sales.Report/definition.pbir").unlink()
+
+    project = load_project(project_copy)
+
+    assert project.semantic_model is not None
+    assert project.semantic_model.path == "Sales.SemanticModel"
+
+
+def test_model_path_to_missing_folder_gives_no_model(project_copy: Path) -> None:
+    (project_copy / "Sales.Report/definition.pbir").write_text(
+        '{"datasetReference": {"byPath": {"path": "../Missing.SemanticModel"}}}'
+    )
+
+    project = load_project(project_copy)
+
+    assert project.semantic_model is None
+
+
+def test_model_outside_project_gets_relative_path(project_copy: Path) -> None:
+    shutil.move(project_copy / "Sales.SemanticModel", project_copy.parent / "Shared")
+    (project_copy / "Sales.Report/definition.pbir").write_text(
+        '{"datasetReference": {"byPath": {"path": "../../Shared"}}}'
+    )
+
+    project = load_project(project_copy)
+
+    assert project.semantic_model is not None
+    assert project.semantic_model.path == "../Shared"

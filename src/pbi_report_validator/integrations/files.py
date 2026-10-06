@@ -7,6 +7,7 @@ so the output does not depend on where the project lives.
 
 import json
 import logging
+import os
 from pathlib import Path
 
 from pbi_report_validator.domain.raw import (
@@ -37,11 +38,20 @@ class MissingDefinitionError(ProjectLoadError):
 
 
 class InvalidJsonError(ProjectLoadError):
-    """A file the whole report depends on is not valid JSON."""
+    """A file the whole report depends on is unreadable or not valid JSON."""
 
     def __init__(self, path: str, reason: str) -> None:
         """Create the error for ``path`` with the parser's ``reason``."""
         super().__init__(f"{path}: invalid JSON ({reason})")
+        self.path = path
+
+
+class UnreadableFileError(ProjectLoadError):
+    """A semantic model file could not be read as UTF-8 text."""
+
+    def __init__(self, path: str, reason: str) -> None:
+        """Create the error for ``path`` with the underlying ``reason``."""
+        super().__init__(f"{path}: could not read file ({reason})")
         self.path = path
 
 
@@ -59,7 +69,9 @@ def load_project(path: Path) -> RawProject:
     Raises:
         ProjectNotFoundError: No single ``.Report`` folder was found.
         MissingDefinitionError: The report is not in PBIR format.
-        InvalidJsonError: ``report.json`` or ``pages.json`` is not valid JSON.
+        InvalidJsonError: ``report.json``, ``pages.json`` or ``definition.pbir``
+            is unreadable or not valid JSON.
+        UnreadableFileError: A ``.tmdl`` file could not be read.
     """
     report_dir = _find_report_dir(path)
     root = report_dir.parent
@@ -89,12 +101,16 @@ def _find_report_dir(path: Path) -> Path:
 def _find_model_dir(report_dir: Path) -> Path | None:
     pbir = report_dir / "definition.pbir"
     if pbir.is_file():
-        reference = _read_json(pbir, report_dir.parent)
+        reference = _read_required_json(pbir, report_dir.parent)
         by_path = reference.content.get("datasetReference", {}).get("byPath", {})
         if isinstance(by_path, dict) and isinstance(by_path.get("path"), str):
-            candidate = (report_dir / by_path["path"]).resolve()
-            return candidate if candidate.is_dir() else None
-        logger.info("%s has no byPath dataset reference", pbir)
+            model_path: str = by_path["path"]
+            candidate = (report_dir / model_path).resolve()
+            if candidate.is_dir():
+                return candidate
+            logger.warning("%s points to missing folder %s", pbir.name, candidate)
+            return None
+        logger.info("%s has no byPath dataset reference", pbir.name)
         return None
     sibling = report_dir.with_name(
         report_dir.name.removesuffix(REPORT_SUFFIX) + MODEL_SUFFIX
@@ -143,11 +159,16 @@ def _load_semantic_model(model_dir: Path, root: Path) -> RawSemanticModel:
     files = sorted(definition.rglob("*.tmdl"), key=lambda p: p.relative_to(definition))
     return RawSemanticModel(
         path=_relative(model_dir, root),
-        files=tuple(
-            RawTextFile(path=_relative(f, root), text=f.read_text(encoding="utf-8"))
-            for f in files
-        ),
+        files=tuple(_read_text(f, root) for f in files),
     )
+
+
+def _read_text(path: Path, root: Path) -> RawTextFile:
+    relative = _relative(path, root)
+    try:
+        return RawTextFile(path=relative, text=path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError) as exc:
+        raise UnreadableFileError(relative, str(exc)) from exc
 
 
 def _read_required_json(path: Path, root: Path) -> RawJsonFile:
@@ -161,8 +182,8 @@ def _read_json(path: Path, root: Path) -> RawJsonFile:
     relative = _relative(path, root)
     try:
         content = json.loads(path.read_text(encoding="utf-8-sig"))
-    except json.JSONDecodeError as exc:
-        logger.warning("Invalid JSON in %s: %s", relative, exc)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        logger.warning("Could not read %s: %s", relative, exc)
         return RawJsonFile(path=relative, error=str(exc))
     if not isinstance(content, dict):
         return RawJsonFile(path=relative, error="top-level value is not an object")
@@ -176,7 +197,8 @@ def _sorted_subdirs(path: Path) -> list[Path]:
 
 
 def _relative(path: Path, root: Path) -> str:
+    """Path relative to ``root``, with ``..`` segments if it lies outside."""
     try:
-        return path.resolve().relative_to(root.resolve()).as_posix()
-    except ValueError:
-        return path.as_posix()
+        return Path(os.path.relpath(path.resolve(), root.resolve())).as_posix()
+    except ValueError:  # different drive on Windows, no relative path exists
+        return path.name

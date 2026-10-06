@@ -2,7 +2,8 @@
 
 These models are the hand-over point between ``integrations`` (which reads
 files) and ``parsers`` (which interpret them). JSON stays untyped here; the
-parsers turn it into the typed domain models.
+parsers turn it into the typed domain models. The models are frozen, but the
+JSON dictionaries inside them are not; parsers must not modify them.
 """
 
 from typing import Any
