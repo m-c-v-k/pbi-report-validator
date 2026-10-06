@@ -5,7 +5,7 @@ model can be hashed, compared and serialised deterministically.
 """
 
 from enum import StrEnum
-from typing import Final, Literal
+from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -60,12 +60,81 @@ class FilterLevel(StrEnum):
     VISUAL = "visual"
 
 
+class LiteralKind(StrEnum):
+    """Type of a literal value in a filter condition."""
+
+    NUMBER = "number"
+    TEXT = "text"
+    BOOLEAN = "boolean"
+    DATETIME = "datetime"
+    NULL = "null"
+    OTHER = "other"
+
+
+class LiteralValue(DomainModel):
+    """A literal in a filter condition.
+
+    ``value`` is normalised: numbers without type suffix, text unquoted,
+    datetimes as ISO text, booleans as ``true``/``false``, ``""`` for null.
+    ``OTHER`` keeps the raw PBIR literal.
+    """
+
+    kind: LiteralKind
+    value: str
+
+
+class InCondition(DomainModel):
+    """``field in (values)``; several fields compare tuples of values."""
+
+    kind: Literal["in"] = "in"
+    fields: tuple[FieldRef, ...]
+    rows: tuple[tuple[LiteralValue, ...], ...]
+
+
+class ComparisonCondition(DomainModel):
+    """``field <operator> value`` with operator one of ``= > >= < <=``."""
+
+    kind: Literal["comparison"] = "comparison"
+    field: FieldRef
+    operator: Literal["=", ">", ">=", "<", "<="]
+    value: LiteralValue
+
+
+class NotCondition(DomainModel):
+    """Negation of another condition."""
+
+    kind: Literal["not"] = "not"
+    operand: "Condition"
+
+
+class BinaryCondition(DomainModel):
+    """``left and right`` or ``left or right``."""
+
+    kind: Literal["and", "or"]
+    left: "Condition"
+    right: "Condition"
+
+
+class AllCondition(DomainModel):
+    """Several top-level conditions of one filter, all of which must hold."""
+
+    kind: Literal["all"] = "all"
+    items: tuple["Condition", ...]
+
+
+Condition = Annotated[
+    InCondition | ComparisonCondition | NotCondition | BinaryCondition | AllCondition,
+    Field(discriminator="kind"),
+]
+
+
 class Filter(DomainModel):
     """A filter card on the report, a page or a visual.
 
     ``condition`` is a normalised, human-readable form of the filter
     expression (for example ``Product[Category] in ('Bikes', 'Clothing')``),
-    or ``None`` when the filter card has no active condition.
+    or ``None`` when the filter card has no active condition. ``expression``
+    is the same condition in structured form, used to build DAX.
     """
 
     name: str
@@ -73,6 +142,7 @@ class Filter(DomainModel):
     filter_type: str
     field: FieldRef | None = None
     condition: str | None = None
+    expression: Condition | None = None
 
 
 class SlicerState(DomainModel):
@@ -80,6 +150,7 @@ class SlicerState(DomainModel):
 
     field: FieldRef | None = None
     condition: str | None = None
+    expression: Condition | None = None
 
 
 class Position(DomainModel):
@@ -314,3 +385,11 @@ class DiffResult(DomainModel):
     @classmethod
     def _sort_findings(cls, findings: tuple[Finding, ...]) -> tuple[Finding, ...]:
         return tuple(sorted(findings, key=lambda f: f.sort_key))
+
+
+# Resolve the forward references of the recursive condition models.
+NotCondition.model_rebuild()
+BinaryCondition.model_rebuild()
+AllCondition.model_rebuild()
+Filter.model_rebuild()
+SlicerState.model_rebuild()
