@@ -414,7 +414,11 @@ class DataStatus(StrEnum):
 
 
 class DataSummary(DomainModel):
-    """Data comparison result for one visual (``page/visual``)."""
+    """Data comparison result for one visual (``page/visual``).
+
+    ``max_abs_delta`` is the largest numeric difference among matched rows,
+    including differences within the tolerance (so small drift is visible).
+    """
 
     path: str
     status: DataStatus

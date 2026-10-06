@@ -121,11 +121,13 @@ def _frame(
     canonical = [f"k{i}" for i in range(len(keys))] + [
         f"v{i}" for i in range(len(values))
     ]
+    # The API returns no column names for a result without rows, so columns
+    # can only be checked when there are some.
+    missing = [name for name in wanted if name not in result.columns]
+    if result.columns and missing:
+        raise ComparisonError(f"{label} result has no column {', '.join(missing)}")
     if not result.rows:
         return pd.DataFrame(columns=canonical, dtype=object)
-    missing = [name for name in wanted if name not in result.columns]
-    if missing:
-        raise ComparisonError(f"{label} result has no column {', '.join(missing)}")
     frame = pd.DataFrame(list(result.rows), columns=list(result.columns), dtype=object)
     frame = frame[wanted].set_axis(canonical, axis=1)
     if keys and frame.duplicated(subset=canonical[: len(keys)]).any():
@@ -143,7 +145,7 @@ def _merge(old: pd.DataFrame, new: pd.DataFrame, key_count: int) -> pd.DataFrame
         new, on=on, how="outer", suffixes=("_old", "_new"), indicator=SIDE
     )
     merged[SIDE] = merged[SIDE].astype(str)
-    order = merged[on].map(_sort_text).apply(tuple, axis=1)
+    order = merged[on].map(_sort_key).apply(tuple, axis=1)
     return merged.loc[order.sort_values(kind="stable").index]
 
 
@@ -215,6 +217,12 @@ def display(value: CellValue) -> str:
     return str(value)
 
 
-def _sort_text(value: object) -> str:
+def _sort_key(value: object) -> tuple[int, float, str]:
+    """Blanks first, then numbers in numeric order, then everything else."""
     cell = _cell(value)
-    return "" if cell is None else f"{type(cell).__name__}:{cell}"
+    if cell is None:
+        return (0, 0.0, "")
+    number = _number(cell)
+    if number is not None:
+        return (1, number, "")
+    return (2, 0.0, f"{type(cell).__name__}:{cell}")

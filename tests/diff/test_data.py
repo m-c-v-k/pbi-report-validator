@@ -203,3 +203,27 @@ def test_not_validated_helper() -> None:
 )
 def test_display(value: CellValue, text: str) -> None:
     assert display(value) == text
+
+
+def test_empty_result_with_wrong_columns_is_not_validated() -> None:
+    wrong = QueryResult(columns=("Date[Month]", "[Other]"), rows=())
+
+    comparison = compare_results(PATH, wrong, result(("a", 1)), KEYS, VALUES)
+
+    assert comparison.summary.status == DataStatus.NOT_VALIDATED
+
+
+def test_numeric_keys_sort_naturally() -> None:
+    columns = ("Date[Year]", "[V]")
+    old = result((9, 1), (10, 1), (2024, 1), columns=columns)
+    new = result((9, 2), (10, 2), (2024, 2), columns=columns)
+
+    comparison = compare_results(
+        PATH, old, new, [("Date[Year]", "Date[Year]")], [("[V]", "[V]")]
+    )
+
+    assert [f.path.split("=")[1].split("/")[0] for f in comparison.findings] == [
+        "9",
+        "10",
+        "2024",
+    ]
