@@ -3,7 +3,16 @@ from pathlib import Path
 
 import pytest
 
-from pbi_report_validator.domain.models import Category, ChangeKind, DiffResult, Finding
+from pbi_report_validator.domain.models import (
+    Category,
+    ChangeKind,
+    DiffResult,
+    Finding,
+    ItemStatus,
+    PageView,
+    Position,
+    VisualView,
+)
 from pbi_report_validator.integrations.templates import (
     TemplateNotFoundError,
     read_template,
@@ -85,3 +94,81 @@ def test_every_category_has_a_label() -> None:
 def test_every_change_kind_has_a_colour_rule() -> None:
     for change in ChangeKind:
         assert f".change-{change.value}" in TEMPLATE
+
+
+def page_svg(html: str, page: str) -> str:
+    start = html.index(f'id="page-{page}"')
+    return html[start : html.index("</figure>", start)]
+
+
+def test_each_page_has_a_wireframe_with_every_visual() -> None:
+    html = fixture_html()
+
+    assert html.count('<figure class="page"') == 3
+    overview = page_svg(html, "overview")
+    assert 'viewBox="0 0 1280.0 720.0"' in overview
+    new_layer = overview[
+        overview.index('class="layout-new"') : overview.index('class="layout-old"')
+    ]
+    assert new_layer.count('<g class="visual') == 4
+
+
+def test_status_classes_and_marks_in_wireframes() -> None:
+    html = fixture_html()
+
+    overview = page_svg(html, "overview")
+    assert (
+        'class="visual status-modified" data-visual="chart_sales_by_month"' in overview
+    )
+    assert 'class="visual status-unchanged" data-visual="card_total_sales"' in overview
+    trends = page_svg(html, "trends")
+    assert 'class="visual status-added" data-visual="chart_margin_by_month"' in trends
+    assert ">+ Margin by month</text>" in trends
+
+
+def test_moved_visual_shows_previous_position() -> None:
+    details = page_svg(fixture_html(), "details")
+
+    assert (
+        '<rect class="previous" x="840.0" y="40.0" width="400.0" height="320.0"'
+        in details
+    )
+    assert 'data-visual="chart_sales_by_region"' in details
+    assert 'x="840.0" y="360.0" width="400.0" height="320.0"' in details
+
+
+def test_layout_toggle_only_on_modified_pages() -> None:
+    html = fixture_html()
+
+    assert 'class="layout-toggle"' in page_svg(html, "overview")
+    assert 'class="layout-toggle"' not in page_svg(html, "trends")
+
+
+def test_visual_missing_in_one_version_is_a_ghost_in_that_layout() -> None:
+    result = DiffResult(
+        old_source="o",
+        new_source="n",
+        pages=(
+            PageView(
+                name="p",
+                display_name="P",
+                status=ItemStatus.MODIFIED,
+                ordinal=0,
+                width=100,
+                height=100,
+                visuals=(
+                    VisualView(
+                        name="gone",
+                        visual_type="card",
+                        status=ItemStatus.REMOVED,
+                        old_position=Position(x=1, y=2, width=3, height=4),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    svg = page_svg(render(result), "p")
+
+    assert 'class="visual status-removed ghost" data-visual="gone"' in svg
+    assert 'class="visual status-removed" data-visual="gone"' in svg

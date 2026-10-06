@@ -9,7 +9,7 @@ from collections import Counter
 
 from jinja2 import Environment, StrictUndefined
 
-from pbi_report_validator.domain.models import Category, DiffResult
+from pbi_report_validator.domain.models import Category, DiffResult, ItemStatus
 
 REPORT_TEMPLATE = "report.html.j2"
 CATEGORY_LABELS = {
@@ -20,6 +20,19 @@ CATEGORY_LABELS = {
     Category.SLICER: "Slicers",
     Category.MEASURE: "Measures",
     Category.PARSE_ISSUE: "Parse issues",
+}
+STATUS_LABELS = {
+    ItemStatus.ADDED: "Added",
+    ItemStatus.REMOVED: "Removed",
+    ItemStatus.MODIFIED: "Modified",
+    ItemStatus.UNCHANGED: "Unchanged",
+}
+# A text mark next to the colour, so status is not conveyed by colour alone.
+STATUS_MARKS = {
+    ItemStatus.ADDED: "+",
+    ItemStatus.REMOVED: "-",
+    ItemStatus.MODIFIED: "~",
+    ItemStatus.UNCHANGED: "",
 }
 
 
@@ -50,4 +63,6 @@ def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
             (c.value, CATEGORY_LABELS[c], counts[c]) for c in Category if counts[c]
         ],
         labels={c.value: CATEGORY_LABELS[c] for c in Category},
+        status_labels={s.value: label for s, label in STATUS_LABELS.items()},
+        status_marks={s.value: mark for s, mark in STATUS_MARKS.items()},
     )

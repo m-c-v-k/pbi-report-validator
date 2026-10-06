@@ -50,6 +50,40 @@ tr:last-child td { border-bottom: 0; }
 .empty { color: var(--muted); }
 footer { margin-top: 40px; color: var(--muted); font-size: 0.85rem; }
 footer a { color: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 16px; padding: 0; list-style: none; color: var(--muted); }
+.legend li::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 6px;
+  vertical-align: -1px; border: 2px solid currentColor; border-radius: 2px; }
+.legend .status-added { color: var(--added); }
+.legend .status-removed { color: var(--removed); }
+.legend .status-modified { color: var(--modified); }
+.legend .status-unchanged { color: var(--unchanged); }
+.legend .ghost::before { border-style: dashed; }
+.page { margin: 0 0 28px; }
+.page-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 8px; }
+.page-head h3 { margin: 0; font-size: 1rem; }
+.badge { font-size: 0.8rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.badge.status-added { color: var(--added); }
+.badge.status-removed { color: var(--removed); }
+.badge.status-modified { color: var(--modified); }
+.badge.status-unchanged { color: var(--unchanged); }
+.layout-toggle { margin-left: auto; display: flex; gap: 4px; }
+.layout-toggle button { background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 2px 10px; cursor: pointer; font: inherit; font-size: 0.85rem; }
+.layout-toggle button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.wireframe { display: block; width: 100%; height: auto; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; }
+.wireframe .canvas { fill: var(--bg); }
+.wireframe .visual rect { fill-opacity: 0.12; stroke-width: 3; }
+.wireframe .visual text { fill: var(--text); font: 600 22px system-ui, sans-serif; }
+.wireframe .visual .sub { font-weight: 400; fill: var(--muted); }
+.wireframe .status-added rect { stroke: var(--added); fill: var(--added); }
+.wireframe .status-removed rect { stroke: var(--removed); fill: var(--removed); stroke-dasharray: 10 6; }
+.wireframe .status-modified rect { stroke: var(--modified); fill: var(--modified); }
+.wireframe .status-unchanged rect { stroke: var(--unchanged); fill: var(--unchanged); }
+.wireframe .ghost rect { fill-opacity: 0; stroke-dasharray: 4 6; }
+.wireframe .ghost text { opacity: 0.6; }
+.wireframe .previous { fill: none; stroke: var(--modified); stroke-width: 2; stroke-dasharray: 4 6; }
+.page[data-layout="new"] .layout-old, .page[data-layout="old"] .layout-new { display: none; }
 </style>
 </head>
 <body>
@@ -72,6 +106,59 @@ footer a { color: var(--accent); }
   <p class="empty">No differences found.</p>
 {% endif %}
 </section>
+
+{% macro visual_box(v, pos, ghost) %}
+        <g class="visual status-{{ v.status.value }}{{ ' ghost' if ghost }}" data-visual="{{ v.name }}">
+          <title>{{ v.visual_type }}{{ ': ' ~ v.title if v.title }} ({{ v.name }}) &ndash; {{ status_labels[v.status.value] }}{{ ', not in this version' if ghost }}</title>
+          <rect x="{{ pos.x }}" y="{{ pos.y }}" width="{{ pos.width }}" height="{{ pos.height }}" rx="6"></rect>
+          <text x="{{ pos.x + 10 }}" y="{{ pos.y + 30 }}">{{ status_marks[v.status.value] }} {{ v.title or v.visual_type }}</text>
+          <text class="sub" x="{{ pos.x + 10 }}" y="{{ pos.y + 56 }}">{{ v.visual_type }}</text>
+        </g>
+{% endmacro %}
+{% if result.pages %}
+<section aria-labelledby="pages-title">
+  <h2 id="pages-title">Pages</h2>
+  <ul class="legend">
+    <li class="status-added">{{ status_marks['added'] }} Added</li>
+    <li class="status-removed">{{ status_marks['removed'] }} Removed</li>
+    <li class="status-modified">{{ status_marks['modified'] }} Modified</li>
+    <li class="status-unchanged">Unchanged</li>
+    <li class="status-modified ghost">Previous position / not in this version</li>
+  </ul>
+{% for page in result.pages %}
+  <figure class="page" id="page-{{ page.name }}" data-page="{{ page.name }}" data-layout="new">
+    <div class="page-head">
+      <h3>{{ page.display_name }}</h3>
+      <span class="badge status-{{ page.status.value }}">{{ status_labels[page.status.value] }}</span>
+      <span class="mono">{{ page.name }}</span>
+{% if page.status.value == 'modified' %}
+      <div class="layout-toggle" role="group" aria-label="Layout">
+        <button type="button" data-layout="old" aria-pressed="false">Old</button>
+        <button type="button" data-layout="new" aria-pressed="true">New</button>
+      </div>
+{% endif %}
+    </div>
+    <svg class="wireframe" viewBox="0 0 {{ page.width }} {{ page.height }}" role="img"
+         aria-label="Layout of page {{ page.display_name }}">
+      <rect class="canvas" x="0" y="0" width="{{ page.width }}" height="{{ page.height }}"></rect>
+      <g class="layout-new">
+{% for v in page.visuals %}
+{% if v.new_position and v.old_position and v.new_position != v.old_position %}
+        <rect class="previous" x="{{ v.old_position.x }}" y="{{ v.old_position.y }}" width="{{ v.old_position.width }}" height="{{ v.old_position.height }}" rx="6"></rect>
+{% endif %}
+{{ visual_box(v, v.new_position or v.old_position, v.new_position is none) }}
+{% endfor %}
+      </g>
+      <g class="layout-old">
+{% for v in page.visuals %}
+{{ visual_box(v, v.old_position or v.new_position, v.old_position is none) }}
+{% endfor %}
+      </g>
+    </svg>
+  </figure>
+{% endfor %}
+</section>
+{% endif %}
 
 {% if result.findings %}
 <section aria-labelledby="findings-title">
@@ -112,6 +199,17 @@ footer a { color: var(--accent); }
 </footer>
 </main>
 <script>
+(function () {
+  document.querySelectorAll(".page .layout-toggle button").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var page = button.closest(".page");
+      page.setAttribute("data-layout", button.getAttribute("data-layout"));
+      page.querySelectorAll(".layout-toggle button").forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b === button));
+      });
+    });
+  });
+})();
 (function () {
   var buttons = document.querySelectorAll("[data-filter]");
   var rows = document.querySelectorAll("#findings tbody tr");
