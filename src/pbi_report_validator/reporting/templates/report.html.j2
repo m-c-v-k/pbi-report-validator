@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="pbi-report-validator {{ tool_version }}">
+<title>Power BI report diff</title>
+<style>
+:root {
+  --bg: #ffffff; --surface: #f6f7f9; --text: #1d2125; --muted: #5c6670;
+  --border: #d9dde2; --accent: #2457c5;
+  --added: #1a7f37; --removed: #c62828; --modified: #b26a00; --unchanged: #6e7781;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15181c; --surface: #1f2329; --text: #e6e8eb; --muted: #9aa4ae;
+    --border: #343a42; --accent: #7ea6ff;
+    --added: #4ac26b; --removed: #ff6b6b; --modified: #e3a33b; --unchanged: #8b949e;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+h2 { font-size: 1.15rem; margin: 32px 0 12px; }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.9em; }
+.sources { color: var(--muted); margin: 0; word-break: break-all; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.card .n { font-size: 1.6rem; font-weight: 600; }
+.card .label { color: var(--muted); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.filters button { background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 999px; padding: 4px 12px; cursor: pointer; font: inherit; }
+.filters button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+th { background: var(--surface); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.change { font-weight: 600; white-space: nowrap; }
+.change-added { color: var(--added); }
+.change-removed { color: var(--removed); }
+.change-error { color: var(--removed); }
+.change-modified, .change-moved, .change-retyped, .change-renamed, .change-reordered { color: var(--modified); }
+.values pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+.values .old { color: var(--removed); }
+.values .new { color: var(--added); }
+.empty { color: var(--muted); }
+footer { margin-top: 40px; color: var(--muted); font-size: 0.85rem; }
+footer a { color: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 16px; padding: 0; list-style: none; color: var(--muted); }
+.legend li::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 6px;
+  vertical-align: -1px; border: 2px solid currentColor; border-radius: 2px; }
+.legend .status-added { color: var(--added); }
+.legend .status-removed { color: var(--removed); }
+.legend .status-modified { color: var(--modified); }
+.legend .status-unchanged { color: var(--unchanged); }
+.legend .ghost::before { border-style: dashed; }
+.page { margin: 0 0 28px; }
+.page-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 8px; }
+.page-head h3 { margin: 0; font-size: 1rem; }
+.badge { font-size: 0.8rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.badge.status-added { color: var(--added); }
+.badge.status-removed { color: var(--removed); }
+.badge.status-modified { color: var(--modified); }
+.badge.status-unchanged { color: var(--unchanged); }
+.layout-toggle { margin-left: auto; display: flex; gap: 4px; }
+.layout-toggle button { background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 2px 10px; cursor: pointer; font: inherit; font-size: 0.85rem; }
+.layout-toggle button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.wireframe { display: block; width: 100%; height: auto; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; }
+.wireframe .canvas { fill: var(--bg); }
+.wireframe .visual rect { fill-opacity: 0.12; stroke-width: 3; }
+.wireframe .visual text { fill: var(--text); font: 600 22px system-ui, sans-serif; }
+.wireframe .visual .sub { font-weight: 400; fill: var(--muted); }
+.wireframe .status-added rect { stroke: var(--added); fill: var(--added); }
+.wireframe .status-removed rect { stroke: var(--removed); fill: var(--removed); stroke-dasharray: 10 6; }
+.wireframe .status-modified rect { stroke: var(--modified); fill: var(--modified); }
+.wireframe .status-unchanged rect { stroke: var(--unchanged); fill: var(--unchanged); }
+.wireframe .ghost rect { fill-opacity: 0; stroke-dasharray: 4 6; }
+.wireframe .ghost text { opacity: 0.6; }
+.wireframe .previous { fill: none; stroke: var(--modified); stroke-width: 2; stroke-dasharray: 4 6; }
+.page[data-layout="new"] .layout-old, .page[data-layout="old"] .layout-new { display: none; }
+.wireframe a { cursor: pointer; }
+.wireframe a:hover rect, .wireframe a:focus rect { stroke-width: 6; }
+.visual-detail { border: 1px solid var(--border); border-radius: 8px; margin: 0 0 10px; background: var(--surface); }
+.visual-detail > summary { cursor: pointer; padding: 10px 12px; font-weight: 600; }
+.visual-detail[open] > summary { border-bottom: 1px solid var(--border); }
+.visual-detail:target { outline: 2px solid var(--accent); }
+.detail-body { padding: 8px 12px 12px; }
+.detail-body dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 8px; }
+.detail-body dt { color: var(--muted); }
+.detail-body dd { margin: 0; }
+.detail-body ul { margin: 0; padding-left: 18px; }
+.detail-body li { margin: 6px 0; }
+td a, .detail-body a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Power BI report diff</h1>
+  <p class="sources"><code>{{ result.old_source }}</code> &rarr; <code>{{ result.new_source }}</code></p>
+</header>
+
+<section aria-labelledby="summary-title">
+  <h2 id="summary-title">Summary</h2>
+{% if result.findings %}
+  <div class="cards">
+    <div class="card"><div class="n" data-count="total">{{ result.findings | length }}</div><div class="label">Findings</div></div>
+{% for key, label, count in categories %}
+    <div class="card"><div class="n" data-count="{{ key }}">{{ count }}</div><div class="label">{{ label }}</div></div>
+{% endfor %}
+  </div>
+{% else %}
+  <p class="empty">No differences found.</p>
+{% endif %}
+</section>
+
+{% macro visual_box(page, v, pos, ghost) %}
+{% if pos %}
+{% set key = page.name ~ '/' ~ v.name %}
+{% if key in details %}        <a href="#{{ key }}" data-open="{{ key }}">
+{% endif %}
+        <g class="visual status-{{ v.status.value }}{{ ' ghost' if ghost }}" data-visual="{{ v.name }}">
+          <title>{{ v.visual_type }}{{ ': ' ~ v.title if v.title }} ({{ v.name }}) &ndash; {{ status_labels[v.status.value] }}{{ ', not in this version' if ghost }}</title>
+          <rect x="{{ pos.x }}" y="{{ pos.y }}" width="{{ pos.width }}" height="{{ pos.height }}" rx="6"></rect>
+          <text x="{{ pos.x + 10 }}" y="{{ pos.y + 30 }}">{{ (status_marks[v.status.value] ~ ' ' ~ (v.title or v.visual_type)) | trim }}</text>
+          <text class="sub" x="{{ pos.x + 10 }}" y="{{ pos.y + 56 }}">{{ v.visual_type }}</text>
+        </g>
+{% if key in details %}        </a>
+{% endif %}
+{% endif %}
+{% endmacro %}
+{% if result.pages %}
+<section aria-labelledby="pages-title">
+  <h2 id="pages-title">Pages</h2>
+  <ul class="legend">
+    <li class="status-added">{{ status_marks['added'] }} Added</li>
+    <li class="status-removed">{{ status_marks['removed'] }} Removed</li>
+    <li class="status-modified">{{ status_marks['modified'] }} Modified</li>
+    <li class="status-unchanged">Unchanged</li>
+    <li class="status-modified ghost">Previous position / not in this version</li>
+  </ul>
+{% for page in result.pages %}
+  <figure class="page" id="page-{{ page.name }}" data-page="{{ page.name }}" data-layout="new">
+    <div class="page-head">
+      <h3>{{ page.display_name }}</h3>
+      <span class="badge status-{{ page.status.value }}">{{ status_labels[page.status.value] }}</span>
+      <span class="mono">{{ page.name }}</span>
+{% if page.status.value == 'modified' %}
+      <div class="layout-toggle" role="group" aria-label="Layout">
+        <button type="button" data-layout="old" aria-pressed="false">Old</button>
+        <button type="button" data-layout="new" aria-pressed="true">New</button>
+      </div>
+{% endif %}
+    </div>
+    <svg class="wireframe" viewBox="0 0 {{ page.width }} {{ page.height }}" role="img"
+         aria-label="Layout of page {{ page.display_name }}">
+      <rect class="canvas" x="0" y="0" width="{{ page.width }}" height="{{ page.height }}"></rect>
+      <g class="layout-new">
+{% for v in page.visuals %}
+{% if v.new_position and v.old_position and v.new_position != v.old_position %}
+        <rect class="previous" x="{{ v.old_position.x }}" y="{{ v.old_position.y }}" width="{{ v.old_position.width }}" height="{{ v.old_position.height }}" rx="6"></rect>
+{% endif %}
+{{ visual_box(page, v, v.new_position or v.old_position, v.new_position is none) }}
+{% endfor %}
+      </g>
+      <g class="layout-old">
+{% for v in page.visuals %}
+{{ visual_box(page, v, v.old_position or v.new_position, v.old_position is none) }}
+{% endfor %}
+      </g>
+    </svg>
+  </figure>
+{% endfor %}
+</section>
+{% endif %}
+
+{% macro position(pos) %}{% if pos %}x {{ pos.x | round | int }}, y {{ pos.y | round | int }}, {{ pos.width | round | int }} &times; {{ pos.height | round | int }}{% else %}&ndash;{% endif %}{% endmacro %}
+{% if details %}
+<section aria-labelledby="details-title">
+  <h2 id="details-title">Visual details</h2>
+{% for page in result.pages %}
+{% for v in page.visuals %}
+{% set key = page.name ~ '/' ~ v.name %}
+{% if key in details %}
+  <details class="visual-detail" id="{{ key }}">
+    <summary>{{ status_marks[v.status.value] }} {{ v.title or v.visual_type }} <span class="mono">{{ key }}</span> &ndash; {{ status_labels[v.status.value] }}</summary>
+    <div class="detail-body">
+      <dl>
+        <dt>Page</dt><dd><a href="#page-{{ page.name }}">{{ page.display_name }}</a></dd>
+        <dt>Type</dt><dd>{{ v.visual_type }}</dd>
+        <dt>Position</dt><dd>{{ position(v.old_position) }} &rarr; {{ position(v.new_position) }}</dd>
+      </dl>
+      <ul>
+{% for f in details[key] %}
+        <li><span class="change change-{{ f.change.value }}">{{ f.change.value }}</span> {{ labels[f.category.value] }}: {{ f.message }}
+{% if f.old is not none or f.new is not none %}
+          <div class="values">
+{% if f.old is not none %}            <pre class="old">{{ f.old }}</pre>
+{% endif %}
+{% if f.new is not none %}            <pre class="new">{{ f.new }}</pre>
+{% endif %}
+          </div>
+{% endif %}
+        </li>
+{% endfor %}
+      </ul>
+    </div>
+  </details>
+{% endif %}
+{% endfor %}
+{% endfor %}
+</section>
+{% endif %}
+
+{% if result.findings %}
+<section aria-labelledby="findings-title">
+  <h2 id="findings-title">Findings</h2>
+  <div class="filters" role="group" aria-label="Filter by category">
+    <button type="button" data-filter="all" aria-pressed="true">All</button>
+{% for key, label, count in categories %}
+    <button type="button" data-filter="{{ key }}" aria-pressed="false">{{ label }} ({{ count }})</button>
+{% endfor %}
+  </div>
+  <div class="table-wrap">
+    <table id="findings">
+      <thead><tr><th>Change</th><th>Category</th><th>Where</th><th>What</th><th>Old &rarr; new</th></tr></thead>
+      <tbody>
+{% for f in result.findings %}
+        <tr data-category="{{ f.category.value }}">
+          <td class="change change-{{ f.change.value }}">{{ f.change.value }}</td>
+          <td>{{ labels[f.category.value] }}</td>
+{% set target = visual_key(f.path) %}
+          <td class="mono">{% if target %}<a href="#{{ target }}" data-open="{{ target }}">{{ f.path }}</a>{% else %}{{ f.path }}{% endif %}</td>
+          <td>{{ f.message }}</td>
+          <td class="values">
+{% if f.old is not none %}            <pre class="old">{{ f.old }}</pre>
+{% endif %}
+{% if f.new is not none %}            <pre class="new">{{ f.new }}</pre>
+{% endif %}
+          </td>
+        </tr>
+{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<footer>
+  Generated by <a href="https://github.com/m-c-v-k/pbi-report-validator">pbi-report-validator</a>
+  {{ tool_version }} &middot; schema {{ result.schema_version }}
+</footer>
+</main>
+<script>
+(function () {
+  function openDetail(id) {
+    var detail = document.getElementById(id);
+    if (detail && detail.tagName === "DETAILS") { detail.open = true; }
+  }
+  document.querySelectorAll("[data-open]").forEach(function (link) {
+    link.addEventListener("click", function () { openDetail(link.getAttribute("data-open")); });
+  });
+  function openFromHash() {
+    if (location.hash.length > 1) { openDetail(decodeURIComponent(location.hash.slice(1))); }
+  }
+  window.addEventListener("hashchange", openFromHash);
+  openFromHash();
+})();
+(function () {
+  document.querySelectorAll(".page .layout-toggle button").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var page = button.closest(".page");
+      page.setAttribute("data-layout", button.getAttribute("data-layout"));
+      page.querySelectorAll(".layout-toggle button").forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b === button));
+      });
+    });
+  });
+})();
+(function () {
+  var buttons = document.querySelectorAll("[data-filter]");
+  var rows = document.querySelectorAll("#findings tbody tr");
+  buttons.forEach(function (button) {
+    button.addEventListener("click", function () {
+      var filter = button.getAttribute("data-filter");
+      buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b === button)); });
+      rows.forEach(function (row) {
+        row.hidden = filter !== "all" && row.getAttribute("data-category") !== filter;
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

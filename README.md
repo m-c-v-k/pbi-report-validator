@@ -1,11 +1,12 @@
 # pbi-report-validator
 
 [![CI](https://github.com/m-c-v-k/pbi-report-validator/actions/workflows/ci.yml/badge.svg)](https://github.com/m-c-v-k/pbi-report-validator/actions/workflows/ci.yml)
+[![Demo](https://img.shields.io/badge/demo-live%20report-2457c5)](https://m-c-v-k.github.io/pbi-report-validator/)
 
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
 
-**Status:** preview (v0.0.1). Structural diff works; see the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time) for what comes next.
+**Status:** v0.1.0 – structural diff with JSON, Markdown and HTML reports. See the [live demo report](https://m-c-v-k.github.io/pbi-report-validator/) and the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
 
 ## Why
 
@@ -26,14 +27,30 @@ Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 for you).
 Install the latest release as a command-line tool:
 
 ```bash
-uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.0.1
+uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.1.0
 ```
 
 Or run it once without installing:
 
 ```bash
-uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.0.1 pbi-validate --help
+uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.1.0 pbi-validate --help
 ```
+
+Each [GitHub release](https://github.com/m-c-v-k/pbi-report-validator/releases)
+also has the wheel attached, which `pip install` or `uv tool install` accept
+directly.
+
+### Docker
+
+Each release is also published as an image on GitHub Container Registry.
+Mount the folder that holds both reports at `/work`:
+
+```bash
+docker run --rm -v "$PWD:/work" ghcr.io/m-c-v-k/pbi-report-validator diff old new
+```
+
+To write `--json`, `--markdown` or `--html` files into the mounted folder on Linux,
+add `--user "$(id -u):$(id -g)"` so the files are owned by you.
 
 ## Quick start
 
@@ -44,12 +61,18 @@ uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.0.1 pbi-valida
 2. Compare them:
 
 ```bash
-pbi-validate diff ./old ./new --json diff.json
+pbi-validate diff ./old ./new --html report.html
 ```
 
 Each argument is a PBIP project folder (containing one `<Name>.Report` folder)
-or the `.Report` folder itself. The terminal shows a summary; `--json` writes
-every finding with old and new values (the JSON has a `schema_version`).
+or the `.Report` folder itself. The terminal always shows a summary; add any of:
+
+| Option | Output |
+|---|---|
+| `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
+| `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
+| `--json PATH` | Every finding with old and new values, plus every page and visual with its status (`schema_version` 1.1) |
+
 Running it on the sample reports in this repository gives:
 
 ```text
@@ -71,10 +94,10 @@ Compared tests/fixtures/sales_v1 -> tests/fixtures/sales_v2
 ```
 
 Exit codes: `0` when the comparison ran (whether or not there are
-differences), `1` when a project cannot be loaded or the JSON cannot be
+differences), `1` when a project cannot be loaded or an output file cannot be
 written. No credentials or environment variables are needed.
 
-### What it compares (v0.0.1)
+### What it compares
 
 - Pages: added, removed, renamed, reordered
 - Visuals: added, removed, moved/resized, type changed, title changed
@@ -91,13 +114,12 @@ written. No credentials or environment variables are needed.
   not supported (save as `.pbip` with PBIR enabled)
 - No data comparison yet: it shows what changed in the definition, not
   whether the numbers differ
-- Output is terminal text and JSON; Markdown and HTML reports come in v0.1.0
 - A visual moved to a different page shows as removed on one page and added
   on the other
 
-Coming next: Markdown and HTML reports, data validation against published
-semantic models, a Docker image and a GitHub Action that comments on pull
-requests that change a report.
+Coming next: data validation against published semantic models (re-run each
+visual as a DAX query and compare the numbers) and a GitHub Action that
+comments on pull requests that change a report.
 
 ## Data handling
 
@@ -117,7 +139,7 @@ uv run ruff check . && uv run ruff format --check .
 uv run mypy src
 ```
 
-Built with Python, uv, Typer and Pydantic. See [CLAUDE.md](CLAUDE.md) for
+Built with Python, uv, Typer, Pydantic and Jinja2. See [CLAUDE.md](CLAUDE.md) for
 architecture and contribution rules, and [docs/PROJECT.md](docs/PROJECT.md) for
 scope and milestones.
 

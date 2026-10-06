@@ -1,19 +1,26 @@
 [project]
 name = "pbi-report-validator"
-version = "0.0.1"
+version = "0.1.0"
 description = "Compare two versions of a Power BI report (PBIP) and report what changed."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Marcus Klingborg" }]
 requires-python = ">=3.12"
+keywords = ["power-bi", "pbip", "pbir", "tmdl", "report", "diff", "validation", "ci"]
 classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
-    "Environment :: Console",
     "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
 ]
 dependencies = [
+    "jinja2>=3.1.6",
     "pydantic>=2.13.5",
     "typer>=0.27.2",
 ]
@@ -22,7 +29,10 @@ dependencies = [
 pbi-validate = "pbi_report_validator.cli.main:app"
 
 [project.urls]
+Homepage = "https://github.com/m-c-v-k/pbi-report-validator"
 Repository = "https://github.com/m-c-v-k/pbi-report-validator"
+Issues = "https://github.com/m-c-v-k/pbi-report-validator/issues"
+Changelog = "https://github.com/m-c-v-k/pbi-report-validator/releases"
 
 [build-system]
 requires = ["hatchling"]

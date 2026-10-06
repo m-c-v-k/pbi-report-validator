@@ -4,6 +4,7 @@ import pytest
 from typer.testing import CliRunner
 
 from pbi_report_validator.cli.main import app
+from pbi_report_validator.integrations.templates import TemplateNotFoundError
 
 REPO_ROOT = Path(__file__).parent.parent.parent
 SNAPSHOT = REPO_ROOT / "tests/snapshots/diff_sales_v1_v2.json"
@@ -90,3 +91,53 @@ def test_verbose_logs_progress(caplog: pytest.LogCaptureFixture) -> None:
 
     assert result.exit_code == 0
     assert "Found 7 findings" in caplog.text
+
+
+def test_diff_markdown_matches_snapshot(tmp_path: Path) -> None:
+    # Update with: uv run pbi-validate diff tests/fixtures/sales_v1
+    #   tests/fixtures/sales_v2 --markdown tests/snapshots/diff_sales_v1_v2.md
+    target = tmp_path / "diff.md"
+
+    result = runner.invoke(app, ["diff", OLD, NEW, "--markdown", str(target)])
+
+    assert result.exit_code == 0
+    assert "Markdown written to" in result.stdout
+    expected = REPO_ROOT / "tests/snapshots/diff_sales_v1_v2.md"
+    assert target.read_bytes() == expected.read_bytes()
+
+
+def test_json_and_markdown_together(tmp_path: Path) -> None:
+    json_file, md_file = tmp_path / "d.json", tmp_path / "d.md"
+
+    result = runner.invoke(
+        app, ["diff", OLD, NEW, "--json", str(json_file), "--markdown", str(md_file)]
+    )
+
+    assert result.exit_code == 0
+    assert json_file.exists() and md_file.exists()
+    assert "JSON written to" in result.stdout
+    assert "Markdown written to" in result.stdout
+
+
+def test_diff_writes_html_report(tmp_path: Path) -> None:
+    target = tmp_path / "report.html"
+
+    result = runner.invoke(app, ["diff", OLD, NEW, "--html", str(target)])
+
+    assert result.exit_code == 0
+    assert "HTML written to" in result.stdout
+    assert target.read_text(encoding="utf-8").startswith("<!doctype html>")
+
+
+def test_missing_html_template_exits_with_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def missing(name: str) -> str:
+        raise TemplateNotFoundError(f"template {name} not found")
+
+    monkeypatch.setattr("pbi_report_validator.services.validate.read_template", missing)
+
+    result = runner.invoke(app, ["diff", OLD, NEW, "--html", str(tmp_path / "r.html")])
+
+    assert result.exit_code == 1
+    assert "Error: template report.html.j2 not found" in result.stderr
