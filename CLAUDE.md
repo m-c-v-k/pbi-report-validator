@@ -115,8 +115,9 @@ integrations/ ALL I/O: filesystem, Power BI REST API, Anthropic API, env config.
 - Never commit directly to `main` or `develop`. Create feature branches from
   `develop` (`feat/<issue>-slug`, `fix/<issue>-slug`) and open PRs against
   `develop`; one issue per PR, PR description starts with `Closes #<issue>`.
-  Keep PRs under ~300 changed lines; propose a split if an issue grows beyond
-  that.
+  Keep PRs under ~300 changed source lines (`src/`; tests, fixtures,
+  snapshots and docs do not count) and state the source line count in the
+  PR description; propose a split if an issue grows beyond that.
 - `main` holds released versions only. It changes solely through a release PR
   from `develop` to `main`, followed by a version tag. Do not open PRs against
   `main` unless the issue is a release.
