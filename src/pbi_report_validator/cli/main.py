@@ -12,7 +12,7 @@ from pbi_report_validator.reporting.terminal import format_summary
 from pbi_report_validator.services.validate import validate, write_json
 
 PACKAGE_NAME = "pbi-report-validator"
-EXIT_LOAD_ERROR = 1
+EXIT_ERROR = 1  # project could not be loaded or output not written
 
 app = typer.Typer(
     name="pbi-validate",
@@ -65,7 +65,7 @@ def diff(
             write_json(result, json_path)
     except (ProjectLoadError, OutputWriteError) as exc:
         typer.echo(f"Error: {exc}", err=True)
-        raise typer.Exit(EXIT_LOAD_ERROR) from exc
+        raise typer.Exit(EXIT_ERROR) from exc
     typer.echo(format_summary(result))
     if json_path is not None:
         typer.echo(f"\nJSON written to {json_path.as_posix()}")

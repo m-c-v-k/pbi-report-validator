@@ -27,6 +27,8 @@ def test_diff_prints_summary() -> None:
 
 
 def test_diff_json_matches_snapshot_and_is_stable(tmp_path: Path) -> None:
+    # old_source/new_source are the paths as given, so the snapshot only
+    # matches when run from the repo root (see run_from_repo_root).
     # To update after an intended change:
     # uv run pbi-validate diff tests/fixtures/sales_v1 tests/fixtures/sales_v2 \
     #   --json tests/snapshots/diff_sales_v1_v2.json
@@ -73,3 +75,18 @@ def test_works_without_environment_variables(monkeypatch: pytest.MonkeyPatch) ->
         monkeypatch.delenv(name, raising=False)
 
     assert runner.invoke(app, ["diff", OLD, NEW]).exit_code == 0
+
+
+def test_report_folder_can_be_passed_directly() -> None:
+    result = runner.invoke(app, ["diff", f"{OLD}/Sales.Report", f"{NEW}/Sales.Report"])
+
+    assert result.exit_code == 0
+    assert "7 findings:" in result.stdout
+
+
+def test_verbose_logs_progress(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("INFO"):
+        result = runner.invoke(app, ["diff", OLD, NEW, "--verbose"])
+
+    assert result.exit_code == 0
+    assert "Found 7 findings" in caplog.text
