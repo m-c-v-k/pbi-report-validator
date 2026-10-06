@@ -19,9 +19,11 @@ from pbi_report_validator.domain.models import (
 )
 from pbi_report_validator.domain.raw import RawProject
 from pbi_report_validator.integrations.files import load_project, write_text
+from pbi_report_validator.integrations.templates import read_template
 from pbi_report_validator.matching.matcher import match_reports
 from pbi_report_validator.parsers.pbir import parse_report
 from pbi_report_validator.parsers.tmdl import parse_semantic_model
+from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
 from pbi_report_validator.reporting.json_out import to_json
 from pbi_report_validator.reporting.markdown import to_markdown
 
@@ -75,6 +77,16 @@ def write_json(result: DiffResult, path: Path) -> None:
         OutputWriteError: The file could not be written.
     """
     write_text(path, to_json(result))
+
+
+def write_html(result: DiffResult, path: Path, tool_version: str) -> None:
+    """Write the result as a self-contained HTML report to ``path``.
+
+    Raises:
+        OutputWriteError: The file could not be written.
+        TemplateNotFoundError: The report template is missing.
+    """
+    write_text(path, to_html(result, read_template(REPORT_TEMPLATE), tool_version))
 
 
 def write_markdown(result: DiffResult, path: Path) -> None:

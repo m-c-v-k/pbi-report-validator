@@ -116,3 +116,13 @@ def test_json_and_markdown_together(tmp_path: Path) -> None:
     assert json_file.exists() and md_file.exists()
     assert "JSON written to" in result.stdout
     assert "Markdown written to" in result.stdout
+
+
+def test_diff_writes_html_report(tmp_path: Path) -> None:
+    target = tmp_path / "report.html"
+
+    result = runner.invoke(app, ["diff", OLD, NEW, "--html", str(target)])
+
+    assert result.exit_code == 0
+    assert "HTML written to" in result.stdout
+    assert target.read_text(encoding="utf-8").startswith("<!doctype html>")
