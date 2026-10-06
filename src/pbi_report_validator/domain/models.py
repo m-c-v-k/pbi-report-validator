@@ -9,7 +9,7 @@ from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-SCHEMA_VERSION: Final = "1.1"
+SCHEMA_VERSION: Final = "1.2"
 
 
 class DomainModel(BaseModel):
@@ -325,6 +325,7 @@ class Category(StrEnum):
     SLICER = "slicer"
     MEASURE = "measure"
     PARSE_ISSUE = "parse_issue"
+    DATA = "data"
 
 
 class ChangeKind(StrEnum):
@@ -404,18 +405,66 @@ class PageView(DomainModel):
     visuals: tuple[VisualView, ...] = ()
 
 
+class DataStatus(StrEnum):
+    """Outcome of comparing the data of one visual."""
+
+    SAME = "same"
+    DIFFERENT = "different"
+    NOT_VALIDATED = "not_validated"
+
+
+class DataSummary(DomainModel):
+    """Data comparison result for one visual (``page/visual``).
+
+    ``max_abs_delta`` is the largest numeric difference among matched rows,
+    including differences within the tolerance (so small drift is visible).
+    """
+
+    path: str
+    status: DataStatus
+    rows_old: int = Field(default=0, ge=0)
+    rows_new: int = Field(default=0, ge=0)
+    rows_matched: int = Field(default=0, ge=0)
+    rows_differing: int = Field(default=0, ge=0)
+    rows_only_old: int = Field(default=0, ge=0)
+    rows_only_new: int = Field(default=0, ge=0)
+    max_abs_delta: float | None = None
+    reason: str | None = None
+
+
+class Tolerance(DomainModel):
+    """How far two numbers may differ and still count as equal.
+
+    Two numbers are equal when their difference is at most ``absolute`` or
+    at most ``relative`` times the larger magnitude. Text is compared
+    exactly.
+    """
+
+    absolute: float = Field(default=0.0, ge=0)
+    relative: float = Field(default=1e-9, ge=0)
+
+
+class DataComparison(DomainModel):
+    """Summary and findings from comparing one visual's data."""
+
+    summary: DataSummary
+    findings: tuple[Finding, ...] = ()
+
+
 class DiffResult(DomainModel):
     """The result of comparing two report versions; the JSON output root.
 
-    Schema history: 1.0 had sources and findings; 1.1 added ``pages``.
+    Schema history: 1.0 had sources and findings; 1.1 added ``pages``;
+    1.2 added the ``data`` category and per-visual ``data`` summaries.
     """
 
     # Keep the Literal in sync with SCHEMA_VERSION (enforced by a test).
-    schema_version: Literal["1.1"] = SCHEMA_VERSION
+    schema_version: Literal["1.2"] = SCHEMA_VERSION
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()
     pages: tuple[PageView, ...] = ()
+    data: tuple[DataSummary, ...] = ()
 
     @field_validator("findings")
     @classmethod

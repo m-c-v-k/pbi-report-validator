@@ -30,6 +30,7 @@ CATEGORY_LABELS = {
     Category.SLICER: "Slicers",
     Category.MEASURE: "Measures",
     Category.PARSE_ISSUE: "Parse issues",
+    Category.DATA: "Data",
 }
 STATUS_LABELS = {
     ItemStatus.ADDED: "Added",

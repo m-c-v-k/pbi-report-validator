@@ -23,6 +23,7 @@ CATEGORY_TITLES = {
     Category.SLICER: "Slicers",
     Category.MEASURE: "Measures",
     Category.PARSE_ISSUE: "Parse issues",
+    Category.DATA: "Data",
 }
 MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]|<>#~])")
 

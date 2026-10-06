@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from pbi_report_validator.domain.models import (
+    SCHEMA_VERSION,
     Category,
     ChangeKind,
     DiffResult,
@@ -45,7 +46,8 @@ def test_fixture_report_shows_counts_and_every_finding() -> None:
     assert '<div class="n" data-count="measure">2</div>' in html
     assert html.count('<tr data-category="') == 7
     assert "Page &#39;Trends&#39; added with 1 visual" in html
-    assert "pbi-report-validator</a>\n  9.9.9 &middot; schema 1.1" in html
+    footer = f"pbi-report-validator</a>\n  9.9.9 &middot; schema {SCHEMA_VERSION}"
+    assert footer in html
 
 
 def test_output_is_deterministic() -> None:
