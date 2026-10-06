@@ -1,7 +1,8 @@
 """Parse a PBIR report definition into the ``Report`` domain model.
 
-Covers pages (order, names, size) and visuals (type, position, title and
-the fields in each role). A page or visual that cannot be parsed becomes a
+Covers report and page filters, pages (order, names, size) and visuals
+(type, position, title, fields in each role, visual filters and slicer
+selection). A page or visual that cannot be parsed becomes a
 ``ParseIssue`` and the rest of the report is still parsed.
 """
 
@@ -10,6 +11,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from pbi_report_validator.domain.models import (
+    FilterLevel,
     Page,
     ParseIssue,
     Position,
@@ -19,6 +21,10 @@ from pbi_report_validator.domain.models import (
 )
 from pbi_report_validator.domain.raw import RawJsonFile, RawPage, RawReport
 from pbi_report_validator.parsers.pbir_fields import parse_field
+from pbi_report_validator.parsers.pbir_filters import (
+    parse_filters,
+    parse_slicer_state,
+)
 
 DEFAULT_PAGE_WIDTH = 1280.0
 DEFAULT_PAGE_HEIGHT = 720.0
@@ -31,7 +37,7 @@ class VisualParseError(ValueError):
 
 
 def parse_report(raw: RawReport) -> Report:
-    """Parse the pages and visuals of a PBIR report.
+    """Parse the filters, pages and visuals of a PBIR report.
 
     Args:
         raw: The report folder contents as read by ``integrations.files``.
@@ -42,12 +48,15 @@ def parse_report(raw: RawReport) -> Report:
         that failed to parse, so it stays stable when one page breaks.
     """
     issues: list[ParseIssue] = []
+    problems: list[str] = []
+    filters = parse_filters(raw.report.content, FilterLevel.REPORT, problems)
+    issues.extend(ParseIssue(path=raw.report.path, message=m) for m in problems)
     pages: list[Page] = []
     for ordinal, raw_page in enumerate(_ordered_pages(raw)):
         page = _parse_page(raw_page, ordinal, issues)
         if page is not None:
             pages.append(page)
-    return Report(pages=tuple(pages), issues=tuple(issues))
+    return Report(filters=filters, pages=tuple(pages), issues=tuple(issues))
 
 
 def _ordered_pages(raw: RawReport) -> list[RawPage]:
@@ -69,6 +78,9 @@ def _parse_page(raw: RawPage, ordinal: int, issues: list[ParseIssue]) -> Page | 
         visual = _parse_visual_or_issue(raw_visual, issues)
         if visual is not None:
             visuals.append(visual)
+    problems: list[str] = []
+    filters = parse_filters(content, FilterLevel.PAGE, problems)
+    issues.extend(ParseIssue(path=raw.page.path, message=m) for m in problems)
     try:
         return Page(
             name=str(content.get("name", raw.name)),
@@ -76,6 +88,7 @@ def _parse_page(raw: RawPage, ordinal: int, issues: list[ParseIssue]) -> Page | 
             ordinal=ordinal,
             width=content.get("width", DEFAULT_PAGE_WIDTH),
             height=content.get("height", DEFAULT_PAGE_HEIGHT),
+            filters=filters,
             visuals=tuple(visuals),
         )
     except ValidationError as exc:
@@ -118,19 +131,25 @@ def parse_visual(content: dict[str, Any], problems: list[str]) -> Visual:
     missing = [key for key in REQUIRED_POSITION_KEYS if key not in position]
     if missing:
         raise VisualParseError(f"visual position is missing {', '.join(missing)}")
+    filters = parse_filters(content, FilterLevel.VISUAL, problems)
     body = content.get("visual")
     if not isinstance(body, dict):
         return Visual(
             name=name,
             visual_type=GROUP_VISUAL_TYPE if "visualGroup" in content else "unknown",
             position=_position(position),
+            filters=filters,
         )
+    projections = _projections(body, problems)
+    first_field = projections[0].field if projections else None
     return Visual(
         name=name,
         visual_type=str(body.get("visualType", "unknown")),
         position=_position(position),
         title=_title(body),
-        projections=_projections(body, problems),
+        projections=projections,
+        filters=filters,
+        slicer=parse_slicer_state(body, first_field, problems),
     )
 
 
