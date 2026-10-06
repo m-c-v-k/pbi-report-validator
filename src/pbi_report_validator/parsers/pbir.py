@@ -131,13 +131,14 @@ def parse_visual(content: dict[str, Any], problems: list[str]) -> Visual:
     missing = [key for key in REQUIRED_POSITION_KEYS if key not in position]
     if missing:
         raise VisualParseError(f"visual position is missing {', '.join(missing)}")
+    filters = parse_filters(content, FilterLevel.VISUAL, problems)
     body = content.get("visual")
     if not isinstance(body, dict):
         return Visual(
             name=name,
             visual_type=GROUP_VISUAL_TYPE if "visualGroup" in content else "unknown",
             position=_position(position),
-            filters=parse_filters(content, FilterLevel.VISUAL, problems),
+            filters=filters,
         )
     projections = _projections(body, problems)
     first_field = projections[0].field if projections else None
@@ -147,7 +148,7 @@ def parse_visual(content: dict[str, Any], problems: list[str]) -> Visual:
         position=_position(position),
         title=_title(body),
         projections=projections,
-        filters=parse_filters(content, FilterLevel.VISUAL, problems),
+        filters=filters,
         slicer=parse_slicer_state(body, first_field, problems),
     )
 

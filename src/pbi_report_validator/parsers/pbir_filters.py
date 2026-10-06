@@ -6,13 +6,14 @@ such as ``Product[Category] in ('Bikes', 'Clothing')`` so two versions can
 be compared as text and shown in reports.
 """
 
+import re
 from typing import Any
 
 from pbi_report_validator.domain.models import Filter, FilterLevel, SlicerState
 from pbi_report_validator.parsers.pbir_fields import parse_field
 
 COMPARISON_OPERATORS = {0: "=", 1: ">", 2: ">=", 3: "<", 4: "<="}
-NUMBER_SUFFIXES = ("L", "D", "M")
+NUMBER_LITERAL = re.compile(r"^(-?\d+(?:\.\d+)?)[LDM]$")
 
 
 class UnsupportedConditionError(ValueError):
@@ -186,14 +187,5 @@ def _literal(node: Any) -> str:
     value = node.get("Literal", {}).get("Value") if isinstance(node, dict) else None
     if not isinstance(value, str):
         raise UnsupportedConditionError("non-literal value")
-    if value.endswith(NUMBER_SUFFIXES) and _is_number(value[:-1]):
-        return value[:-1]
-    return value
-
-
-def _is_number(text: str) -> bool:
-    try:
-        float(text)
-    except ValueError:
-        return False
-    return True
+    number = NUMBER_LITERAL.match(value)
+    return number.group(1) if number else value

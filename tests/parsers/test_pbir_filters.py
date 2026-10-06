@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 
 from pbi_report_validator.domain.models import FieldKind, FieldRef, FilterLevel
+from pbi_report_validator.domain.raw import RawJsonFile, RawReport
 from pbi_report_validator.integrations.files import load_project
 from pbi_report_validator.parsers.pbir import parse_report
 from pbi_report_validator.parsers.pbir_filters import (
@@ -178,3 +179,88 @@ def test_unsupported_filter_is_kept_without_condition() -> None:
 )
 def test_missing_filter_config_gives_no_filters(container: Any) -> None:
     assert parse_filters(container, FilterLevel.REPORT, []) == ()
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("12L", "12"),
+        ("-3.5D", "-3.5"),
+        ("infD", "infD"),
+        ("nanL", "nanL"),
+        ("1_0L", "1_0L"),
+        ("null", "null"),
+        ("true", "true"),
+        ("datetime'2025-01-01T00:00:00'", "datetime'2025-01-01T00:00:00'"),
+    ],
+)
+def test_literal_rendering(value: str, expected: str) -> None:
+    condition = {"In": {"Expressions": [col("s", "A")], "Values": [[lit(value)]]}}
+
+    assert render_condition(query(condition)) == f"Sales[A] in ({expected})"
+
+
+def test_not_combined_with_and_is_unambiguous() -> None:
+    a_in = {"In": {"Expressions": [col("s", "A")], "Values": [[lit("1L")]]}}
+    b_in = {"In": {"Expressions": [col("s", "B")], "Values": [[lit("2L")]]}}
+
+    rendered = render_condition(
+        query({"Not": {"Expression": {"And": {"Left": a_in, "Right": b_in}}}}, a_in)
+    )
+
+    assert (
+        rendered == "not ((Sales[A] in (1)) and (Sales[B] in (2))) and Sales[A] in (1)"
+    )
+
+
+def test_slicer_with_no_projection_has_no_field() -> None:
+    body = {
+        "visualType": "slicer",
+        "objects": {
+            "general": [
+                {
+                    "properties": {
+                        "filter": {
+                            "filter": query(
+                                {
+                                    "In": {
+                                        "Expressions": [col("s", "Year")],
+                                        "Values": [[lit("1L")]],
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            ]
+        },
+    }
+
+    state = parse_slicer_state(body, None, [])
+
+    assert state is not None
+    assert (state.field, state.condition) == (None, "Sales[Year] in (1)")
+
+
+def test_report_filter_problem_becomes_issue_with_path() -> None:
+    raw = RawReport(
+        path="Sales.Report",
+        report=RawJsonFile(
+            path="Sales.Report/definition/report.json",
+            content={
+                "filterConfig": {
+                    "filters": [{"name": "f", "filter": query({"Between": {}})}]
+                }
+            },
+        ),
+    )
+
+    report = parse_report(raw)
+
+    assert report.filters[0].condition is None
+    assert [(i.path, i.message) for i in report.issues] == [
+        (
+            "Sales.Report/definition/report.json",
+            "filter f: unsupported condition (Between)",
+        )
+    ]
