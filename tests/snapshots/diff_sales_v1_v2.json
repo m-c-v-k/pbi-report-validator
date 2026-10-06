@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "old_source": "tests/fixtures/sales_v1",
+  "new_source": "tests/fixtures/sales_v2",
+  "findings": [
+    {
+      "category": "visual",
+      "change": "moved",
+      "path": "details/chart_sales_by_region",
+      "message": "clusteredBarChart 'Sales by region' (chart_sales_by_region) moved",
+      "old": "x=840, y=40, width=400, height=320",
+      "new": "x=840, y=360, width=400, height=320"
+    },
+    {
+      "category": "filter",
+      "change": "removed",
+      "path": "details/table_product_sales/filters/visual_filter_category",
+      "message": "Filter visual_filter_category removed",
+      "old": "Product[Category] in ('Bikes', 'Clothing')",
+      "new": null
+    },
+    {
+      "category": "measure",
+      "change": "renamed",
+      "path": "model/Sales/Margin %",
+      "message": "Measure Sales[Margin %] renamed to Sales[Gross Margin %]",
+      "old": "Margin %",
+      "new": "Gross Margin %"
+    },
+    {
+      "category": "measure",
+      "change": "modified",
+      "path": "model/Sales/Total Sales",
+      "message": "Expression of measure Sales[Total Sales] changed",
+      "old": "SUM(Sales[Amount])",
+      "new": "CALCULATE(SUM(Sales[Amount]), Sales[Amount] > 0)"
+    },
+    {
+      "category": "visual",
+      "change": "retyped",
+      "path": "overview/chart_sales_by_month",
+      "message": "clusteredColumnChart 'Sales by month' (chart_sales_by_month) changed type to lineChart",
+      "old": "clusteredColumnChart",
+      "new": "lineChart"
+    },
+    {
+      "category": "slicer",
+      "change": "modified",
+      "path": "overview/slicer_year",
+      "message": "Slicer selection changed",
+      "old": "Date[Year] in (2025)",
+      "new": "Date[Year] in (2024)"
+    },
+    {
+      "category": "page",
+      "change": "added",
+      "path": "trends",
+      "message": "Page 'Trends' added with 1 visual",
+      "old": null,
+      "new": "Trends"
+    }
+  ]
+}
