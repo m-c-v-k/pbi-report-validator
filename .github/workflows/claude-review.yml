@@ -1,0 +1,44 @@
+# Automated Claude Code review of the owner's pull requests.
+# Auth uses the owner's Claude subscription (CLAUDE_CODE_OAUTH_TOKEN).
+# Never add ANTHROPIC_API_KEY: it is billed per token.
+name: Claude review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+  id-token: write
+
+jobs:
+  review:
+    # Owner's non-draft PRs only; runs once per PR (not on every push) to save quota.
+    if: github.event.pull_request.user.login == github.repository_owner && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review this pull request against the rules in CLAUDE.md. Focus on:
+            - correctness bugs and missing tests
+            - layer violations (I/O outside integrations/, imports pointing outwards)
+            - real data, secrets or ANTHROPIC_API_KEY usage
+            - PR size (~300 changed lines) and "Closes #<issue>" in the description
+
+            Be concise. Post the review with `gh pr comment`; use inline comments
+            only for specific lines.
+          claude_args: >-
+            --max-turns 15
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
