@@ -9,7 +9,7 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-SCHEMA_VERSION: Final = "1.0"
+SCHEMA_VERSION: Final = "1.1"
 
 
 class DomainModel(BaseModel):
@@ -260,14 +260,54 @@ class Finding(DomainModel):
         )
 
 
+class ItemStatus(StrEnum):
+    """Overall status of a page or visual in the comparison."""
+
+    ADDED = "added"
+    REMOVED = "removed"
+    MODIFIED = "modified"
+    UNCHANGED = "unchanged"
+
+
+class VisualView(DomainModel):
+    """A visual as shown in reports: both positions and a status.
+
+    ``name`` is the old name for matched and removed visuals and the new
+    name for added ones, so it matches the paths used in findings.
+    """
+
+    name: str
+    visual_type: str
+    title: str | None = None
+    status: ItemStatus
+    old_position: Position | None = None
+    new_position: Position | None = None
+
+
+class PageView(DomainModel):
+    """A page as shown in reports, with every visual of both versions."""
+
+    name: str
+    display_name: str
+    status: ItemStatus
+    ordinal: int = Field(ge=0)
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+    visuals: tuple[VisualView, ...] = ()
+
+
 class DiffResult(DomainModel):
-    """The result of comparing two report versions; the JSON output root."""
+    """The result of comparing two report versions; the JSON output root.
+
+    Schema history: 1.0 had sources and findings; 1.1 added ``pages``.
+    """
 
     # Keep the Literal in sync with SCHEMA_VERSION (enforced by a test).
-    schema_version: Literal["1.0"] = SCHEMA_VERSION
+    schema_version: Literal["1.1"] = SCHEMA_VERSION
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()
+    pages: tuple[PageView, ...] = ()
 
     @field_validator("findings")
     @classmethod

@@ -7,6 +7,7 @@ from pathlib import Path
 from pbi_report_validator.diff.content import diff_content
 from pbi_report_validator.diff.measures import diff_measures
 from pbi_report_validator.diff.structural import diff_pages_and_visuals
+from pbi_report_validator.diff.view import build_page_views
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -62,6 +63,7 @@ def validate(old_path: Path, new_path: Path) -> DiffResult:
         old_source=old_path.as_posix(),
         new_source=new_path.as_posix(),
         findings=tuple(findings),
+        pages=build_page_views(match, findings),
     )
 
 
