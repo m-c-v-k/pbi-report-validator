@@ -254,6 +254,25 @@ class QueryResult(DomainModel):
     rows: tuple[tuple[CellValue, ...], ...] = ()
 
 
+class DaxQuery(DomainModel):
+    """A DAX query that returns what a visual shows.
+
+    ``group_by`` are the DAX column references the result is grouped by
+    (the key for comparing rows); ``values`` the names of the computed
+    columns, in order.
+    """
+
+    dax: str
+    group_by: tuple[str, ...] = ()
+    values: tuple[str, ...] = ()
+
+
+class UnsupportedQuery(DomainModel):
+    """Why no DAX query could be built for a visual."""
+
+    reason: str
+
+
 # --- Matching ----------------------------------------------------------------
 
 
