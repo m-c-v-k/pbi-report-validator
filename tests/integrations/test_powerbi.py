@@ -13,6 +13,7 @@ from pbi_report_validator.integrations.powerbi import (
     API_BASE_URL,
     AuthenticationError,
     DatasetNotFoundError,
+    InvalidDatasetIdError,
     MsalTokenProvider,
     PowerBIClient,
     QueryError,
@@ -228,3 +229,54 @@ def test_msal_failure_is_authentication_error(monkeypatch: pytest.MonkeyPatch) -
 
 def test_secret_is_not_in_config_repr() -> None:
     assert "s3cret" not in repr(CONFIG)
+
+
+@pytest.mark.parametrize(
+    "dataset_id", ["../x", "abc", f"{DATASET}/x", f"{DATASET}?a=1"]
+)
+def test_non_guid_dataset_id_is_rejected_before_any_request(dataset_id: str) -> None:
+    requests: list[httpx.Request] = []
+
+    with pytest.raises(InvalidDatasetIdError):
+        client(ok_rows(), requests=requests).execute_query(dataset_id, DAX)
+    assert requests == []
+
+
+@pytest.mark.parametrize(
+    ("retry_after", "expected"),
+    [("86400", 60.0), ("Wed, 21 Oct 2026 07:28:00 GMT", 1.0), ("soon", 1.0)],
+)
+def test_retry_after_is_capped_and_non_numeric_falls_back(
+    retry_after: str, expected: float
+) -> None:
+    sleeps: list[float] = []
+    pbi = client(
+        httpx.Response(429, headers={"Retry-After": retry_after}),
+        ok_rows({"[A]": 1}),
+        sleeps=sleeps,
+    )
+
+    pbi.execute_query(DATASET, DAX)
+
+    assert sleeps == [expected]
+
+
+def test_bad_request_with_non_json_body_is_query_error() -> None:
+    with pytest.raises(QueryError, match="plain text failure"):
+        client(httpx.Response(400, text="plain text failure")).execute_query(
+            DATASET, DAX
+        )
+
+
+class RaisingMsalApp(FakeMsalApp):
+    def acquire_token_for_client(self, scopes: list[str]) -> dict[str, Any]:
+        raise ConnectionError("login.microsoftonline.com unreachable")
+
+
+def test_msal_network_failure_is_service_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        powerbi.msal, "ConfidentialClientApplication", RaisingMsalApp({})
+    )
+
+    with pytest.raises(ServiceError, match="could not reach Microsoft Entra ID"):
+        MsalTokenProvider(CONFIG).get_token()

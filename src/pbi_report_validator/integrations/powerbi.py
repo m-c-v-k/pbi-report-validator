@@ -6,6 +6,7 @@ drivers. Secrets, tokens and result rows are never logged.
 """
 
 import logging
+import re
 import time
 from collections.abc import Callable
 from typing import Any, Protocol
@@ -23,7 +24,9 @@ AUTHORITY_URL = "https://login.microsoftonline.com/{tenant_id}"
 SCOPE = "https://analysis.windows.net/powerbi/api/.default"
 DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_MAX_RETRIES = 3
+MAX_RETRY_AFTER_SECONDS = 60.0
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+DATASET_ID = re.compile(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}")
 
 
 class PowerBIError(Exception):
@@ -32,6 +35,10 @@ class PowerBIError(Exception):
 
 class AuthenticationError(PowerBIError):
     """The service principal could not sign in or is not allowed."""
+
+
+class InvalidDatasetIdError(PowerBIError):
+    """The dataset id is not a GUID, so it is not sent to the API."""
 
 
 class DatasetNotFoundError(PowerBIError):
@@ -73,8 +80,17 @@ class MsalTokenProvider:
         )
 
     def get_token(self) -> str:
-        """Return a token, or raise ``AuthenticationError``."""
-        result: dict[str, Any] = self._app.acquire_token_for_client(scopes=[SCOPE])
+        """Return a token.
+
+        Raises:
+            AuthenticationError: Entra ID rejected the credentials.
+            ServiceError: Entra ID could not be reached (MSAL's HTTP errors
+                are ``OSError`` subclasses) or answered with invalid data.
+        """
+        try:
+            result: dict[str, Any] = self._app.acquire_token_for_client(scopes=[SCOPE])
+        except (OSError, ValueError) as exc:
+            raise ServiceError(f"could not reach Microsoft Entra ID: {exc}") from exc
         token = result.get("access_token")
         if isinstance(token, str):
             return token
@@ -108,13 +124,21 @@ class PowerBIClient:
     def execute_query(self, dataset_id: str, dax: str) -> QueryResult:
         """Run one DAX query and return its first result table.
 
+        The API sends rows as objects and no separate schema, so a query
+        that returns no rows comes back without column names.
+
         Raises:
+            InvalidDatasetIdError: ``dataset_id`` is not a GUID.
             AuthenticationError: Sign-in failed or access was denied.
             DatasetNotFoundError: The dataset is unknown or not visible.
             QueryError: The query is invalid or failed in the engine.
             RateLimitError: Still rate limited after all retries.
             ServiceError: Server errors, timeouts or unreadable responses.
         """
+        if not DATASET_ID.fullmatch(dataset_id):
+            raise InvalidDatasetIdError(
+                f"dataset id must be a GUID, got {dataset_id!r}"
+            )
         body = {
             "queries": [{"query": dax}],
             "serializerSettings": {"includeNulls": True},
@@ -142,11 +166,16 @@ class PowerBIClient:
         raise ServiceError("Power BI API retries exhausted")  # pragma: no cover
 
     def _wait(self, attempt: int, retry_after: str | None) -> None:
-        delay = (
-            float(retry_after)
-            if retry_after and retry_after.isdigit()
-            else 2.0**attempt
+        """Back off before a retry.
+
+        ``Retry-After`` in seconds is honoured up to a cap; the HTTP-date
+        form and invalid values fall back to exponential backoff.
+        """
+        backoff = 2.0**attempt
+        requested = (
+            float(retry_after) if retry_after and retry_after.isdigit() else backoff
         )
+        delay = min(requested, MAX_RETRY_AFTER_SECONDS)
         logger.info("Power BI API busy, retrying in %.0f s", delay)
         self._sleep(delay)
 
