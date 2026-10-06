@@ -5,7 +5,7 @@
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
 
-**Status:** early development. Structural diff works; see the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time) for what comes next.
+**Status:** preview (v0.0.1). Structural diff works; see the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time) for what comes next.
 
 ## Why
 
@@ -20,16 +20,37 @@ old and new versions side by side and clicking through every page and slicer.
   page wireframes coloured by status
 - **Explanations (optional)** – AI-written summaries of why numbers differ
 
-## Quick start
+## Install
 
-Save both report versions as Power BI Projects (*File → Save as → Power BI
-project (.pbip)*) with the PBIR report format enabled. Then, from a clone of
-this repository (requires [uv](https://docs.astral.sh/uv/)):
+Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 for you).
+Install the latest release as a command-line tool:
 
 ```bash
-uv sync
-uv run pbi-validate diff tests/fixtures/sales_v1 tests/fixtures/sales_v2 --json out/diff.json
+uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.0.1
 ```
+
+Or run it once without installing:
+
+```bash
+uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.0.1 pbi-validate --help
+```
+
+## Quick start
+
+1. Save both report versions as Power BI Projects (*File → Save as → Power BI
+   project (.pbip)*) in the **PBIR** report format. If your Power BI Desktop
+   version does not use PBIR by default, enable it under *Options → Preview
+   features* first.
+2. Compare them:
+
+```bash
+pbi-validate diff ./old ./new --json diff.json
+```
+
+Each argument is a PBIP project folder (containing one `<Name>.Report` folder)
+or the `.Report` folder itself. The terminal shows a summary; `--json` writes
+every finding with old and new values (the JSON has a `schema_version`).
+Running it on the sample reports in this repository gives:
 
 ```text
 Compared tests/fixtures/sales_v1 -> tests/fixtures/sales_v2
@@ -43,13 +64,36 @@ Compared tests/fixtures/sales_v1 -> tests/fixtures/sales_v2
   [moved] details/chart_sales_by_region: clusteredBarChart 'Sales by region' (chart_sales_by_region) moved
   [removed] details/table_product_sales/filters/visual_filter_category: Filter visual_filter_category removed
   [renamed] model/Sales/Margin %: Measure Sales[Margin %] renamed to Sales[Gross Margin %]
-  ...
+  [modified] model/Sales/Total Sales: Expression of measure Sales[Total Sales] changed
+  [retyped] overview/chart_sales_by_month: clusteredColumnChart 'Sales by month' (chart_sales_by_month) changed type to lineChart
+  [modified] overview/slicer_year: Slicer selection changed
+  [added] trends: Page 'Trends' added with 1 visual
 ```
 
-Each argument is a PBIP project folder (containing one `<Name>.Report` folder)
-or the `.Report` folder itself. `--json` writes every finding with old and new
-values; the JSON has a `schema_version`. The command exits with `1` if a
-project cannot be loaded. No credentials or environment variables are needed.
+Exit codes: `0` when the comparison ran (whether or not there are
+differences), `1` when a project cannot be loaded or the JSON cannot be
+written. No credentials or environment variables are needed.
+
+### What it compares (v0.0.1)
+
+- Pages: added, removed, renamed, reordered
+- Visuals: added, removed, moved/resized, type changed, title changed
+- Fields per visual, including role and aggregation
+- Filters at report, page and visual level; slicer selections
+- Measures in the semantic model (TMDL): added, removed, expression changed,
+  renamed (detected by identical expression)
+- Files that cannot be parsed are reported as findings instead of stopping
+  the run
+
+### Limitations
+
+- Only the PBIR report format; the legacy `report.json` and `.pbix` files are
+  not supported (save as `.pbip` with PBIR enabled)
+- No data comparison yet: it shows what changed in the definition, not
+  whether the numbers differ
+- Output is terminal text and JSON; Markdown and HTML reports come in v0.1.0
+- A visual moved to a different page shows as removed on one page and added
+  on the other
 
 Coming next: Markdown and HTML reports, data validation against published
 semantic models, a Docker image and a GitHub Action that comments on pull
