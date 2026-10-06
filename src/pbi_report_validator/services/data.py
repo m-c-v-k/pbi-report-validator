@@ -8,14 +8,18 @@ are never sent anywhere else.
 
 import logging
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Protocol
 
 from pbi_report_validator.dax.builder import build_query
 from pbi_report_validator.diff.data import compare_results, not_validated
 from pbi_report_validator.domain.models import (
+    Category,
+    ChangeKind,
     DataComparison,
     DaxQuery,
     DomainModel,
+    Finding,
     QueryResult,
     Report,
     ReportMatch,
@@ -41,12 +45,44 @@ class QueryRunner(Protocol):
         ...
 
 
+class InvalidDataOptionsError(ValueError):
+    """The data validation options are incomplete or inconsistent."""
+
+
 class DataSettings(DomainModel):
     """What ``--data`` compares against."""
 
     old_dataset: str
     new_dataset: str
     tolerance: Tolerance = Tolerance()
+
+
+@dataclass(frozen=True)
+class DataRun:
+    """Data validation settings plus the runner that executes the queries."""
+
+    settings: DataSettings
+    runner: QueryRunner
+
+
+def data_settings(
+    old_dataset: str | None,
+    new_dataset: str | None,
+    absolute: float = 0.0,
+    relative: float = 1e-9,
+) -> DataSettings:
+    """Settings from the CLI options.
+
+    Raises:
+        InvalidDataOptionsError: A dataset id is missing.
+    """
+    if not old_dataset or not new_dataset:
+        raise InvalidDataOptionsError("--data needs --old-dataset and --new-dataset")
+    return DataSettings(
+        old_dataset=old_dataset,
+        new_dataset=new_dataset,
+        tolerance=Tolerance(absolute=absolute, relative=relative),
+    )
 
 
 def create_runner(environ: Mapping[str, str]) -> QueryRunner:
@@ -114,14 +150,37 @@ def _compare(
     except (QueryError, RateLimitError, ServiceError) as exc:
         return not_validated(path, f"query failed: {exc}")
     keys = [(result_column(c), result_column(c)) for c in old_query.group_by]
+    paired = {name: names.get(name, name) for name in old_query.values}
     values = [
-        (f"[{name}]", f"[{names.get(name, name)}]")
-        for name in old_query.values
-        if names.get(name, name) in new_query.values
+        (f"[{old}]", f"[{new}]")
+        for old, new in paired.items()
+        if new in new_query.values
     ]
-    return compare_results(
+    comparison = compare_results(
         path, old_result, new_result, keys, values, settings.tolerance
     )
+    only_old = [old for old, new in paired.items() if new not in new_query.values]
+    only_new = [n for n in new_query.values if n not in paired.values()]
+    return _with_unpaired(comparison, path, only_old, only_new)
+
+
+def _with_unpaired(
+    comparison: DataComparison, path: str, only_old: list[str], only_new: list[str]
+) -> DataComparison:
+    """Note values that exist in only one version, so they are not hidden."""
+    parts = [f"[{n}] is only in the old visual" for n in only_old]
+    parts += [f"[{n}] is only in the new visual" for n in only_new]
+    if not parts:
+        return comparison
+    note = "not compared: " + "; ".join(parts)
+    finding = Finding(
+        category=Category.DATA,
+        change=ChangeKind.ERROR,
+        path=f"{path}/data",
+        message=f"Data partly validated, {note}",
+    )
+    summary = comparison.summary.model_copy(update={"reason": note})
+    return DataComparison(summary=summary, findings=(*comparison.findings, finding))
 
 
 def result_column(reference: str) -> str:

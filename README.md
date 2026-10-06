@@ -159,6 +159,9 @@ so it runs in CI without Windows-only drivers:
 The dataset id is the GUID in the semantic model's URL in the Power BI
 service (`.../datasets/<id>/...`).
 
+If sign-in fails or a dataset id is wrong, the run stops with exit code 1
+and no output files are written; fix the setup and run it again.
+
 Limitations: models with row-level security can't be queried by a service
 principal; slicer interactions edited in Power BI and slicers synced from
 other pages are not taken into account; the API allows about 120 queries a

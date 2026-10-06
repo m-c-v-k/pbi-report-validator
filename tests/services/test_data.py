@@ -5,18 +5,31 @@ import pytest
 from typer.testing import CliRunner
 
 from pbi_report_validator.cli.main import app
+from pbi_report_validator.diff.data import compare_results
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
     DataStatus,
     QueryResult,
 )
-from pbi_report_validator.integrations.powerbi import AuthenticationError, QueryError
+from pbi_report_validator.integrations.powerbi import (
+    AuthenticationError,
+    InvalidDatasetIdError,
+    QueryError,
+    RateLimitError,
+)
 from pbi_report_validator.integrations.templates import read_template
 from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
 from pbi_report_validator.reporting.markdown import to_markdown
 from pbi_report_validator.reporting.terminal import format_summary
-from pbi_report_validator.services.data import DataSettings, result_column
+from pbi_report_validator.services.data import (
+    DataRun,
+    DataSettings,
+    InvalidDataOptionsError,
+    _with_unpaired,
+    data_settings,
+    result_column,
+)
 from pbi_report_validator.services.validate import validate
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -68,7 +81,9 @@ class FakeRunner:
 
 
 def run(runner: FakeRunner) -> tuple[list[tuple[str, DataStatus]], list[str]]:
-    result = validate(FIXTURES / "sales_v1", FIXTURES / "sales_v2", SETTINGS, runner)
+    result = validate(
+        FIXTURES / "sales_v1", FIXTURES / "sales_v2", DataRun(SETTINGS, runner)
+    )
     data = [f.path for f in result.findings if f.category == Category.DATA]
     return [(s.path, s.status) for s in result.data], data
 
@@ -116,7 +131,7 @@ def test_without_data_settings_nothing_is_queried() -> None:
 
 def test_reports_show_data_results() -> None:
     result = validate(
-        FIXTURES / "sales_v1", FIXTURES / "sales_v2", SETTINGS, FakeRunner()
+        FIXTURES / "sales_v1", FIXTURES / "sales_v2", DataRun(SETTINGS, FakeRunner())
     )
     overview = "Data: 5 visuals compared, 4 same, 1 different, 0 not validated"
 
@@ -149,7 +164,7 @@ def test_cli_data_needs_both_datasets(repo_root: None) -> None:
     )
 
     assert result.exit_code == 2
-    assert "--data needs --old-dataset and --new-dataset" in result.output
+    assert "Error: --data needs --old-dataset and --new-dataset" in result.stderr
 
 
 def test_cli_data_without_credentials_names_the_variables(
@@ -241,3 +256,65 @@ def test_cli_authentication_failure_exits_with_error(
 )
 def test_result_column(reference: str, expected: str) -> None:
     assert result_column(reference) == expected
+
+
+def test_measure_only_in_one_version_is_noted_not_hidden() -> None:
+    data = QueryResult(columns=("[A]",), rows=((1,),))
+    comparison = compare_results("p/v", data, data, [], [("[A]", "[A]")])
+
+    noted = _with_unpaired(comparison, "p/v", ["Margin"], ["Profit"])
+
+    assert noted.summary.status == DataStatus.SAME
+    assert noted.summary.reason == (
+        "not compared: [Margin] is only in the old visual; "
+        "[Profit] is only in the new visual"
+    )
+    assert noted.findings[-1].change == ChangeKind.ERROR
+
+
+def test_rate_limited_query_is_not_validated() -> None:
+    class Limited(FakeRunner):
+        def execute_query(self, dataset_id: str, dax: str) -> QueryResult:
+            raise RateLimitError("Power BI API rate limit reached")
+
+    summaries, _ = run(Limited())
+
+    assert {status for _, status in summaries} == {DataStatus.NOT_VALIDATED}
+
+
+def test_data_settings_require_both_datasets() -> None:
+    with pytest.raises(InvalidDataOptionsError):
+        data_settings(OLD_DS, None)
+    settings = data_settings(OLD_DS, NEW_DS, 0.5, 0.01)
+    assert (settings.tolerance.absolute, settings.tolerance.relative) == (0.5, 0.01)
+
+
+def test_cli_invalid_dataset_id_exits_with_error(
+    repo_root: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class BadId(FakeRunner):
+        def execute_query(self, dataset_id: str, dax: str) -> QueryResult:
+            raise InvalidDatasetIdError(
+                f"dataset id must be a GUID, got {dataset_id!r}"
+            )
+
+    monkeypatch.setattr(
+        "pbi_report_validator.cli.main.create_runner", lambda env: BadId()
+    )
+
+    result = cli.invoke(
+        app,
+        [
+            "diff",
+            "tests/fixtures/sales_v1",
+            "tests/fixtures/sales_v2",
+            "--data",
+            "--old-dataset",
+            "not-a-guid",
+            "--new-dataset",
+            NEW_DS,
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "dataset id must be a GUID" in result.stderr

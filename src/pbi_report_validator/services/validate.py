@@ -26,11 +26,7 @@ from pbi_report_validator.parsers.tmdl import parse_semantic_model
 from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
 from pbi_report_validator.reporting.json_out import to_json
 from pbi_report_validator.reporting.markdown import to_markdown
-from pbi_report_validator.services.data import (
-    DataSettings,
-    QueryRunner,
-    validate_data,
-)
+from pbi_report_validator.services.data import DataRun, validate_data
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +38,15 @@ VISUAL_FILE = re.compile(
 def validate(
     old_path: Path,
     new_path: Path,
-    data: DataSettings | None = None,
-    runner: QueryRunner | None = None,
+    data: DataRun | None = None,
 ) -> DiffResult:
     """Compare two PBIP projects structurally and, optionally, their data.
 
     Args:
         old_path: The old project folder (or its ``.Report`` folder).
         new_path: The new project folder (or its ``.Report`` folder).
-        data: Datasets and tolerance for data validation; ``None`` skips it.
-        runner: Runs DAX queries; required when ``data`` is given.
+        data: Datasets, tolerance and query runner for data validation;
+            ``None`` skips it.
 
     Returns:
         All findings, including parse issues of either version.
@@ -76,10 +71,13 @@ def validate(
     ]
     comparisons = []
     if data is not None:
-        if runner is None:
-            raise ValueError("data validation needs a query runner")
         comparisons = validate_data(
-            old_report, new_report, match, measures.renames, runner, data
+            old_report,
+            new_report,
+            match,
+            measures.renames,
+            data.runner,
+            data.settings,
         )
         findings += [f for c in comparisons for f in c.findings]
     logger.info("Found %d findings", len(findings))

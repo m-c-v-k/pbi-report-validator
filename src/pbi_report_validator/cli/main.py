@@ -8,13 +8,17 @@ from typing import Annotated
 
 import typer
 
-from pbi_report_validator.domain.models import Tolerance
 from pbi_report_validator.integrations.config import MissingCredentialsError
 from pbi_report_validator.integrations.files import OutputWriteError, ProjectLoadError
 from pbi_report_validator.integrations.powerbi import PowerBIError
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
 from pbi_report_validator.reporting.terminal import format_summary
-from pbi_report_validator.services.data import DataSettings, create_runner
+from pbi_report_validator.services.data import (
+    DataRun,
+    InvalidDataOptionsError,
+    create_runner,
+    data_settings,
+)
 from pbi_report_validator.services.validate import (
     validate,
     write_html,
@@ -24,6 +28,7 @@ from pbi_report_validator.services.validate import (
 
 PACKAGE_NAME = "pbi-report-validator"
 EXIT_ERROR = 1  # project not loadable, output not writable or data validation failed
+EXIT_USAGE = 2  # invalid combination of options
 
 app = typer.Typer(
     name="pbi-validate",
@@ -103,17 +108,16 @@ def diff(
         level=logging.INFO if verbose else logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
     )
-    settings = None
-    if data:
-        if not old_dataset or not new_dataset:
-            raise typer.BadParameter("--data needs --old-dataset and --new-dataset")
-        tolerance = Tolerance(absolute=abs_tol, relative=rel_tol)
-        settings = DataSettings(
-            old_dataset=old_dataset, new_dataset=new_dataset, tolerance=tolerance
-        )
     try:
-        runner = create_runner(os.environ) if settings else None
-        result = validate(old, new, settings, runner)
+        settings = (
+            data_settings(old_dataset, new_dataset, abs_tol, rel_tol) if data else None
+        )
+    except InvalidDataOptionsError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(EXIT_USAGE) from exc
+    try:
+        run = DataRun(settings, create_runner(os.environ)) if settings else None
+        result = validate(old, new, run)
         if json_path is not None:
             write_json(result, json_path)
         if markdown_path is not None:
