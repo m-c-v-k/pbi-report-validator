@@ -8,9 +8,11 @@ from typing import Annotated
 import typer
 
 from pbi_report_validator.integrations.files import OutputWriteError, ProjectLoadError
+from pbi_report_validator.integrations.templates import TemplateNotFoundError
 from pbi_report_validator.reporting.terminal import format_summary
 from pbi_report_validator.services.validate import (
     validate,
+    write_html,
     write_json,
     write_markdown,
 )
@@ -61,6 +63,10 @@ def diff(
             help="Write a Markdown summary (for PR comments) to this file.",
         ),
     ] = None,
+    html_path: Annotated[
+        Path | None,
+        typer.Option("--html", help="Write a self-contained HTML report to this file."),
+    ] = None,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show progress logging.")
     ] = False,
@@ -76,10 +82,13 @@ def diff(
             write_json(result, json_path)
         if markdown_path is not None:
             write_markdown(result, markdown_path)
-    except (ProjectLoadError, OutputWriteError) as exc:
+        if html_path is not None:
+            write_html(result, html_path, version(PACKAGE_NAME))
+    except (ProjectLoadError, OutputWriteError, TemplateNotFoundError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(EXIT_ERROR) from exc
     typer.echo(format_summary(result))
-    for label, path in (("JSON", json_path), ("Markdown", markdown_path)):
+    outputs = (("JSON", json_path), ("Markdown", markdown_path), ("HTML", html_path))
+    for label, path in outputs:
         if path is not None:
             typer.echo(f"\n{label} written to {path.as_posix()}")
