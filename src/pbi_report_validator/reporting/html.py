@@ -16,6 +16,7 @@ from pbi_report_validator.domain.models import (
     Finding,
     ItemStatus,
 )
+from pbi_report_validator.reporting.terminal import data_overview
 
 REPORT_TEMPLATE = "report.html.j2"
 # Parse-issue paths point at the file, e.g. new/.../pages/p/visuals/v/visual.json
@@ -69,6 +70,8 @@ def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
     counts = Counter(f.category for f in result.findings)
     keys = {f"{p.name}/{v.name}" for p in result.pages for v in p.visuals}
     return environment.from_string(template_source).render(
+        data_overview=data_overview(result),
+        data_by_path={s.path: s for s in result.data},
         details=visual_findings(result),
         visual_key=lambda path: visual_key(path, keys),
         result=result,

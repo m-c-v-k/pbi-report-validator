@@ -26,6 +26,11 @@ from pbi_report_validator.parsers.tmdl import parse_semantic_model
 from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
 from pbi_report_validator.reporting.json_out import to_json
 from pbi_report_validator.reporting.markdown import to_markdown
+from pbi_report_validator.services.data import (
+    DataSettings,
+    QueryRunner,
+    validate_data,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,18 +39,26 @@ VISUAL_FILE = re.compile(
 )
 
 
-def validate(old_path: Path, new_path: Path) -> DiffResult:
-    """Compare two PBIP projects structurally.
+def validate(
+    old_path: Path,
+    new_path: Path,
+    data: DataSettings | None = None,
+    runner: QueryRunner | None = None,
+) -> DiffResult:
+    """Compare two PBIP projects structurally and, optionally, their data.
 
     Args:
         old_path: The old project folder (or its ``.Report`` folder).
         new_path: The new project folder (or its ``.Report`` folder).
+        data: Datasets and tolerance for data validation; ``None`` skips it.
+        runner: Runs DAX queries; required when ``data`` is given.
 
     Returns:
         All findings, including parse issues of either version.
 
     Raises:
         ProjectLoadError: A project could not be loaded at all.
+        PowerBIError: Data validation could not sign in or find a dataset.
     """
     old_report, old_model = _parse(load_project(old_path))
     new_report, new_model = _parse(load_project(new_path))
@@ -61,12 +74,21 @@ def validate(old_path: Path, new_path: Path) -> DiffResult:
         *_issue_findings("old", old_report, old_model),
         *_issue_findings("new", new_report, new_model),
     ]
+    comparisons = []
+    if data is not None:
+        if runner is None:
+            raise ValueError("data validation needs a query runner")
+        comparisons = validate_data(
+            old_report, new_report, match, measures.renames, runner, data
+        )
+        findings += [f for c in comparisons for f in c.findings]
     logger.info("Found %d findings", len(findings))
     return DiffResult(
         old_source=old_path.as_posix(),
         new_source=new_path.as_posix(),
         findings=tuple(findings),
         pages=build_page_views(match, findings),
+        data=tuple(sorted((c.summary for c in comparisons), key=lambda s: s.path)),
     )
 
 

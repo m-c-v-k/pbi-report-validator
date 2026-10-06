@@ -1,15 +1,20 @@
 """Entry point for the ``pbi-validate`` command line interface."""
 
 import logging
+import os
 from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
+from pbi_report_validator.domain.models import Tolerance
+from pbi_report_validator.integrations.config import MissingCredentialsError
 from pbi_report_validator.integrations.files import OutputWriteError, ProjectLoadError
+from pbi_report_validator.integrations.powerbi import PowerBIError
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
 from pbi_report_validator.reporting.terminal import format_summary
+from pbi_report_validator.services.data import DataSettings, create_runner
 from pbi_report_validator.services.validate import (
     validate,
     write_html,
@@ -18,7 +23,7 @@ from pbi_report_validator.services.validate import (
 )
 
 PACKAGE_NAME = "pbi-report-validator"
-EXIT_ERROR = 1  # project could not be loaded or output not written
+EXIT_ERROR = 1  # project not loadable, output not writable or data validation failed
 
 app = typer.Typer(
     name="pbi-validate",
@@ -67,24 +72,61 @@ def diff(
         Path | None,
         typer.Option("--html", help="Write a self-contained HTML report to this file."),
     ] = None,
+    data: Annotated[
+        bool,
+        typer.Option(
+            "--data",
+            help="Also compare the numbers: run each visual as a DAX query against "
+            "the old and new published datasets (needs PBI_* credentials).",
+        ),
+    ] = False,
+    old_dataset: Annotated[
+        str | None, typer.Option("--old-dataset", help="Dataset id of the old version.")
+    ] = None,
+    new_dataset: Annotated[
+        str | None, typer.Option("--new-dataset", help="Dataset id of the new version.")
+    ] = None,
+    abs_tol: Annotated[
+        float,
+        typer.Option("--abs-tol", min=0, help="Allowed absolute difference."),
+    ] = 0.0,
+    rel_tol: Annotated[
+        float,
+        typer.Option("--rel-tol", min=0, help="Allowed relative difference."),
+    ] = 1e-9,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show progress logging.")
     ] = False,
 ) -> None:
-    """Compare the structure of two report versions."""
+    """Compare two report versions: structure, and with --data also the numbers."""
     logging.basicConfig(
         level=logging.INFO if verbose else logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
     )
+    settings = None
+    if data:
+        if not old_dataset or not new_dataset:
+            raise typer.BadParameter("--data needs --old-dataset and --new-dataset")
+        tolerance = Tolerance(absolute=abs_tol, relative=rel_tol)
+        settings = DataSettings(
+            old_dataset=old_dataset, new_dataset=new_dataset, tolerance=tolerance
+        )
     try:
-        result = validate(old, new)
+        runner = create_runner(os.environ) if settings else None
+        result = validate(old, new, settings, runner)
         if json_path is not None:
             write_json(result, json_path)
         if markdown_path is not None:
             write_markdown(result, markdown_path)
         if html_path is not None:
             write_html(result, html_path, version(PACKAGE_NAME))
-    except (ProjectLoadError, OutputWriteError, TemplateNotFoundError) as exc:
+    except (
+        ProjectLoadError,
+        OutputWriteError,
+        TemplateNotFoundError,
+        MissingCredentialsError,
+        PowerBIError,
+    ) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(EXIT_ERROR) from exc
     typer.echo(format_summary(result))
