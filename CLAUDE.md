@@ -112,10 +112,16 @@ integrations/ ALL I/O: filesystem, Power BI REST API, Anthropic API, env config.
   `ANTHROPIC_API_KEY`.
 - Do not add Windows-only or Power BI Desktop-only dependencies (e.g. ADOMD.NET)
   to the core; such integrations may only be optional extras.
-- Never commit directly to `main`. Work in feature branches
-  (`feat/<issue>-slug`, `fix/<issue>-slug`), one issue per PR, PR description
-  starts with `Closes #<issue>`. Keep PRs under ~300 changed lines; propose a
-  split if an issue grows beyond that.
+- Never commit directly to `main` or `develop`. Create feature branches from
+  `develop` (`feat/<issue>-slug`, `fix/<issue>-slug`) and open PRs against
+  `develop`; one issue per PR, PR description starts with `Closes #<issue>`.
+  Keep PRs under ~300 changed source lines (`src/` plus build and CI config
+  such as `pyproject.toml`, `Dockerfile`, `action.yml` and workflows; tests,
+  fixtures, snapshots and docs do not count) and state the source line count
+  in the PR description; propose a split if an issue grows beyond that.
+- `main` holds released versions only. It changes solely through a release PR
+  from `develop` to `main`, followed by a version tag. Do not open PRs against
+  `main` unless the issue is a release.
 - Do not modify CI workflows or this file unless that is the subject of the issue.
 - Do not weaken checks to make them pass (no blanket `# type: ignore`, `noqa`,
   skipped tests or lowered thresholds without justification in the PR).
