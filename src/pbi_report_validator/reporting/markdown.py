@@ -9,6 +9,7 @@ by dropping whole findings from the end and saying how many were left out.
 import re
 
 from pbi_report_validator.domain.models import Category, DiffResult, Finding
+from pbi_report_validator.reporting.terminal import data_overview
 
 GITHUB_COMMENT_LIMIT = 65_536
 SAFETY_MARGIN = 1_000
@@ -73,6 +74,9 @@ def _header(result: DiffResult) -> str:
         f" · {len(result.findings)} findings",
         "",
     ]
+    overview = data_overview(result)
+    if overview:
+        lines += [overview, ""]
     if result.findings:
         lines += ["| Category | Findings |", "|---|---:|"]
         lines += [f"| {CATEGORY_TITLES[c]} | {n} |" for c, n in counts.items() if n]

@@ -112,18 +112,70 @@ written. No credentials or environment variables are needed.
 
 - Only the PBIR report format; the legacy `report.json` and `.pbix` files are
   not supported (save as `.pbip` with PBIR enabled)
-- No data comparison yet: it shows what changed in the definition, not
-  whether the numbers differ
+- Data validation (`--data`) is new and not yet verified against a live
+  workspace; see its own limitations below
 - A visual moved to a different page shows as removed on one page and added
   on the other
 
-Coming next: data validation against published semantic models (re-run each
-visual as a DAX query and compare the numbers) and a GitHub Action that
-comments on pull requests that change a report.
+### Data validation (optional, `--data`)
+
+The structural diff tells you what changed in the report definition. With
+`--data` the tool also checks whether the **numbers** are the same: each
+visual is turned into a DAX query (with its report, page and visual filters
+and the slicer selections on its page), run against the old and the new
+**published** semantic model, and the results are compared row by row.
+
+```bash
+pbi-validate diff ./old ./new --data \
+  --old-dataset <dataset id> --new-dataset <dataset id> --html report.html
+```
+
+- Numbers are equal when they differ by at most `--abs-tol` (default 0) or
+  `--rel-tol` times the larger value (default 1e-9); text must match exactly.
+- Findings show rows that exist in only one version and values that differ,
+  with old, new and the difference. The HTML drill-down shows a per-visual
+  summary; the JSON has a `data` summary per visual (schema 1.2).
+- Visuals whose query cannot be built faithfully (custom visuals, hierarchy
+  levels, filters on measures, ...) or fails are reported as
+  "not validated" with the reason. Slicers are skipped: they only filter.
+
+**Setup (one time).** Data validation signs in as a Microsoft Entra
+service principal and uses the Power BI REST API `executeQueries` endpoint,
+so it runs in CI without Windows-only drivers:
+
+1. Register an app in Microsoft Entra ID and create a client secret.
+2. In the Power BI admin portal, enable *Allow service principals to use
+   Power BI APIs* and *Dataset Execute Queries REST API* (for the app or a
+   security group that contains it).
+3. Add the app to the workspace(s) that hold both semantic models, with at
+   least Contributor rights (it needs read and build permission).
+4. Provide the credentials as environment variables (`.env.example` lists
+   them; never commit them):
+
+   ```bash
+   export PBI_TENANT_ID=...  PBI_CLIENT_ID=...  PBI_CLIENT_SECRET=...
+   ```
+
+The dataset id is the GUID in the semantic model's URL in the Power BI
+service (`.../datasets/<id>/...`).
+
+If sign-in fails or a dataset id is wrong, the run stops with exit code 1
+and no output files are written; fix the setup and run it again.
+
+Limitations: models with row-level security can't be queried by a service
+principal; slicer interactions edited in Power BI and slicers synced from
+other pages are not taken into account; the API allows about 120 queries a
+minute (40 on Pro/PPU), and each visual needs two.
+
+Coming next: a GitHub Action that comments on pull requests that change a
+report.
 
 ## Data handling
 
 - Runs locally or in your own CI; nothing is sent anywhere by default.
+- With `--data`, queries go only to the Power BI API of your own tenant.
+  Query results stay in memory and in the output files you ask for; they
+  are never logged or sent anywhere else.
 - The optional AI layer only receives metadata (field names, filter
   definitions), never row-level data, unless you explicitly opt in.
 
