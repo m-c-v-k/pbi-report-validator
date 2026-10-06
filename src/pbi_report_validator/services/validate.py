@@ -7,6 +7,7 @@ from pathlib import Path
 from pbi_report_validator.diff.content import diff_content
 from pbi_report_validator.diff.measures import diff_measures
 from pbi_report_validator.diff.structural import diff_pages_and_visuals
+from pbi_report_validator.diff.view import build_page_views
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -22,6 +23,7 @@ from pbi_report_validator.matching.matcher import match_reports
 from pbi_report_validator.parsers.pbir import parse_report
 from pbi_report_validator.parsers.tmdl import parse_semantic_model
 from pbi_report_validator.reporting.json_out import to_json
+from pbi_report_validator.reporting.markdown import to_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +64,7 @@ def validate(old_path: Path, new_path: Path) -> DiffResult:
         old_source=old_path.as_posix(),
         new_source=new_path.as_posix(),
         findings=tuple(findings),
+        pages=build_page_views(match, findings),
     )
 
 
@@ -72,6 +75,15 @@ def write_json(result: DiffResult, path: Path) -> None:
         OutputWriteError: The file could not be written.
     """
     write_text(path, to_json(result))
+
+
+def write_markdown(result: DiffResult, path: Path) -> None:
+    """Write the result as a Markdown summary to ``path``.
+
+    Raises:
+        OutputWriteError: The file could not be written.
+    """
+    write_text(path, to_markdown(result))
 
 
 def _parse(project: RawProject) -> tuple[Report, SemanticModel | None]:

@@ -9,7 +9,11 @@ import typer
 
 from pbi_report_validator.integrations.files import OutputWriteError, ProjectLoadError
 from pbi_report_validator.reporting.terminal import format_summary
-from pbi_report_validator.services.validate import validate, write_json
+from pbi_report_validator.services.validate import (
+    validate,
+    write_json,
+    write_markdown,
+)
 
 PACKAGE_NAME = "pbi-report-validator"
 EXIT_ERROR = 1  # project could not be loaded or output not written
@@ -50,6 +54,13 @@ def diff(
         Path | None,
         typer.Option("--json", help="Write the full result as JSON to this file."),
     ] = None,
+    markdown_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--markdown",
+            help="Write a Markdown summary (for PR comments) to this file.",
+        ),
+    ] = None,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show progress logging.")
     ] = False,
@@ -63,9 +74,12 @@ def diff(
         result = validate(old, new)
         if json_path is not None:
             write_json(result, json_path)
+        if markdown_path is not None:
+            write_markdown(result, markdown_path)
     except (ProjectLoadError, OutputWriteError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(EXIT_ERROR) from exc
     typer.echo(format_summary(result))
-    if json_path is not None:
-        typer.echo(f"\nJSON written to {json_path.as_posix()}")
+    for label, path in (("JSON", json_path), ("Markdown", markdown_path)):
+        if path is not None:
+            typer.echo(f"\n{label} written to {path.as_posix()}")
