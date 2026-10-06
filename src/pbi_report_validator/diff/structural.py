@@ -95,6 +95,18 @@ def _page_changes(match: PageMatch) -> list[Finding]:
                 new=match.new.display_name,
             )
         )
+    if match.old.name != match.new.name:
+        findings.append(
+            Finding(
+                category=Category.PAGE,
+                change=ChangeKind.RENAMED,
+                path=match.old.name,
+                message=f"Page '{match.new.display_name}' has a new id; "
+                "matched by display name",
+                old=match.old.name,
+                new=match.new.name,
+            )
+        )
     page = match.old.name
     findings += [_visual_added(page, v) for v in match.added_visuals]
     findings += [_visual_removed(page, v) for v in match.removed_visuals]

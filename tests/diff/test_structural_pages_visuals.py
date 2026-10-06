@@ -145,3 +145,53 @@ def test_new_visual_id_is_reported_as_renamed() -> None:
     assert [(f.path, f.change, f.old, f.new) for f in findings] == [
         ("p/old_id", ChangeKind.RENAMED, "old_id", "new_id")
     ]
+
+
+def test_new_page_id_is_reported_as_renamed() -> None:
+    old = [page("a1", 0, visual("v"), display="Sales")]
+    new = [page("b2", 0, visual("v"), display="Sales")]
+
+    findings = diff_pages_and_visuals(match_reports(old, new))
+
+    assert [(f.path, f.change, f.old, f.new) for f in findings] == [
+        ("a1", ChangeKind.RENAMED, "a1", "b2")
+    ]
+
+
+def test_removed_page_message_counts_visuals() -> None:
+    old = [page("a", 0), page("b", 1, visual("x"), visual("y"))]
+
+    findings = diff_pages_and_visuals(match_reports(old, [page("a", 0)]))
+
+    assert findings[0].message == "Page 'B' removed with 2 visuals"
+
+
+def test_z_order_change_alone_is_ignored() -> None:
+    old = [page("p", 0, visual("v"))]
+    new = [page("p", 0, visual("v", z=5000))]
+
+    assert diff_pages_and_visuals(match_reports(old, new)) == []
+
+
+def test_title_added_and_removed() -> None:
+    old = [page("p", 0, visual("a", title=None), visual("b", title="B", x=500))]
+    new = [page("p", 0, visual("a", title="A"), visual("b", title=None, x=500))]
+
+    findings = diff_pages_and_visuals(match_reports(old, new))
+
+    assert sorted((f.path, f.old, f.new) for f in findings) == [
+        ("p/a", None, "A"),
+        ("p/b", "B", None),
+    ]
+
+
+def test_new_id_and_retype_are_both_reported() -> None:
+    old = [page("p", 0, visual("old_id", "clusteredBarChart", "Sales"))]
+    new = [page("p", 0, visual("new_id", "clusteredColumnChart", "Sales"))]
+
+    findings = diff_pages_and_visuals(match_reports(old, new, threshold=0.5))
+
+    assert sorted((f.path, f.change) for f in findings) == [
+        ("p/old_id", ChangeKind.RENAMED),
+        ("p/old_id", ChangeKind.RETYPED),
+    ]
