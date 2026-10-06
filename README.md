@@ -39,6 +39,18 @@ From the next release on, each [GitHub release](https://github.com/m-c-v-k/pbi-r
 also has the wheel attached, which `pip install` or `uv tool install` accept
 directly.
 
+### Docker
+
+From v0.1.0 an image is published to GitHub Container Registry. Mount the
+folder that holds both reports at `/work`:
+
+```bash
+docker run --rm -v "$PWD:/work" ghcr.io/m-c-v-k/pbi-report-validator diff old new
+```
+
+To write `--json` or `--markdown` files into the mounted folder on Linux,
+add `--user "$(id -u):$(id -g)"` so the files are owned by you.
+
 ## Quick start
 
 1. Save both report versions as Power BI Projects (*File → Save as → Power BI
