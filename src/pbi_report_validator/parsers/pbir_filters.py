@@ -1,23 +1,40 @@
 """Parse PBIR filter cards and slicer selections.
 
 Filter conditions are stored in PBIR as small query-language trees
-(``From`` + ``Where``). They are rendered to a normalised, readable string
-such as ``Product[Category] in ('Bikes', 'Clothing')`` so two versions can
-be compared as text and shown in reports.
+(``From`` + ``Where``). They are parsed into structured ``Condition``
+models (used to build DAX) and rendered from those to a normalised,
+readable string such as ``Product[Category] in ('Bikes', 'Clothing')``,
+which is what the diff compares and the reports show. Rendering from the
+structured form keeps the two in agreement.
 """
 
 import re
-from typing import Any
+from typing import Any, Literal, cast
 
-from pbi_report_validator.domain.models import Filter, FilterLevel, SlicerState
+from pbi_report_validator.domain.models import (
+    AllCondition,
+    BinaryCondition,
+    ComparisonCondition,
+    Condition,
+    FieldRef,
+    Filter,
+    FilterLevel,
+    InCondition,
+    LiteralKind,
+    LiteralValue,
+    NotCondition,
+    SlicerState,
+)
 from pbi_report_validator.parsers.pbir_fields import parse_field
 
-COMPARISON_OPERATORS = {0: "=", 1: ">", 2: ">=", 3: "<", 4: "<="}
-NUMBER_LITERAL = re.compile(r"^(-?\d+(?:\.\d+)?)[LDM]$")
+Operator = Literal["=", ">", ">=", "<", "<="]
+COMPARISON_OPERATORS: dict[int, Operator] = {0: "=", 1: ">", 2: ">=", 3: "<", 4: "<="}
+NUMBER_LITERAL = re.compile(r"^(-?\d+(?:\.\d+)?)[LDM]?$")
+DATETIME_LITERAL = re.compile(r"^datetime'(?P<value>[^']*)'$")
 
 
 class UnsupportedConditionError(ValueError):
-    """A filter condition uses a construct the renderer does not know."""
+    """A filter condition uses a construct the parser does not know."""
 
 
 def parse_filters(
@@ -44,24 +61,27 @@ def parse_filters(
 
 
 def parse_slicer_state(
-    body: dict[str, Any], field_hint: Any, problems: list[str]
+    body: dict[str, Any], field_hint: FieldRef | None, problems: list[str]
 ) -> SlicerState | None:
     """Parse the selection stored in a slicer's ``objects.general`` filter.
 
     Args:
         body: The ``visual`` object of a slicer.
-        field_hint: The slicer's field (``FieldRef``), used when the selection
-            itself names no field.
-        problems: Receives a message if the selection could not be rendered.
+        field_hint: The slicer's field, used when the selection itself names
+            no field.
+        problems: Receives a message if the selection could not be parsed.
 
     Returns:
         The slicer state, or ``None`` if the visual is not a slicer.
     """
     if body.get("visualType") != "slicer":
         return None
-    query = _slicer_query(body)
-    condition = _render_or_problem(query, "slicer selection", problems)
-    return SlicerState(field=field_hint, condition=condition)
+    expression = _parse_or_problem(_slicer_query(body), "slicer selection", problems)
+    return SlicerState(
+        field=field_hint,
+        condition=render(expression) if expression else None,
+        expression=expression,
+    )
 
 
 def render_condition(query: Any) -> str | None:
@@ -73,45 +93,106 @@ def render_condition(query: Any) -> str | None:
     Raises:
         UnsupportedConditionError: The query uses an unknown construct.
     """
+    expression = parse_condition(query)
+    return render(expression) if expression else None
+
+
+def parse_condition(query: Any) -> Condition | None:
+    """Parse a PBIR filter query (``From``/``Where``) into a ``Condition``.
+
+    Returns:
+        The condition, or ``None`` if the query has no ``Where`` clause. A
+        single ``Where`` item is returned as is; several are wrapped in an
+        ``AllCondition``.
+
+    Raises:
+        UnsupportedConditionError: The query uses an unknown construct.
+    """
     if not isinstance(query, dict):
         return None
     aliases = _aliases(query.get("From"))
     where = query.get("Where")
     if not isinstance(where, list) or not where:
         return None
-    conditions = [
-        item.get("Condition") if isinstance(item, dict) else None for item in where
-    ]
-    parts = [_condition(c, aliases) for c in conditions]
-    if len(parts) > 1:
-        parts = [
-            f"({part})" if _is_compound(c) else part
-            for part, c in zip(parts, conditions, strict=True)
-        ]
-    return " and ".join(parts)
+    items = tuple(
+        _condition(item.get("Condition") if isinstance(item, dict) else None, aliases)
+        for item in where
+    )
+    return items[0] if len(items) == 1 else AllCondition(items=items)
 
 
-def _is_compound(node: Any) -> bool:
-    return isinstance(node, dict) and ("And" in node or "Or" in node)
+def render(condition: Condition) -> str:
+    """Render a structured condition as normalised text."""
+    if isinstance(condition, InCondition):
+        return _render_in(condition)
+    if isinstance(condition, ComparisonCondition):
+        value = render_literal(condition.value)
+        return f"{condition.field.key} {condition.operator} {value}"
+    if isinstance(condition, NotCondition):
+        return f"not ({render(condition.operand)})"
+    if isinstance(condition, BinaryCondition):
+        left, right = render(condition.left), render(condition.right)
+        return f"({left}) {condition.kind} ({right})"
+    return " and ".join(
+        f"({render(item)})" if isinstance(item, BinaryCondition) else render(item)
+        for item in condition.items
+    )
+
+
+def render_literal(literal: LiteralValue) -> str:
+    """Render a literal the way it appears in a normalised condition."""
+    if literal.kind == LiteralKind.TEXT:
+        return "'" + literal.value.replace("'", "''") + "'"
+    if literal.kind == LiteralKind.DATETIME:
+        return f"datetime'{literal.value}'"
+    if literal.kind == LiteralKind.NULL:
+        return "null"
+    return literal.value
+
+
+def parse_literal(raw: str) -> LiteralValue:
+    """Classify a raw PBIR literal such as ``2025L``, ``'Bikes'`` or ``true``."""
+    number = NUMBER_LITERAL.match(raw)
+    if number:
+        return LiteralValue(kind=LiteralKind.NUMBER, value=number.group(1))
+    if len(raw) >= 2 and raw.startswith("'") and raw.endswith("'"):
+        return LiteralValue(kind=LiteralKind.TEXT, value=raw[1:-1].replace("''", "'"))
+    if raw in ("true", "false"):
+        return LiteralValue(kind=LiteralKind.BOOLEAN, value=raw)
+    if raw == "null":
+        return LiteralValue(kind=LiteralKind.NULL, value="")
+    datetime = DATETIME_LITERAL.match(raw)
+    if datetime:
+        return LiteralValue(kind=LiteralKind.DATETIME, value=datetime["value"])
+    return LiteralValue(kind=LiteralKind.OTHER, value=raw)
+
+
+def _render_in(condition: InCondition) -> str:
+    fields = [f.key for f in condition.fields]
+    values = [", ".join(render_literal(v) for v in row) for row in condition.rows]
+    target = fields[0] if len(fields) == 1 else f"({', '.join(fields)})"
+    rendered = values if len(fields) == 1 else [f"({v})" for v in values]
+    return f"{target} in ({', '.join(rendered)})"
 
 
 def _parse_filter(
     entry: dict[str, Any], level: FilterLevel, problems: list[str]
 ) -> Filter:
     name = str(entry.get("name", ""))
-    condition = _render_or_problem(entry.get("filter"), f"filter {name}", problems)
+    expression = _parse_or_problem(entry.get("filter"), f"filter {name}", problems)
     return Filter(
         name=name,
         level=level,
         field=parse_field(entry.get("field")),
         filter_type=str(entry.get("type", "Unknown")),
-        condition=condition,
+        condition=render(expression) if expression else None,
+        expression=expression,
     )
 
 
-def _render_or_problem(query: Any, label: str, problems: list[str]) -> str | None:
+def _parse_or_problem(query: Any, label: str, problems: list[str]) -> Condition | None:
     try:
-        return render_condition(query)
+        return parse_condition(query)
     except UnsupportedConditionError as exc:
         problems.append(f"{label}: unsupported condition ({exc})")
         return None
@@ -136,7 +217,7 @@ def _aliases(sources: Any) -> dict[str, str]:
     }
 
 
-def _condition(node: Any, aliases: dict[str, str]) -> str:
+def _condition(node: Any, aliases: dict[str, str]) -> Condition:
     if not isinstance(node, dict) or len(node) != 1:
         raise UnsupportedConditionError("malformed condition")
     kind, body = next(iter(node.items()))
@@ -145,47 +226,50 @@ def _condition(node: Any, aliases: dict[str, str]) -> str:
     if kind == "In":
         return _in(body, aliases)
     if kind == "Not":
-        return f"not ({_condition(body.get('Expression'), aliases)})"
+        return NotCondition(operand=_condition(body.get("Expression"), aliases))
     if kind in ("And", "Or"):
-        left = _condition(body.get("Left"), aliases)
-        right = _condition(body.get("Right"), aliases)
-        return f"({left}) {kind.lower()} ({right})"
+        return BinaryCondition(
+            kind=cast(Literal["and", "or"], kind.lower()),
+            left=_condition(body.get("Left"), aliases),
+            right=_condition(body.get("Right"), aliases),
+        )
     if kind == "Comparison":
         return _comparison(body, aliases)
     raise UnsupportedConditionError(kind)
 
 
-def _in(body: dict[str, Any], aliases: dict[str, str]) -> str:
+def _in(body: dict[str, Any], aliases: dict[str, str]) -> InCondition:
     expressions = body.get("Expressions", [])
     rows = body.get("Values", [])
     if not isinstance(expressions, list) or not isinstance(rows, list):
         raise UnsupportedConditionError("In")
-    fields = [_field_key(e, aliases) for e in expressions]
-    values = [", ".join(_literal(v) for v in row) for row in rows]
-    target = fields[0] if len(fields) == 1 else f"({', '.join(fields)})"
-    rendered = values if len(fields) == 1 else [f"({v})" for v in values]
-    return f"{target} in ({', '.join(rendered)})"
+    return InCondition(
+        fields=tuple(_field(e, aliases) for e in expressions),
+        rows=tuple(tuple(_literal(v) for v in row) for row in rows),
+    )
 
 
-def _comparison(body: dict[str, Any], aliases: dict[str, str]) -> str:
+def _comparison(body: dict[str, Any], aliases: dict[str, str]) -> ComparisonCondition:
     kind = body.get("ComparisonKind")
     operator = COMPARISON_OPERATORS.get(kind) if isinstance(kind, int) else None
     if operator is None:
         raise UnsupportedConditionError("ComparisonKind")
-    left = _field_key(body.get("Left"), aliases)
-    return f"{left} {operator} {_literal(body.get('Right'))}"
+    return ComparisonCondition(
+        field=_field(body.get("Left"), aliases),
+        operator=operator,
+        value=_literal(body.get("Right")),
+    )
 
 
-def _field_key(expression: Any, aliases: dict[str, str]) -> str:
+def _field(expression: Any, aliases: dict[str, str]) -> FieldRef:
     field = parse_field(expression, aliases)
     if field is None:
         raise UnsupportedConditionError("unrecognised field")
-    return field.key
+    return field
 
 
-def _literal(node: Any) -> str:
+def _literal(node: Any) -> LiteralValue:
     value = node.get("Literal", {}).get("Value") if isinstance(node, dict) else None
     if not isinstance(value, str):
         raise UnsupportedConditionError("non-literal value")
-    number = NUMBER_LITERAL.match(value)
-    return number.group(1) if number else value
+    return parse_literal(value)
