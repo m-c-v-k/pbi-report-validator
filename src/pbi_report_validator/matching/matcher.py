@@ -41,7 +41,11 @@ def match_reports(
     Returns:
         Matched pages (ordered by the old page order) and the pages only in
         the old or only in the new version.
+
+    Raises:
+        ValueError: ``threshold`` is outside 0-1.
     """
+    _check_threshold(threshold)
     by_name, old_left, new_left = _match_by_key(old_pages, new_pages, lambda p: p.name)
     by_display, old_left, new_left = _match_by_key(
         old_left, new_left, lambda p: p.display_name
@@ -64,34 +68,45 @@ def match_visuals(
     Returns:
         Matched visuals, visuals only on the old page and visuals only on
         the new page, each sorted by visual name.
+
+    Raises:
+        ValueError: ``threshold`` is outside 0-1.
     """
+    _check_threshold(threshold)
     by_id, old_left, new_left = _match_by_key(
         old.visuals, new.visuals, lambda v: v.name
     )
     matches = [
         VisualMatch(old=o, new=n, method=MatchMethod.ID, score=1.0) for o, n in by_id
     ]
+    # Candidates are tracked by list index, not name: a malformed page can
+    # contain duplicate visual names, and those must not hide each other.
     candidates = sorted(
         (
-            (score, o.name, n.name, o, n)
-            for o in old_left
-            for n in new_left
+            (score, o.name, n.name, i, j)
+            for i, o in enumerate(old_left)
+            for j, n in enumerate(new_left)
             if (score := similarity(o, n, old, new)) >= threshold
         ),
-        key=lambda c: (-c[0], c[1], c[2]),
+        key=lambda c: (-c[0], c[1], c[2], c[3], c[4]),
     )
-    used_old: set[str] = set()
-    used_new: set[str] = set()
-    for score, old_name, new_name, o, n in candidates:
-        if old_name in used_old or new_name in used_new:
+    used_old: set[int] = set()
+    used_new: set[int] = set()
+    for score, _, _, i, j in candidates:
+        if i in used_old or j in used_new:
             continue
-        used_old.add(old_name)
-        used_new.add(new_name)
+        used_old.add(i)
+        used_new.add(j)
         matches.append(
-            VisualMatch(old=o, new=n, method=MatchMethod.SIMILARITY, score=score)
+            VisualMatch(
+                old=old_left[i],
+                new=new_left[j],
+                method=MatchMethod.SIMILARITY,
+                score=score,
+            )
         )
-    removed = [v for v in old_left if v.name not in used_old]
-    added = [v for v in new_left if v.name not in used_new]
+    removed = [v for i, v in enumerate(old_left) if i not in used_old]
+    added = [v for j, v in enumerate(new_left) if j not in used_new]
     return (
         sorted(matches, key=lambda m: m.old.name),
         sorted(removed, key=lambda v: v.name),
@@ -100,12 +115,22 @@ def match_visuals(
 
 
 def similarity(old: Visual, new: Visual, old_page: Page, new_page: Page) -> float:
-    """Score (0-1) how likely two visuals are the same visual."""
+    """Score (0-1) how likely two visuals are the same visual.
+
+    Two untitled visuals count as having the same title, and two visuals
+    without fields as having the same fields: absence on both sides is
+    agreement, not missing evidence.
+    """
     score = TYPE_WEIGHT * (old.visual_type == new.visual_type)
     score += TITLE_WEIGHT * (old.title == new.title)
     score += FIELDS_WEIGHT * _jaccard(_field_keys(old), _field_keys(new))
     score += POSITION_WEIGHT * _position_closeness(old, new, old_page, new_page)
     return round(score, 6)
+
+
+def _check_threshold(threshold: float) -> None:
+    if not 0 <= threshold <= 1:
+        raise ValueError(f"threshold must be between 0 and 1, got {threshold}")
 
 
 def _match_page(

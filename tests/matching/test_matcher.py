@@ -156,19 +156,60 @@ def test_threshold_controls_similarity_matches() -> None:
     assert len(match_visuals(old, new, threshold=0.5)[0]) == 1
 
 
+BASE = visual("a", title="T")
+
+
 @pytest.mark.parametrize(
-    ("changes", "expected"),
+    ("other", "expected"),
     [
-        ({}, 1.0),
-        ({"visual_type": "table"}, 0.7),
-        ({"title": "Other"}, 0.8),
-        ({"fields": ("Other",)}, 0.7),
+        (visual("b", title="T"), 1.0),
+        (visual("b", "table", title="T"), 0.7),
+        (visual("b", title="Other"), 0.8),
+        (visual("b", title="T", fields=("Other",)), 0.7),
     ],
 )
-def test_similarity_weights(changes: dict[str, object], expected: float) -> None:
-    base = {"name": "a", "title": "T"}
+def test_similarity_weights(other: Visual, expected: float) -> None:
     p = page("p")
 
-    score = similarity(visual(**base), visual(**{**base, **changes}), p, p)  # type: ignore[arg-type]
+    assert similarity(BASE, other, p, p) == pytest.approx(expected)
 
-    assert score == pytest.approx(expected)
+
+def test_position_closeness_is_relative_to_page_size() -> None:
+    small = page("p")
+    large = Page(name="p", display_name="P", ordinal=0, width=2000, height=2000)
+    moved = visual("b", title="T", x=500)
+    scaled = Visual(
+        name="b",
+        visual_type="card",
+        title="T",
+        position=Position(x=0, y=0, width=200, height=200),
+        projections=BASE.projections,
+    )
+
+    assert 0.8 < similarity(BASE, moved, small, small) < 1.0
+    assert similarity(BASE, scaled, small, large) == pytest.approx(1.0)
+
+
+def test_untitled_visuals_without_fields_agree_on_title_and_fields() -> None:
+    a = visual("a", "card", None, (), x=0)
+    b = visual("b", "table", None, (), x=900, y=900)
+    p = page("p")
+
+    assert similarity(a, b, p, p) == pytest.approx(0.5, abs=0.05)
+
+
+def test_duplicate_visual_names_are_not_lost() -> None:
+    old = page("p", visual("dup", title="A"), visual("dup", "map", "B", x=900, y=900))
+    new = page("p", visual("fresh", title="A"))
+
+    matches, removed, added = match_visuals(old, new)
+
+    assert [(m.old.title, m.new.name) for m in matches] == [("A", "fresh")]
+    assert [(v.name, v.title) for v in removed] == [("dup", "B")]
+    assert added == []
+
+
+@pytest.mark.parametrize("threshold", [-0.1, 1.5])
+def test_threshold_outside_range_is_rejected(threshold: float) -> None:
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        match_reports([], [], threshold=threshold)
