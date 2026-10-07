@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from pbi_report_validator.dax.builder import build_query, column, literal, text
@@ -12,64 +10,43 @@ from pbi_report_validator.domain.models import (
     FieldKind,
     FieldRef,
     Filter,
-    FilterLevel,
     InCondition,
     LiteralKind,
     LiteralValue,
     NotCondition,
     Page,
     Position,
-    Projection,
     SlicerState,
     UnsupportedQuery,
     Visual,
 )
-from pbi_report_validator.integrations.files import load_project
-from pbi_report_validator.parsers.pbir import parse_report
+from tests import factories
+from tests.factories import SNAPSHOTS, fixture_report
 
-FIXTURES = Path(__file__).parent.parent / "fixtures"
-SNAPSHOT = Path(__file__).parent.parent / "snapshots" / "dax_sales.txt"
+SNAPSHOT = SNAPSHOTS / "dax_sales.txt"
 POS = Position(x=0, y=0, width=10, height=10)
 YEAR = FieldRef(table="Date", name="Year", kind=FieldKind.COLUMN)
 REGION = FieldRef(table="Sales", name="Region", kind=FieldKind.COLUMN)
 TOTAL = FieldRef(table="Sales", name="Total Sales", kind=FieldKind.MEASURE)
 
 
-def num(value: str) -> LiteralValue:
-    return LiteralValue(kind=LiteralKind.NUMBER, value=value)
+num = factories.number
 
 
 def visual(
     *fields: FieldRef, visual_type: str = "tableEx", filters: tuple[Filter, ...] = ()
 ) -> Visual:
-    return Visual(
-        name="v",
-        visual_type=visual_type,
-        position=POS,
-        projections=tuple(Projection(role="Values", field=f) for f in fields),
-        filters=filters,
+    return factories.visual(
+        "v", visual_type, fields=fields, filters=filters, width=10, height=10
     )
 
 
 def page(*visuals: Visual, filters: tuple[Filter, ...] = ()) -> Page:
-    return Page(
-        name="p",
-        display_name="P",
-        ordinal=0,
-        width=100,
-        height=100,
-        visuals=visuals,
-        filters=filters,
-    )
+    return factories.page("p", *visuals, filters=filters)
 
 
 def flt(expression: Condition) -> Filter:
-    return Filter(
-        name="f",
-        level=FilterLevel.VISUAL,
-        filter_type="Advanced",
-        expression=expression,
-    )
+    return factories.filter_card(expression, filter_type="Advanced")
 
 
 def query_for(
@@ -87,7 +64,7 @@ def dax(v: Visual, **kwargs: tuple[Filter, ...]) -> str:
 def fixture_queries() -> str:
     blocks = []
     for name in ("sales_v1", "sales_v2"):
-        report = parse_report(load_project(FIXTURES / name).report)
+        report = fixture_report(name)
         for p in report.pages:
             for v in p.visuals:
                 result = build_query(v, p, report.filters)

@@ -1,11 +1,9 @@
-from pathlib import Path
-
 from pbi_report_validator.domain.models import FieldKind, FieldRef, Position, Projection
 from pbi_report_validator.domain.raw import RawJsonFile, RawPage, RawReport
 from pbi_report_validator.integrations.files import load_project
 from pbi_report_validator.parsers.pbir import parse_report, parse_visual
+from tests.factories import FIXTURES
 
-FIXTURES = Path(__file__).parent.parent / "fixtures"
 TOTAL_SALES = FieldRef(table="Sales", name="Total Sales", kind=FieldKind.MEASURE)
 
 

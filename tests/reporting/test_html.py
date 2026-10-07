@@ -26,8 +26,8 @@ from pbi_report_validator.reporting.html import (
 )
 from pbi_report_validator.reporting.labels import CATEGORY_LABELS
 from pbi_report_validator.services.validate import validate
+from tests.factories import FIXTURES
 
-FIXTURES = Path(__file__).parent.parent / "fixtures"
 TEMPLATE = read_template(REPORT_TEMPLATE)
 
 
