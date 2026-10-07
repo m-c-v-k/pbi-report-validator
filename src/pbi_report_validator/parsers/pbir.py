@@ -103,13 +103,12 @@ def _parse_visual_or_issue(
 ) -> Visual | None:
     # The visual's folder name is its id; it is known even if the file is broken.
     key = f"{page_name}/{PurePosixPath(raw.path).parent.name}"
-    if raw.error is not None:
-        message = f"unreadable: {raw.error}"
-        issues.append(ParseIssue(path=raw.path, message=message, visual=key))
+    content = _content_or_issue(raw, issues, visual=key)
+    if content is None:
         return None
     problems: list[str] = []
     try:
-        visual = parse_visual(raw.content, problems)
+        visual = parse_visual(content, problems)
     except VisualParseError as exc:
         problems = [str(exc)]
     except ValidationError as exc:
@@ -200,10 +199,11 @@ def _projections(body: dict[str, Any], problems: list[str]) -> tuple[Projection,
 
 
 def _content_or_issue(
-    raw: RawJsonFile, issues: list[ParseIssue]
+    raw: RawJsonFile, issues: list[ParseIssue], visual: str | None = None
 ) -> dict[str, Any] | None:
     if raw.error is not None:
-        issues.append(ParseIssue(path=raw.path, message=f"unreadable: {raw.error}"))
+        message = f"unreadable: {raw.error}"
+        issues.append(ParseIssue(path=raw.path, message=message, visual=visual))
         return None
     return raw.content
 
