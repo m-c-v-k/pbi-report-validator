@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/m-c-v-k/pbi-report-validator/actions/workflows/ci.yml/badge.svg)](https://github.com/m-c-v-k/pbi-report-validator/actions/workflows/ci.yml)
 [![Demo](https://img.shields.io/badge/demo-live%20report-2457c5)](https://m-c-v-k.github.io/pbi-report-validator/)
+[![Coverage](https://img.shields.io/endpoint?url=https://m-c-v-k.github.io/pbi-report-validator/coverage-badge.json)](https://m-c-v-k.github.io/pbi-report-validator/coverage/)
 
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
@@ -190,6 +191,11 @@ uv run pytest                  # tests
 uv run ruff check . && uv run ruff format --check .
 uv run mypy src
 ```
+
+Every CI run shows the test results and a coverage table in its summary
+and attaches the HTML coverage report. The coverage report of the latest
+release is on the [demo site](https://m-c-v-k.github.io/pbi-report-validator/coverage/);
+CI fails if coverage drops below 95%.
 
 Built with Python, uv, Typer, Pydantic and Jinja2. See [CLAUDE.md](CLAUDE.md) for
 architecture and contribution rules, and [docs/PROJECT.md](docs/PROJECT.md) for

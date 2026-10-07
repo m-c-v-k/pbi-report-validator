@@ -1,7 +1,8 @@
 name: Pages
 
-# Publish the demo: the HTML report for the synthetic fixtures, built by CI
-# on every push to main. PRs that change the demo only build it.
+# Publish the demo: the HTML report for the synthetic fixtures plus the test
+# coverage report and badge, built by CI on every push to main. PRs that
+# change the demo only build it.
 on:
   push:
     branches: [main]
@@ -9,6 +10,7 @@ on:
     branches: [main, develop]
     paths:
       - docs/demo/**
+      - pyproject.toml
       - .github/workflows/pages.yml
   workflow_dispatch:
 
@@ -34,6 +36,17 @@ jobs:
           cp docs/demo/index.html site/
           uv run pbi-validate diff tests/fixtures/sales_v1 tests/fixtures/sales_v2 \
             --html site/report.html --json site/diff.json --markdown site/diff.md
+
+      - name: Coverage report and badge
+        run: |
+          uv run pytest -q --cov --cov-report=html:site/coverage
+          pct=$(uv run coverage report --format=total)
+          if [ "$pct" -ge 95 ]; then color=brightgreen
+          elif [ "$pct" -ge 85 ]; then color=yellow
+          else color=red; fi
+          printf '{"schemaVersion": 1, "label": "coverage", "message": "%s%%", "color": "%s"}\n' \
+            "$pct" "$color" > site/coverage-badge.json
+          rm -f site/coverage/.gitignore
 
       - uses: actions/upload-pages-artifact@v5
         with:
