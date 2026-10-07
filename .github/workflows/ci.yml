@@ -28,6 +28,9 @@ jobs:
         run: uv sync --locked
 
       - name: Tests with coverage
+        # `shell: bash` adds -o pipefail, so a test failure or a coverage
+        # drop fails the step even though the output is piped into tee.
+        shell: bash
         run: |
           uv run pytest -v --cov --cov-report=term --cov-report=html \
             --junitxml=test-results.xml | tee pytest.log
