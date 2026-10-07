@@ -44,6 +44,10 @@ tr:last-child td { border-bottom: 0; }
 .change-removed { color: var(--removed); }
 .change-error { color: var(--removed); }
 .change-modified, .change-moved, .change-retyped, .change-renamed, .change-reordered { color: var(--modified); }
+.severity { font-weight: 600; white-space: nowrap; }
+.severity-critical { color: var(--removed); }
+.severity-warning { color: var(--modified); }
+.severity-info { color: var(--unchanged); }
 .values pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
 .values .old { color: var(--removed); }
 .values .new { color: var(--added); }
@@ -115,6 +119,9 @@ td a, .detail-body a { color: var(--accent); }
 {% if result.findings %}
   <div class="cards">
     <div class="card"><div class="n" data-count="total">{{ result.findings | length }}</div><div class="label">Findings</div></div>
+{% for key, count in severities %}
+    <div class="card"><div class="n severity-{{ key }}" data-severity-count="{{ key }}">{{ count }}</div><div class="label">{{ key | capitalize }}</div></div>
+{% endfor %}
 {% for key, label, count in categories %}
     <div class="card"><div class="n" data-count="{{ key }}">{{ count }}</div><div class="label">{{ label }}</div></div>
 {% endfor %}
@@ -206,7 +213,7 @@ td a, .detail-body a { color: var(--accent); }
       </dl>
       <ul>
 {% for f in details[key] %}
-        <li><span class="change change-{{ f.change.value }}">{{ f.change.value }}</span> {{ labels[f.category.value] }}: {{ f.message }}
+        <li><span class="severity severity-{{ f.severity.value }}">{{ f.severity.value }}</span> <span class="change change-{{ f.change.value }}">{{ f.change.value }}</span> {{ labels[f.category.value] }}: {{ f.message }}
 {% if f.old is not none or f.new is not none %}
           <div class="values">
 {% if f.old is not none %}            <pre class="old">{{ f.old }}</pre>
@@ -237,10 +244,11 @@ td a, .detail-body a { color: var(--accent); }
   </div>
   <div class="table-wrap">
     <table id="findings">
-      <thead><tr><th>Change</th><th>Category</th><th>Where</th><th>What</th><th>Old &rarr; new</th></tr></thead>
+      <thead><tr><th>Severity</th><th>Change</th><th>Category</th><th>Where</th><th>What</th><th>Old &rarr; new</th></tr></thead>
       <tbody>
 {% for f in result.findings %}
-        <tr data-category="{{ f.category.value }}">
+        <tr data-category="{{ f.category.value }}" data-severity="{{ f.severity.value }}">
+          <td class="severity severity-{{ f.severity.value }}">{{ f.severity.value }}</td>
           <td class="change change-{{ f.change.value }}">{{ f.change.value }}</td>
           <td>{{ labels[f.category.value] }}</td>
 {% set target = visual_key(f) %}

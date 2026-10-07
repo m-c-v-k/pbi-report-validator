@@ -1,11 +1,12 @@
 {
-  "schema_version": "1.2",
+  "schema_version": "1.3",
   "old_source": "tests/fixtures/sales_v1",
   "new_source": "tests/fixtures/sales_v2",
   "findings": [
     {
       "category": "visual",
       "change": "moved",
+      "severity": "info",
       "path": "details/chart_sales_by_region",
       "message": "clusteredBarChart 'Sales by region' (chart_sales_by_region) moved",
       "old": "x=840, y=40, width=400, height=320",
@@ -14,6 +15,7 @@
     {
       "category": "filter",
       "change": "removed",
+      "severity": "critical",
       "path": "details/table_product_sales/filters/visual_filter_category",
       "message": "Filter visual_filter_category removed",
       "old": "Product[Category] in ('Bikes', 'Clothing')",
@@ -22,6 +24,7 @@
     {
       "category": "measure",
       "change": "renamed",
+      "severity": "warning",
       "path": "model/Sales/Margin %",
       "message": "Measure Sales[Margin %] renamed to Sales[Gross Margin %]",
       "old": "Margin %",
@@ -30,6 +33,7 @@
     {
       "category": "measure",
       "change": "modified",
+      "severity": "critical",
       "path": "model/Sales/Total Sales",
       "message": "Expression of measure Sales[Total Sales] changed",
       "old": "SUM(Sales[Amount])",
@@ -38,6 +42,7 @@
     {
       "category": "visual",
       "change": "retyped",
+      "severity": "warning",
       "path": "overview/chart_sales_by_month",
       "message": "clusteredColumnChart 'Sales by month' (chart_sales_by_month) changed type to lineChart",
       "old": "clusteredColumnChart",
@@ -46,6 +51,7 @@
     {
       "category": "slicer",
       "change": "modified",
+      "severity": "critical",
       "path": "overview/slicer_year",
       "message": "Slicer selection changed",
       "old": "Date[Year] in (2025)",
@@ -54,12 +60,18 @@
     {
       "category": "page",
       "change": "added",
+      "severity": "info",
       "path": "trends",
       "message": "Page 'Trends' added with 1 visual",
       "old": null,
       "new": "Trends"
     }
   ],
+  "severity_counts": {
+    "critical": 3,
+    "warning": 2,
+    "info": 2
+  },
   "pages": [
     {
       "name": "overview",

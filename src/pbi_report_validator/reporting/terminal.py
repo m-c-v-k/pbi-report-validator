@@ -3,7 +3,7 @@
 from collections import Counter
 
 from pbi_report_validator.domain.models import Category, DiffResult
-from pbi_report_validator.reporting.labels import data_overview
+from pbi_report_validator.reporting.labels import data_overview, severity_overview
 
 DEFAULT_LIMIT = 20
 
@@ -25,7 +25,10 @@ def format_summary(result: DiffResult, limit: int = DEFAULT_LIMIT) -> str:
     if not result.findings:
         return f"{header}\nNo differences found."
     counts = Counter(f.category for f in result.findings)
-    lines = [header, f"{len(result.findings)} findings:"]
+    lines = [
+        header,
+        f"{len(result.findings)} findings ({severity_overview(result)}):",
+    ]
     lines += [
         f"  {category.value:<12} {counts[category]}"
         for category in Category
@@ -33,7 +36,8 @@ def format_summary(result: DiffResult, limit: int = DEFAULT_LIMIT) -> str:
     ]
     lines.append("")
     lines += [
-        f"  [{f.change.value}] {f.path}: {f.message}" for f in result.findings[:limit]
+        f"  {f.severity.value:<8} [{f.change.value}] {f.path}: {f.message}"
+        for f in result.findings[:limit]
     ]
     hidden = len(result.findings) - limit
     if hidden > 0:

@@ -34,6 +34,12 @@ STATUS_MARKS = {
 }
 
 
+def severity_overview(result: DiffResult) -> str:
+    """Findings per severity, most severe first: ``1 critical, 0 warning, 2 info``."""
+    counts = result.severity_counts
+    return f"{counts.critical} critical, {counts.warning} warning, {counts.info} info"
+
+
 def data_overview(result: DiffResult) -> str | None:
     """One line about data validation, or ``None`` if it did not run."""
     if not result.data:

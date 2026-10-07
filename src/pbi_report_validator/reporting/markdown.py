@@ -9,7 +9,11 @@ by dropping whole findings from the end and saying how many were left out.
 import re
 
 from pbi_report_validator.domain.models import Category, DiffResult, Finding
-from pbi_report_validator.reporting.labels import CATEGORY_LABELS, data_overview
+from pbi_report_validator.reporting.labels import (
+    CATEGORY_LABELS,
+    data_overview,
+    severity_overview,
+)
 
 GITHUB_COMMENT_LIMIT = 65_536
 SAFETY_MARGIN = 1_000
@@ -64,6 +68,8 @@ def _header(result: DiffResult) -> str:
         f" · {len(result.findings)} findings",
         "",
     ]
+    if result.findings:
+        lines += [f"Severity: {severity_overview(result)}", ""]
     overview = data_overview(result)
     if overview:
         lines += [overview, ""]
@@ -81,7 +87,9 @@ def _grouped(findings: tuple[Finding, ...]) -> list[Finding]:
 def _finding(finding: Finding) -> str:
     path = _code(finding.path)
     message = escape(" ".join(finding.message.split()))
-    line = f"- **{finding.change.value}** `{path}`: {message}"
+    line = (
+        f"- {finding.severity.value} · **{finding.change.value}** `{path}`: {message}"
+    )
     if finding.old is None and finding.new is None:
         return line + "\n"
     if _is_short(finding.old) and _is_short(finding.new):

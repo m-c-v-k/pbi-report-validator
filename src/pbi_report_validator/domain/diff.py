@@ -1,9 +1,10 @@
 """Matching, findings, page views and the diff result (the JSON root)."""
 
+from collections import Counter
 from enum import StrEnum
 from typing import Final, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 
 from pbi_report_validator.domain.base import DomainModel
 from pbi_report_validator.domain.data import DataSummary
@@ -13,7 +14,7 @@ from pbi_report_validator.domain.report import (
     Visual,
 )
 
-SCHEMA_VERSION: Final = "1.2"
+SCHEMA_VERSION: Final = "1.3"
 
 
 class MatchMethod(StrEnum):
@@ -81,15 +82,25 @@ class ChangeKind(StrEnum):
     ERROR = "error"
 
 
+class Severity(StrEnum):
+    """How much a finding matters, from least to most."""
+
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
+
+
 class Finding(DomainModel):
     """One difference (or parse problem) between the old and new report.
 
     ``path`` locates the object, e.g. ``details/table_product_sales/filters/
-    visual_filter_category`` or ``model/Sales/Total Sales``.
+    visual_filter_category`` or ``model/Sales/Total Sales``. ``severity`` is
+    set by ``diff.severity``; findings are created with the lowest level.
     """
 
     category: Category
     change: ChangeKind
+    severity: Severity = Severity.INFO
     path: str
     message: str
     old: str | None = None
@@ -156,18 +167,32 @@ class DataComparison(DomainModel):
     findings: tuple[Finding, ...] = ()
 
 
+class SeverityCounts(DomainModel):
+    """Number of findings per severity."""
+
+    critical: int = Field(default=0, ge=0)
+    warning: int = Field(default=0, ge=0)
+    info: int = Field(default=0, ge=0)
+
+
 class DiffResult(DomainModel):
     """The result of comparing two report versions; the JSON output root.
 
     Schema history: 1.0 had sources and findings; 1.1 added ``pages``;
-    1.2 added the ``data`` category and per-visual ``data`` summaries.
+    1.2 added the ``data`` category and per-visual ``data`` summaries;
+    1.3 added ``severity`` on findings and ``severity_counts``.
     """
 
     # Keep the Literal in sync with SCHEMA_VERSION (enforced by a test).
-    schema_version: Literal["1.2"] = SCHEMA_VERSION
+    schema_version: Literal["1.3"] = SCHEMA_VERSION
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()
+    # Always derived from ``findings``; any value passed in is replaced. Must
+    # stay declared after ``findings``: validators only see earlier fields.
+    severity_counts: SeverityCounts = Field(
+        default_factory=SeverityCounts, validate_default=True
+    )
     pages: tuple[PageView, ...] = ()
     data: tuple[DataSummary, ...] = ()
 
@@ -175,3 +200,12 @@ class DiffResult(DomainModel):
     @classmethod
     def _sort_findings(cls, findings: tuple[Finding, ...]) -> tuple[Finding, ...]:
         return tuple(sorted(findings, key=lambda f: f.sort_key))
+
+    @field_validator("severity_counts")
+    @classmethod
+    def _count_severities(
+        cls, _: SeverityCounts, info: ValidationInfo
+    ) -> SeverityCounts:
+        findings: tuple[Finding, ...] = info.data.get("findings", ())
+        counts = Counter(f.severity for f in findings)
+        return SeverityCounts(**{s.value: counts[s] for s in Severity})
