@@ -7,7 +7,7 @@ from pbi_report_validator.diff.content import diff_content
 from pbi_report_validator.diff.measures import diff_measures
 from pbi_report_validator.diff.structural import (
     diff_pages_and_visuals,
-    without_unparseable_visuals,
+    without_unparseable,
 )
 from pbi_report_validator.diff.view import build_page_views
 from pbi_report_validator.domain.models import (
@@ -57,7 +57,7 @@ def validate(
     new_report, new_model = _parse(load_project(new_path))
     match = match_reports(old_report.pages, new_report.pages)
     measures = diff_measures(old_model, new_model)
-    structural = without_unparseable_visuals(
+    structural = without_unparseable(
         diff_pages_and_visuals(match), old_report.issues, new_report.issues
     )
     findings = [

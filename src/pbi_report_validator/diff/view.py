@@ -31,8 +31,8 @@ def build_page_views(
     paths = {f.path for f in findings}
     changes = {(f.path, f.change) for f in findings}
     views = [_matched_page(m, paths, changes) for m in match.pages]
-    views += [_whole_page(p, ItemStatus.ADDED) for p in match.added_pages]
-    views += [_whole_page(p, ItemStatus.REMOVED) for p in match.removed_pages]
+    views += [_whole_page(p, ChangeKind.ADDED, changes) for p in match.added_pages]
+    views += [_whole_page(p, ChangeKind.REMOVED, changes) for p in match.removed_pages]
     return tuple(
         sorted(views, key=lambda v: (v.ordinal, v.status == ItemStatus.REMOVED, v.name))
     )
@@ -83,11 +83,7 @@ def _unmatched_visual(
     Without a matching added/removed finding the visual exists in both
     versions but failed to parse in one; it is shown as modified.
     """
-    path = f"{page}/{visual.name}"
-    if (path, change) not in changes:
-        status = ItemStatus.MODIFIED
-    else:
-        status = ItemStatus.ADDED if change == ChangeKind.ADDED else ItemStatus.REMOVED
+    status = _one_sided_status(f"{page}/{visual.name}", change, changes)
     is_old = change == ChangeKind.REMOVED
     return VisualView(
         name=visual.name,
@@ -99,8 +95,17 @@ def _unmatched_visual(
     )
 
 
-def _whole_page(page: Page, status: ItemStatus) -> PageView:
-    is_old = status == ItemStatus.REMOVED
+def _whole_page(
+    page: Page, change: ChangeKind, changes: set[tuple[str, ChangeKind]]
+) -> PageView:
+    """A page on one side only.
+
+    Without a matching added/removed finding the page exists in both
+    versions but failed to parse in one; it and its visuals are shown as
+    modified.
+    """
+    status = _one_sided_status(page.name, change, changes)
+    is_old = change == ChangeKind.REMOVED
     return PageView(
         name=page.name,
         display_name=page.display_name,
@@ -120,6 +125,14 @@ def _whole_page(page: Page, status: ItemStatus) -> PageView:
             for v in sorted(page.visuals, key=lambda v: v.name)
         ),
     )
+
+
+def _one_sided_status(
+    path: str, change: ChangeKind, changes: set[tuple[str, ChangeKind]]
+) -> ItemStatus:
+    if (path, change) not in changes:
+        return ItemStatus.MODIFIED
+    return ItemStatus.ADDED if change == ChangeKind.ADDED else ItemStatus.REMOVED
 
 
 def _status_if_changed(path: str, paths: set[str]) -> ItemStatus:

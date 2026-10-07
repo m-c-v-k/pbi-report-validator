@@ -137,3 +137,18 @@ def test_page_level_change_marks_only_the_page() -> None:
     ]
 
     assert statuses(old, new) == [("a", "modified", [("v", "unchanged")])]
+
+
+def test_unparseable_page_is_modified_not_removed(tmp_path: Path) -> None:
+    new = tmp_path / "new"
+    shutil.copytree(FIXTURES / "sales_v1", new)
+    (new / "Sales.Report/definition/pages/details/page.json").write_text("{")
+
+    result = validate(FIXTURES / "sales_v1", new)
+
+    assert [(f.category, f.path) for f in result.findings] == [
+        ("parse_issue", "new/Sales.Report/definition/pages/details/page.json")
+    ]
+    details = next(p for p in result.pages if p.name == "details")
+    assert details.status == ItemStatus.MODIFIED
+    assert {v.status for v in details.visuals} == {ItemStatus.MODIFIED}
