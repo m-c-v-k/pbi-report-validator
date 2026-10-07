@@ -165,56 +165,68 @@ def _visual_removed(page: str, visual: Visual) -> Finding:
 
 
 def _visual_changes(page: str, match: VisualMatch) -> list[Finding]:
-    old, new = match.old, match.new
-    path = f"{page}/{old.name}"
-    findings = []
-    if match.method == MatchMethod.SIMILARITY:
-        findings.append(
-            Finding(
-                category=Category.VISUAL,
-                change=ChangeKind.RENAMED,
-                path=path,
-                message=f"{_describe(new)} has a new id; matched by similarity "
-                f"({match.score:.2f})",
-                old=old.name,
-                new=new.name,
-            )
-        )
-    if old.visual_type != new.visual_type:
-        findings.append(
-            Finding(
-                category=Category.VISUAL,
-                change=ChangeKind.RETYPED,
-                path=path,
-                message=f"{_describe(old)} changed type to {new.visual_type}",
-                old=old.visual_type,
-                new=new.visual_type,
-            )
-        )
-    if old.title != new.title:
-        findings.append(
-            Finding(
-                category=Category.VISUAL,
-                change=ChangeKind.MODIFIED,
-                path=path,
-                message=f"Title of {old.visual_type} '{old.name}' changed",
-                old=old.title,
-                new=new.title,
-            )
-        )
+    path = f"{page}/{match.old.name}"
+    candidates = (
+        _new_id(path, match),
+        _retyped(path, match.old, match.new),
+        _retitled(path, match.old, match.new),
+        _moved(path, match.old, match.new),
+    )
+    return [finding for finding in candidates if finding is not None]
+
+
+def _new_id(path: str, match: VisualMatch) -> Finding | None:
+    if match.method != MatchMethod.SIMILARITY:
+        return None
+    return Finding(
+        category=Category.VISUAL,
+        change=ChangeKind.RENAMED,
+        path=path,
+        message=f"{_describe(match.new)} has a new id; matched by similarity "
+        f"({match.score:.2f})",
+        old=match.old.name,
+        new=match.new.name,
+    )
+
+
+def _retyped(path: str, old: Visual, new: Visual) -> Finding | None:
+    if old.visual_type == new.visual_type:
+        return None
+    return Finding(
+        category=Category.VISUAL,
+        change=ChangeKind.RETYPED,
+        path=path,
+        message=f"{_describe(old)} changed type to {new.visual_type}",
+        old=old.visual_type,
+        new=new.visual_type,
+    )
+
+
+def _retitled(path: str, old: Visual, new: Visual) -> Finding | None:
+    if old.title == new.title:
+        return None
+    return Finding(
+        category=Category.VISUAL,
+        change=ChangeKind.MODIFIED,
+        path=path,
+        message=f"Title of {old.visual_type} '{old.name}' changed",
+        old=old.title,
+        new=new.title,
+    )
+
+
+def _moved(path: str, old: Visual, new: Visual) -> Finding | None:
     movement = _movement(old.position, new.position)
-    if movement:
-        findings.append(
-            Finding(
-                category=Category.VISUAL,
-                change=ChangeKind.MOVED,
-                path=path,
-                message=f"{_describe(new)} {movement}",
-                old=_format_position(old.position),
-                new=_format_position(new.position),
-            )
-        )
-    return findings
+    if not movement:
+        return None
+    return Finding(
+        category=Category.VISUAL,
+        change=ChangeKind.MOVED,
+        path=path,
+        message=f"{_describe(new)} {movement}",
+        old=_format_position(old.position),
+        new=_format_position(new.position),
+    )
 
 
 def _movement(old: Position, new: Position) -> str:

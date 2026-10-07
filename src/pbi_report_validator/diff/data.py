@@ -65,40 +65,63 @@ def compare_results(
     except ComparisonError as exc:
         return not_validated(path, str(exc))
     merged = _merge(old_frame, new_frame, len(keys))
+    findings, differing, deltas = _compare_rows(path, merged, keys, values, tolerance)
+    summary = DataSummary(
+        path=path,
+        status=DataStatus.DIFFERENT if findings else DataStatus.SAME,
+        rows_old=len(old_frame),
+        rows_new=len(new_frame),
+        rows_matched=_count(merged, "both"),
+        rows_differing=differing,
+        rows_only_old=_count(merged, "left_only"),
+        rows_only_new=_count(merged, "right_only"),
+        max_abs_delta=max(deltas) if deltas else None,
+    )
+    return DataComparison(summary=summary, findings=tuple(findings[:max_findings]))
+
+
+def _compare_rows(
+    path: str,
+    merged: pd.DataFrame,
+    keys: ColumnPairs,
+    values: ColumnPairs,
+    tolerance: Tolerance,
+) -> tuple[list[Finding], int, list[float]]:
+    """Findings, number of differing matched rows and all numeric deltas."""
     names = [old_name for old_name, _ in keys]
     findings: list[Finding] = []
     differing = 0
     deltas: list[float] = []
     for _, row in merged.iterrows():
         label = _label(names, [row[f"k{i}"] for i in range(len(keys))])
-        side = row[SIDE]
-        if side != "both":
-            findings.append(_row_finding(path, label, side == "right_only"))
+        if row[SIDE] != "both":
+            findings.append(_row_finding(path, label, row[SIDE] == "right_only"))
             continue
-        changed = False
-        for index, (value_name, _) in enumerate(values):
-            before, after = _cell(row[f"v{index}_old"]), _cell(row[f"v{index}_new"])
-            equal, delta = _equal(before, after, tolerance)
-            if delta is not None:
-                deltas.append(delta)
-            if not equal:
-                changed = True
-                findings.append(_value_finding(path, label, value_name, before, after))
-        differing += changed
-    only_old = int((merged[SIDE] == "left_only").sum())
-    only_new = int((merged[SIDE] == "right_only").sum())
-    summary = DataSummary(
-        path=path,
-        status=DataStatus.DIFFERENT if findings else DataStatus.SAME,
-        rows_old=len(old_frame),
-        rows_new=len(new_frame),
-        rows_matched=int((merged[SIDE] == "both").sum()),
-        rows_differing=differing,
-        rows_only_old=only_old,
-        rows_only_new=only_new,
-        max_abs_delta=max(deltas) if deltas else None,
-    )
-    return DataComparison(summary=summary, findings=tuple(findings[:max_findings]))
+        row_findings, row_deltas = _compare_row(path, label, row, values, tolerance)
+        findings += row_findings
+        deltas += row_deltas
+        differing += bool(row_findings)
+    return findings, differing, deltas
+
+
+def _compare_row(
+    path: str, label: str, row: pd.Series, values: ColumnPairs, tolerance: Tolerance
+) -> tuple[list[Finding], list[float]]:
+    """Value findings and numeric deltas for one row present in both versions."""
+    findings: list[Finding] = []
+    deltas: list[float] = []
+    for index, (value_name, _) in enumerate(values):
+        before, after = _cell(row[f"v{index}_old"]), _cell(row[f"v{index}_new"])
+        equal, delta = _equal(before, after, tolerance)
+        if delta is not None:
+            deltas.append(delta)
+        if not equal:
+            findings.append(_value_finding(path, label, value_name, before, after))
+    return findings, deltas
+
+
+def _count(merged: pd.DataFrame, side: str) -> int:
+    return int((merged[SIDE] == side).sum())
 
 
 def not_validated(path: str, reason: str) -> DataComparison:
