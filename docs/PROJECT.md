@@ -64,7 +64,9 @@ old one — and if not, where and why?"*
 ### Out of scope
 
 - Parsing `.pbix` binaries / the compressed data model directly.
-- Editing or auto-fixing reports.
+- Editing or auto-fixing reports, including rebinding a report to another
+  semantic model. The validator only reads; a separate companion project may
+  use its JSON output to propose and apply changes.
 - Pixel/screenshot comparison.
 - Supporting Power BI Report Server or paginated reports.
 
@@ -109,6 +111,7 @@ old one — and if not, where and why?"*
 - Edge cases from real-world-shaped fixtures (field parameters, calculation
   groups, bookmarks noted as unsupported).
 - Optional `--attribute` for data findings: report change, model change or both.
+- Source locations (file and JSON pointer) on findings.
 - Docs: quick start, CI guide, security/data-handling page, architecture.
 - Release v1.0.0, demo GIF, CV-ready README.
 
