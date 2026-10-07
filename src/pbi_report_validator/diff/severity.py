@@ -42,3 +42,9 @@ def with_severity(findings: Iterable[Finding]) -> list[Finding]:
         f.model_copy(update={"severity": default_severity(f.category, f.change)})
         for f in findings
     ]
+
+
+def at_least(findings: Iterable[Finding], threshold: Severity) -> list[Finding]:
+    """The findings whose severity is ``threshold`` or higher."""
+    levels = list(Severity)
+    return [f for f in findings if levels.index(f.severity) >= levels.index(threshold)]

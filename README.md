@@ -94,9 +94,22 @@ Compared tests/fixtures/sales_v1 -> tests/fixtures/sales_v2
   info     [added] trends: Page 'Trends' added with 1 visual
 ```
 
-Exit codes: `0` when the comparison ran (whether or not there are
-differences), `1` when a project cannot be loaded or an output file cannot be
-written. No credentials or environment variables are needed.
+No credentials or environment variables are needed.
+
+To fail a CI job on important changes, add `--fail-on` with a severity
+(`info`, `warning` or `critical`; the default `none` never fails). Output
+files are still written, and the run ends with, for example:
+
+```text
+Failed: 3 findings at critical or above (--fail-on critical)
+```
+
+| Exit code | Meaning |
+|---|---|
+| `0` | The comparison ran (with or without differences), and nothing reached the `--fail-on` severity |
+| `1` | A project could not be loaded, an output file could not be written, or data validation could not run |
+| `2` | Invalid options |
+| `3` | At least one finding at or above the `--fail-on` severity |
 
 ### What it compares
 

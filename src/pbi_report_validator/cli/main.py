@@ -2,17 +2,20 @@
 
 import logging
 import os
+from enum import StrEnum
 from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
+from pbi_report_validator.diff.severity import at_least
+from pbi_report_validator.domain.models import Severity
 from pbi_report_validator.integrations.config import MissingCredentialsError
 from pbi_report_validator.integrations.files import OutputWriteError, ProjectLoadError
 from pbi_report_validator.integrations.powerbi import PowerBIError
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
-from pbi_report_validator.reporting.terminal import format_summary
+from pbi_report_validator.reporting.terminal import format_failure, format_summary
 from pbi_report_validator.services.data import (
     DataRun,
     InvalidDataOptionsError,
@@ -29,6 +32,17 @@ from pbi_report_validator.services.validate import (
 PACKAGE_NAME = "pbi-report-validator"
 EXIT_ERROR = 1  # project not loadable, output not writable or data validation failed
 EXIT_USAGE = 2  # invalid combination of options
+EXIT_FINDINGS = 3  # a finding at or above the --fail-on severity
+
+
+class FailOn(StrEnum):
+    """Values of ``--fail-on``: a severity, or ``none`` to never fail."""
+
+    NONE = "none"
+    INFO = Severity.INFO.value
+    WARNING = Severity.WARNING.value
+    CRITICAL = Severity.CRITICAL.value
+
 
 app = typer.Typer(
     name="pbi-validate",
@@ -99,6 +113,13 @@ def diff(
         float,
         typer.Option("--rel-tol", min=0, help="Allowed relative difference."),
     ] = 1e-9,
+    fail_on: Annotated[
+        FailOn,
+        typer.Option(
+            "--fail-on",
+            help="Exit with code 3 when a finding has at least this severity.",
+        ),
+    ] = FailOn.NONE,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show progress logging.")
     ] = False,
@@ -138,3 +159,9 @@ def diff(
     for label, path in outputs:
         if path is not None:
             typer.echo(f"\n{label} written to {path.as_posix()}")
+    if fail_on is not FailOn.NONE:
+        threshold = Severity(fail_on.value)
+        failing = at_least(result.findings, threshold)
+        if failing:
+            typer.echo(f"\n{format_failure(len(failing), threshold)}")
+            raise typer.Exit(EXIT_FINDINGS)
