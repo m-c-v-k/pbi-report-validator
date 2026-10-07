@@ -5,9 +5,9 @@ from typer.testing import CliRunner
 
 from pbi_report_validator.cli.main import app
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
+from tests.factories import REPO_ROOT, SNAPSHOTS
 
-REPO_ROOT = Path(__file__).parent.parent.parent
-SNAPSHOT = REPO_ROOT / "tests/snapshots/diff_sales_v1_v2.json"
+SNAPSHOT = SNAPSHOTS / "diff_sales_v1_v2.json"
 OLD = "tests/fixtures/sales_v1"
 NEW = "tests/fixtures/sales_v2"
 
@@ -102,7 +102,7 @@ def test_diff_markdown_matches_snapshot(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert "Markdown written to" in result.stdout
-    expected = REPO_ROOT / "tests/snapshots/diff_sales_v1_v2.md"
+    expected = SNAPSHOTS / "diff_sales_v1_v2.md"
     assert target.read_bytes() == expected.read_bytes()
 
 

@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from pbi_report_validator.dax.builder import build_query, column, literal, text
@@ -23,9 +21,9 @@ from pbi_report_validator.domain.models import (
     Visual,
 )
 from tests import factories
-from tests.factories import fixture_report
+from tests.factories import SNAPSHOTS, fixture_report
 
-SNAPSHOT = Path(__file__).parent.parent / "snapshots" / "dax_sales.txt"
+SNAPSHOT = SNAPSHOTS / "dax_sales.txt"
 POS = Position(x=0, y=0, width=10, height=10)
 YEAR = FieldRef(table="Date", name="Year", kind=FieldKind.COLUMN)
 REGION = FieldRef(table="Sales", name="Region", kind=FieldKind.COLUMN)
@@ -38,7 +36,9 @@ num = factories.number
 def visual(
     *fields: FieldRef, visual_type: str = "tableEx", filters: tuple[Filter, ...] = ()
 ) -> Visual:
-    return factories.visual("v", visual_type, fields=fields, filters=filters)
+    return factories.visual(
+        "v", visual_type, fields=fields, filters=filters, width=10, height=10
+    )
 
 
 def page(*visuals: Visual, filters: tuple[Filter, ...] = ()) -> Page:

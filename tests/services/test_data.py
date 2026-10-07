@@ -1,5 +1,4 @@
 import re
-from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -31,9 +30,8 @@ from pbi_report_validator.services.data import (
     result_column,
 )
 from pbi_report_validator.services.validate import validate
-from tests.factories import FIXTURES
+from tests.factories import FIXTURES, REPO_ROOT
 
-REPO_ROOT = Path(__file__).parent.parent.parent
 OLD_DS = "11111111-1111-1111-1111-111111111111"
 NEW_DS = "22222222-2222-2222-2222-222222222222"
 SETTINGS = DataSettings(old_dataset=OLD_DS, new_dataset=NEW_DS)
