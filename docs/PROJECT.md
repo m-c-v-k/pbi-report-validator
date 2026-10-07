@@ -57,6 +57,9 @@ old one — and if not, where and why?"*
 - Legacy report format (`report.json` with stringified config / `.pbix` Layout).
 - Simple web UI (upload two zipped PBIPs → report).
 - Azure DevOps pipeline template.
+- Attribute data differences to the report or the semantic model: run the new
+  report's queries against the old model as well (read-only; reports are never
+  rebound or changed).
 
 ### Out of scope
 
@@ -105,6 +108,7 @@ old one — and if not, where and why?"*
 ### M5 – Hardening & polish (week 6)
 - Edge cases from real-world-shaped fixtures (field parameters, calculation
   groups, bookmarks noted as unsupported).
+- Optional `--attribute` for data findings: report change, model change or both.
 - Docs: quick start, CI guide, security/data-handling page, architecture.
 - Release v1.0.0, demo GIF, CV-ready README.
 
