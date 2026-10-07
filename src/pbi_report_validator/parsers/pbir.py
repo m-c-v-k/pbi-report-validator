@@ -6,6 +6,7 @@ selection). A page or visual that cannot be parsed becomes a
 ``ParseIssue`` and the rest of the report is still parsed.
 """
 
+from pathlib import PurePosixPath
 from typing import Any
 
 from pydantic import ValidationError
@@ -73,9 +74,10 @@ def _parse_page(raw: RawPage, ordinal: int, issues: list[ParseIssue]) -> Page | 
     content = _content_or_issue(raw.page, issues)
     if content is None:
         return None
+    page_name = str(content.get("name", raw.name))
     visuals = []
     for raw_visual in raw.visuals:
-        visual = _parse_visual_or_issue(raw_visual, issues)
+        visual = _parse_visual_or_issue(raw_visual, page_name, issues)
         if visual is not None:
             visuals.append(visual)
     problems: list[str] = []
@@ -83,7 +85,7 @@ def _parse_page(raw: RawPage, ordinal: int, issues: list[ParseIssue]) -> Page | 
     issues.extend(ParseIssue(path=raw.page.path, message=m) for m in problems)
     try:
         return Page(
-            name=str(content.get("name", raw.name)),
+            name=page_name,
             display_name=str(content.get("displayName", raw.name)),
             ordinal=ordinal,
             width=content.get("width", DEFAULT_PAGE_WIDTH),
@@ -96,20 +98,27 @@ def _parse_page(raw: RawPage, ordinal: int, issues: list[ParseIssue]) -> Page | 
         return None
 
 
-def _parse_visual_or_issue(raw: RawJsonFile, issues: list[ParseIssue]) -> Visual | None:
-    content = _content_or_issue(raw, issues)
+def _parse_visual_or_issue(
+    raw: RawJsonFile, page_name: str, issues: list[ParseIssue]
+) -> Visual | None:
+    # The visual's folder name is its id; it is known even if the file is broken.
+    key = f"{page_name}/{PurePosixPath(raw.path).parent.name}"
+    content = _content_or_issue(raw, issues, visual=key)
     if content is None:
         return None
     problems: list[str] = []
     try:
         visual = parse_visual(content, problems)
     except VisualParseError as exc:
-        issues.append(ParseIssue(path=raw.path, message=str(exc)))
+        problems = [str(exc)]
     except ValidationError as exc:
-        issues.append(ParseIssue(path=raw.path, message=_first_error(exc)))
+        problems = [_first_error(exc)]
     else:
-        issues.extend(ParseIssue(path=raw.path, message=m) for m in problems)
+        issues.extend(
+            ParseIssue(path=raw.path, message=m, visual=key) for m in problems
+        )
         return visual
+    issues.extend(ParseIssue(path=raw.path, message=m, visual=key) for m in problems)
     return None
 
 
@@ -190,10 +199,11 @@ def _projections(body: dict[str, Any], problems: list[str]) -> tuple[Projection,
 
 
 def _content_or_issue(
-    raw: RawJsonFile, issues: list[ParseIssue]
+    raw: RawJsonFile, issues: list[ParseIssue], visual: str | None = None
 ) -> dict[str, Any] | None:
     if raw.error is not None:
-        issues.append(ParseIssue(path=raw.path, message=f"unreadable: {raw.error}"))
+        message = f"unreadable: {raw.error}"
+        issues.append(ParseIssue(path=raw.path, message=message, visual=visual))
         return None
     return raw.content
 

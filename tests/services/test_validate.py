@@ -25,6 +25,7 @@ def test_parse_issues_become_findings(tmp_path: Path) -> None:
         )
     ]
     assert not any(f.category == Category.VISUAL for f in result.findings)
+    assert [f.visual for f in issues] == ["overview/card_margin"]
 
 
 def test_measures_are_skipped_without_semantic_model(tmp_path: Path) -> None:

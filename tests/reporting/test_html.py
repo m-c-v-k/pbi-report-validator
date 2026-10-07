@@ -264,24 +264,32 @@ def test_parse_issue_is_shown_on_its_visual(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("path", "expected"),
+    ("path", "visual", "expected"),
     [
-        ("overview/slicer_year", "overview/slicer_year"),
-        ("details/table_product_sales/filters/f", "details/table_product_sales"),
+        ("overview/slicer_year", None, "overview/slicer_year"),
+        ("details/table_product_sales/filters/f", None, "details/table_product_sales"),
         (
             "new/Sales.Report/definition/pages/overview/visuals/card_margin/visual.json",
             "overview/card_margin",
+            "overview/card_margin",
         ),
-        ("overview/filters/page_filter", None),
-        ("model/Sales/Total Sales", None),
-        ("trends", None),
+        ("overview/filters/page_filter", None, None),
+        ("model/Sales/Total Sales", None, None),
+        ("trends", None, None),
     ],
 )
-def test_visual_key(path: str, expected: str | None) -> None:
+def test_visual_key(path: str, visual: str | None, expected: str | None) -> None:
     keys = {
         "overview/slicer_year",
         "details/table_product_sales",
         "overview/card_margin",
     }
+    finding = Finding(
+        category=Category.PARSE_ISSUE if visual else Category.VISUAL,
+        change=ChangeKind.ERROR,
+        path=path,
+        message="m",
+        visual=visual,
+    )
 
-    assert visual_key(path, keys) == expected
+    assert visual_key(finding, keys) == expected

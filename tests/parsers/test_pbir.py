@@ -297,3 +297,26 @@ def test_skipped_field_becomes_issue_but_visual_is_kept() -> None:
 
     assert [v.name for v in report.pages[0].visuals] == ["v"]
     assert [i.path for i in report.issues] == ["p/visuals/v/visual.json"]
+
+
+def test_visual_parse_issues_name_their_visual() -> None:
+    broken = RawJsonFile(path="pages/p/visuals/bad_one/visual.json", error="boom")
+    incomplete = RawJsonFile(
+        path="pages/p/visuals/no_pos/visual.json", content={"name": "no_pos"}
+    )
+    page = RawPage(name="p", page=page_json("p"), visuals=(broken, incomplete))
+
+    report = parse_report(report_with_pages(page))
+
+    assert [(i.visual, i.path) for i in report.issues] == [
+        ("p/bad_one", broken.path),
+        ("p/no_pos", incomplete.path),
+    ]
+
+
+def test_page_level_issues_have_no_visual() -> None:
+    page = RawPage(name="p", page=RawJsonFile(path="pages/p/page.json", error="x"))
+
+    report = parse_report(report_with_pages(page))
+
+    assert report.issues[0].visual is None
