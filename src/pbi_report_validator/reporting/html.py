@@ -51,6 +51,7 @@ def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
         categories=[
             (c.value, CATEGORY_LABELS[c], counts[c]) for c in Category if counts[c]
         ],
+        severities=list(result.severity_counts.model_dump().items()),
         labels={c.value: CATEGORY_LABELS[c] for c in Category},
         status_labels={s.value: label for s, label in STATUS_LABELS.items()},
         status_marks={s.value: mark for s, mark in STATUS_MARKS.items()},

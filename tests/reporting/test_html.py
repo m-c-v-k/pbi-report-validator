@@ -293,3 +293,12 @@ def test_visual_key(path: str, visual: str | None, expected: str | None) -> None
     )
 
     assert visual_key(finding, keys) == expected
+
+
+def test_severity_counts_and_column() -> None:
+    html = fixture_html()
+
+    assert 'data-severity-count="critical">3</div>' in html
+    assert 'data-severity-count="warning">2</div>' in html
+    assert 'data-severity-count="info">2</div>' in html
+    assert html.count('<td class="severity severity-') == 7

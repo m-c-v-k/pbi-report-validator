@@ -19,11 +19,11 @@ def test_summary_truncates_long_lists() -> None:
 
     assert text.splitlines() == [
         "Compared a -> b",
-        "3 findings:",
+        "3 findings (0 critical, 0 warning, 3 info):",
         "  visual       3",
         "",
-        "  [added] p/v0: added",
-        "  [added] p/v1: added",
+        "  info     [added] p/v0: added",
+        "  info     [added] p/v1: added",
         "  ... and 1 more (use --json for the full list)",
     ]
 

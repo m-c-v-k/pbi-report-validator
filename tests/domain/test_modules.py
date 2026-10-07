@@ -17,7 +17,7 @@ def test_models_reexports_every_class_of_the_split_modules() -> None:
 
     assert defined <= set(models.__all__)
     assert all(hasattr(models, name) for name in models.__all__)
-    assert len(models.__all__) == 44
+    assert len(models.__all__) == 46
 
 
 @pytest.mark.parametrize("module", ["report", "semantic", "data", "diff"])

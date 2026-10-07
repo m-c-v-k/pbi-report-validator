@@ -28,6 +28,8 @@ from pbi_report_validator.domain.diff import (
     PageMatch,
     PageView,
     ReportMatch,
+    Severity,
+    SeverityCounts,
     VisualMatch,
     VisualView,
 )
@@ -97,6 +99,8 @@ __all__ = [
     "Report",
     "ReportMatch",
     "SemanticModel",
+    "Severity",
+    "SeverityCounts",
     "SlicerState",
     "Table",
     "Tolerance",

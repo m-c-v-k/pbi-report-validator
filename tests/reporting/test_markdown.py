@@ -100,3 +100,10 @@ def test_truncates_to_limit_with_note() -> None:
 
 def test_escape_leaves_plain_text() -> None:
     assert escape("Total Sales 2025") == "Total Sales 2025"
+
+
+def test_severity_overview_and_per_finding() -> None:
+    text = to_markdown(result(finding("model/Sales/M")))
+
+    assert "Severity: 0 critical, 0 warning, 1 info\n" in text
+    assert "- info · **modified** `model/Sales/M`: changed" in text

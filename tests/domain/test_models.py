@@ -20,6 +20,8 @@ from pbi_report_validator.domain.models import (
     Projection,
     Report,
     SemanticModel,
+    Severity,
+    SeverityCounts,
     SlicerState,
     Table,
     Visual,
@@ -150,6 +152,27 @@ def test_diff_result_order_is_independent_of_input_order() -> None:
     backward = DiffResult(old_source="o", new_source="n", findings=(second, first))
 
     assert forward.findings == backward.findings == (first, second)
+
+
+def test_severity_counts_are_derived_from_findings() -> None:
+    finding = Finding(
+        category=Category.FILTER,
+        change=ChangeKind.REMOVED,
+        severity=Severity.CRITICAL,
+        path="p/v/filters/f",
+        message="Filter removed",
+    )
+    info = finding.model_copy(update={"severity": Severity.INFO, "path": "p"})
+
+    result = DiffResult(
+        old_source="o",
+        new_source="n",
+        findings=(finding, info),
+        severity_counts=SeverityCounts(warning=5),
+    )
+
+    assert result.severity_counts == SeverityCounts(critical=1, info=1)
+    assert DiffResult.model_validate_json(result.model_dump_json()) == result
 
 
 def test_schema_version_literal_matches_constant() -> None:

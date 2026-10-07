@@ -5,6 +5,7 @@ from pathlib import Path
 
 from pbi_report_validator.diff.content import diff_content
 from pbi_report_validator.diff.measures import diff_measures
+from pbi_report_validator.diff.severity import with_severity
 from pbi_report_validator.diff.structural import (
     diff_pages_and_visuals,
     without_unparseable,
@@ -78,6 +79,7 @@ def validate(
             data.settings,
         )
         findings += [f for c in comparisons for f in c.findings]
+    findings = with_severity(findings)
     logger.info("Found %d findings", len(findings))
     return DiffResult(
         old_source=old_path.as_posix(),

@@ -72,26 +72,26 @@ or the `.Report` folder itself. The terminal always shows a summary; add any of:
 |---|---|
 | `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
 | `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
-| `--json PATH` | Every finding with old and new values, plus every page and visual with its status (`schema_version` 1.1) |
+| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.3) |
 
 Running it on the sample reports in this repository gives:
 
 ```text
 Compared tests/fixtures/sales_v1 -> tests/fixtures/sales_v2
-7 findings:
+7 findings (3 critical, 2 warning, 2 info):
   page         1
   visual       2
   filter       1
   slicer       1
   measure      2
 
-  [moved] details/chart_sales_by_region: clusteredBarChart 'Sales by region' (chart_sales_by_region) moved
-  [removed] details/table_product_sales/filters/visual_filter_category: Filter visual_filter_category removed
-  [renamed] model/Sales/Margin %: Measure Sales[Margin %] renamed to Sales[Gross Margin %]
-  [modified] model/Sales/Total Sales: Expression of measure Sales[Total Sales] changed
-  [retyped] overview/chart_sales_by_month: clusteredColumnChart 'Sales by month' (chart_sales_by_month) changed type to lineChart
-  [modified] overview/slicer_year: Slicer selection changed
-  [added] trends: Page 'Trends' added with 1 visual
+  info     [moved] details/chart_sales_by_region: clusteredBarChart 'Sales by region' (chart_sales_by_region) moved
+  critical [removed] details/table_product_sales/filters/visual_filter_category: Filter visual_filter_category removed
+  warning  [renamed] model/Sales/Margin %: Measure Sales[Margin %] renamed to Sales[Gross Margin %]
+  critical [modified] model/Sales/Total Sales: Expression of measure Sales[Total Sales] changed
+  warning  [retyped] overview/chart_sales_by_month: clusteredColumnChart 'Sales by month' (chart_sales_by_month) changed type to lineChart
+  critical [modified] overview/slicer_year: Slicer selection changed
+  info     [added] trends: Page 'Trends' added with 1 visual
 ```
 
 Exit codes: `0` when the comparison ran (whether or not there are
@@ -108,6 +108,14 @@ written. No credentials or environment variables are needed.
   renamed (detected by identical expression)
 - Files that cannot be parsed are reported as findings instead of stopping
   the run
+
+Every finding has a severity:
+
+| Severity | Findings |
+|---|---|
+| `critical` | Data differences, removed pages and visuals, added/removed/changed filters and slicer selections, changed measure expressions |
+| `warning` | Changed visual type, changed fields, renamed or removed measures, parse issues, visuals whose data could not be validated |
+| `info` | Added pages, visuals and measures, moved or reordered pages and visuals, renamed pages, changed titles |
 
 ### Limitations
 

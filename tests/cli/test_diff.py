@@ -23,7 +23,7 @@ def test_diff_prints_summary() -> None:
     result = runner.invoke(app, ["diff", OLD, NEW])
 
     assert result.exit_code == 0
-    assert "7 findings:" in result.stdout
+    assert "7 findings (3 critical, 2 warning, 2 info):" in result.stdout
     assert "[added] trends: Page 'Trends' added with 1 visual" in result.stdout
 
 
@@ -82,7 +82,7 @@ def test_report_folder_can_be_passed_directly() -> None:
     result = runner.invoke(app, ["diff", f"{OLD}/Sales.Report", f"{NEW}/Sales.Report"])
 
     assert result.exit_code == 0
-    assert "7 findings:" in result.stdout
+    assert "7 findings (3 critical, 2 warning, 2 info):" in result.stdout
 
 
 def test_verbose_logs_progress(caplog: pytest.LogCaptureFixture) -> None:
