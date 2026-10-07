@@ -11,8 +11,7 @@ from pbi_report_validator.integrations.files import (
     UnreadableFileError,
     load_project,
 )
-
-FIXTURES = Path(__file__).parent.parent / "fixtures"
+from tests.factories import FIXTURES
 
 
 @pytest.fixture

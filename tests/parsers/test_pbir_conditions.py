@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -16,8 +15,6 @@ from pbi_report_validator.domain.models import (
     LiteralValue,
     NotCondition,
 )
-from pbi_report_validator.integrations.files import load_project
-from pbi_report_validator.parsers.pbir import parse_report
 from pbi_report_validator.parsers.pbir_filters import (
     UnsupportedConditionError,
     parse_condition,
@@ -26,8 +23,8 @@ from pbi_report_validator.parsers.pbir_filters import (
     render,
     render_literal,
 )
+from tests.factories import fixture_report
 
-FIXTURES = Path(__file__).parent.parent / "fixtures"
 AMOUNT = FieldRef(table="Sales", name="Amount", kind=FieldKind.COLUMN)
 
 
@@ -47,7 +44,7 @@ def query(*conditions: dict[str, Any]) -> dict[str, Any]:
 
 
 def all_filters(name: str) -> list[Filter]:
-    report = parse_report(load_project(FIXTURES / name).report)
+    report = fixture_report(name)
     filters = list(report.filters)
     for page in report.pages:
         filters += page.filters
@@ -58,7 +55,7 @@ def all_filters(name: str) -> list[Filter]:
 
 @pytest.mark.parametrize("fixture", ["sales_v1", "sales_v2"])
 def test_fixture_conditions_match_their_structured_form(fixture: str) -> None:
-    report = parse_report(load_project(FIXTURES / fixture).report)
+    report = fixture_report(fixture)
     slicers = [v.slicer for p in report.pages for v in p.visuals if v.slicer]
 
     for item in [*all_filters(fixture), *slicers]:
@@ -67,7 +64,7 @@ def test_fixture_conditions_match_their_structured_form(fixture: str) -> None:
 
 
 def test_fixture_slicer_expression() -> None:
-    report = parse_report(load_project(FIXTURES / "sales_v1").report)
+    report = fixture_report("sales_v1")
     slicer = next(v.slicer for v in report.pages[0].visuals if v.slicer)
 
     assert slicer.expression == InCondition(

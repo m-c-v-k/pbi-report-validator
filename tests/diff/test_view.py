@@ -6,32 +6,20 @@ from pbi_report_validator.diff.view import build_page_views
 from pbi_report_validator.domain.models import (
     ItemStatus,
     Page,
-    Position,
     Visual,
 )
 from pbi_report_validator.matching.matcher import match_reports
 from pbi_report_validator.services.validate import validate
-
-FIXTURES = Path(__file__).parent.parent / "fixtures"
+from tests import factories
+from tests.factories import FIXTURES
 
 
 def visual(name: str, x: float = 0) -> Visual:
-    return Visual(
-        name=name,
-        visual_type="card",
-        position=Position(x=x, y=0, width=100, height=100),
-    )
+    return factories.visual(name, x=x)
 
 
 def page(name: str, ordinal: int, *visuals: Visual) -> Page:
-    return Page(
-        name=name,
-        display_name=name.title(),
-        ordinal=ordinal,
-        width=1000,
-        height=1000,
-        visuals=visuals,
-    )
+    return factories.page(name, *visuals, ordinal=ordinal)
 
 
 def statuses(
