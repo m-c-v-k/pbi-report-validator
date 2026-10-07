@@ -2,7 +2,7 @@
 
 from collections import Counter
 
-from pbi_report_validator.domain.models import Category, DiffResult
+from pbi_report_validator.domain.models import Category, DiffResult, Severity
 from pbi_report_validator.reporting.labels import data_overview, severity_overview
 
 DEFAULT_LIMIT = 20
@@ -43,3 +43,12 @@ def format_summary(result: DiffResult, limit: int = DEFAULT_LIMIT) -> str:
     if hidden > 0:
         lines.append(f"  ... and {hidden} more (use --json for the full list)")
     return "\n".join(lines)
+
+
+def format_failure(count: int, threshold: Severity) -> str:
+    """Why ``--fail-on`` failed the run, e.g. ``Failed: 2 findings at ...``."""
+    noun = "finding" if count == 1 else "findings"
+    return (
+        f"Failed: {count} {noun} at {threshold.value} or above "
+        f"(--fail-on {threshold.value})"
+    )

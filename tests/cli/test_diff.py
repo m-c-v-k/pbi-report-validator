@@ -141,3 +141,50 @@ def test_missing_html_template_exits_with_error(
 
     assert result.exit_code == 1
     assert "Error: template report.html.j2 not found" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("threshold", "exit_code", "message"),
+    [
+        ("none", 0, None),
+        ("info", 3, "Failed: 7 findings at info or above (--fail-on info)"),
+        ("warning", 3, "Failed: 5 findings at warning or above (--fail-on warning)"),
+        ("critical", 3, "Failed: 3 findings at critical or above (--fail-on critical)"),
+    ],
+)
+def test_fail_on_threshold(threshold: str, exit_code: int, message: str | None) -> None:
+    result = runner.invoke(app, ["diff", OLD, NEW, "--fail-on", threshold])
+
+    assert result.exit_code == exit_code
+    assert (message in result.stdout) if message else ("Failed:" not in result.stdout)
+
+
+def test_fail_on_passes_without_findings() -> None:
+    result = runner.invoke(app, ["diff", OLD, OLD, "--fail-on", "info"])
+
+    assert result.exit_code == 0
+
+
+def test_fail_on_still_writes_outputs(tmp_path: Path) -> None:
+    target = tmp_path / "diff.json"
+
+    result = runner.invoke(
+        app, ["diff", OLD, NEW, "--json", str(target), "--fail-on", "critical"]
+    )
+
+    assert result.exit_code == 3
+    assert target.read_bytes() == SNAPSHOT.read_bytes()
+
+
+def test_error_wins_over_fail_on(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["diff", str(tmp_path / "missing"), NEW, "--fail-on", "info"]
+    )
+
+    assert result.exit_code == 1
+
+
+def test_invalid_fail_on_is_a_usage_error() -> None:
+    result = runner.invoke(app, ["diff", OLD, NEW, "--fail-on", "severe"])
+
+    assert result.exit_code == 2

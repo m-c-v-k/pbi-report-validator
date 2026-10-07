@@ -2,7 +2,11 @@ from itertools import product
 
 import pytest
 
-from pbi_report_validator.diff.severity import default_severity, with_severity
+from pbi_report_validator.diff.severity import (
+    at_least,
+    default_severity,
+    with_severity,
+)
 from pbi_report_validator.domain.models import Category, ChangeKind, Finding, Severity
 from pbi_report_validator.services.validate import validate
 from tests.factories import FIXTURES
@@ -72,3 +76,20 @@ def test_fixture_pair_has_every_severity() -> None:
         "warning": 2,
         "info": 2,
     }
+
+
+@pytest.mark.parametrize(
+    ("threshold", "expected"),
+    [
+        (S.INFO, [S.INFO, S.WARNING, S.CRITICAL]),
+        (S.WARNING, [S.WARNING, S.CRITICAL]),
+        (S.CRITICAL, [S.CRITICAL]),
+    ],
+)
+def test_at_least(threshold: S, expected: list[S]) -> None:
+    findings = [
+        Finding(category=C.PAGE, change=K.ADDED, severity=s, path=s, message="m")
+        for s in Severity
+    ]
+
+    assert [f.severity for f in at_least(findings, threshold)] == expected
