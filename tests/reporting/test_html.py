@@ -20,11 +20,11 @@ from pbi_report_validator.integrations.templates import (
     read_template,
 )
 from pbi_report_validator.reporting.html import (
-    CATEGORY_LABELS,
     REPORT_TEMPLATE,
     to_html,
     visual_key,
 )
+from pbi_report_validator.reporting.labels import CATEGORY_LABELS
 from pbi_report_validator.services.validate import validate
 from tests.factories import FIXTURES
 
