@@ -1,6 +1,6 @@
 from pbi_report_validator.diff.structural import (
     diff_pages_and_visuals,
-    without_unparseable_visuals,
+    without_unparseable,
 )
 from pbi_report_validator.domain.models import (
     Category,
@@ -198,5 +198,15 @@ def test_unparseable_visuals_are_not_reported_added_or_removed() -> None:
         path="pages/p/visuals/b/visual.json", message="boom", visual="p/b"
     )
 
-    assert without_unparseable_visuals(findings, [], [issue]) == []
-    assert without_unparseable_visuals(findings, [issue], []) == findings
+    assert without_unparseable(findings, [], [issue]) == []
+    assert without_unparseable(findings, [issue], []) == findings
+
+
+def test_unparseable_pages_are_not_reported_added_or_removed() -> None:
+    findings = diff_pages_and_visuals(
+        match_reports([page("a", 0), page("b", 1)], [page("a", 0)])
+    )
+    issue = ParseIssue(path="pages/b/page.json", message="boom", page="b")
+
+    assert without_unparseable(findings, [], [issue]) == []
+    assert without_unparseable(findings, [issue], []) == findings

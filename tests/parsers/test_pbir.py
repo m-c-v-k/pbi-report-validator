@@ -318,3 +318,23 @@ def test_page_level_issues_have_no_visual() -> None:
     report = parse_report(report_with_pages(page))
 
     assert report.issues[0].visual is None
+
+
+def test_unparseable_page_issues_name_their_page() -> None:
+    unreadable = RawPage(
+        name="bad", page=RawJsonFile(path="pages/bad/page.json", error="x")
+    )
+    invalid = RawPage(
+        name="neg",
+        page=RawJsonFile(
+            path="pages/neg/page.json", content={"name": "neg", "width": -1}
+        ),
+    )
+
+    report = parse_report(report_with_pages(unreadable, invalid))
+
+    assert report.pages == ()
+    assert [(i.page, i.path) for i in report.issues] == [
+        ("bad", "pages/bad/page.json"),
+        ("neg", "pages/neg/page.json"),
+    ]

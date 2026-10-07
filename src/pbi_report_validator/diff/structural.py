@@ -37,30 +37,35 @@ def diff_pages_and_visuals(match: ReportMatch) -> list[Finding]:
     return findings
 
 
-def without_unparseable_visuals(
+def without_unparseable(
     findings: Sequence[Finding],
     old_issues: Sequence[ParseIssue],
     new_issues: Sequence[ParseIssue],
 ) -> list[Finding]:
-    """Drop "added"/"removed" for visuals that exist but failed to parse.
+    """Drop "added"/"removed" for pages and visuals that failed to parse.
 
-    A visual that cannot be parsed in one version is missing from that
-    version's model, which would otherwise read as added or removed. Its
-    parse issue finding already reports the real problem.
+    A page or visual that cannot be parsed in one version is missing from
+    that version's model, which would otherwise read as added or removed.
+    Its parse issue finding already reports the real problem.
     """
-    broken_in_old = {i.visual for i in old_issues if i.visual}
-    broken_in_new = {i.visual for i in new_issues if i.visual}
+    broken_in_old = _broken(old_issues)
+    broken_in_new = _broken(new_issues)
     return [
         f
         for f in findings
         if not (
-            f.category == Category.VISUAL
+            f.category in (Category.PAGE, Category.VISUAL)
             and (
                 (f.change == ChangeKind.REMOVED and f.path in broken_in_new)
                 or (f.change == ChangeKind.ADDED and f.path in broken_in_old)
             )
         )
     ]
+
+
+def _broken(issues: Sequence[ParseIssue]) -> set[str]:
+    """Paths (``page`` or ``page/visual``) that failed to parse."""
+    return {key for i in issues for key in (i.page, i.visual) if key}
 
 
 def _page_added(page: Page) -> Finding:

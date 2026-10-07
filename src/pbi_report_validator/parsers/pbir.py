@@ -71,7 +71,8 @@ def _ordered_pages(raw: RawReport) -> list[RawPage]:
 
 
 def _parse_page(raw: RawPage, ordinal: int, issues: list[ParseIssue]) -> Page | None:
-    content = _content_or_issue(raw.page, issues)
+    # The page's folder name is its id; it is known even if the file is broken.
+    content = _content_or_issue(raw.page, issues, page=raw.name)
     if content is None:
         return None
     page_name = str(content.get("name", raw.name))
@@ -94,7 +95,9 @@ def _parse_page(raw: RawPage, ordinal: int, issues: list[ParseIssue]) -> Page | 
             visuals=tuple(visuals),
         )
     except ValidationError as exc:
-        issues.append(ParseIssue(path=raw.page.path, message=_first_error(exc)))
+        issues.append(
+            ParseIssue(path=raw.page.path, message=_first_error(exc), page=page_name)
+        )
         return None
 
 
@@ -199,11 +202,16 @@ def _projections(body: dict[str, Any], problems: list[str]) -> tuple[Projection,
 
 
 def _content_or_issue(
-    raw: RawJsonFile, issues: list[ParseIssue], visual: str | None = None
+    raw: RawJsonFile,
+    issues: list[ParseIssue],
+    visual: str | None = None,
+    page: str | None = None,
 ) -> dict[str, Any] | None:
     if raw.error is not None:
         message = f"unreadable: {raw.error}"
-        issues.append(ParseIssue(path=raw.path, message=message, visual=visual))
+        issues.append(
+            ParseIssue(path=raw.path, message=message, visual=visual, page=page)
+        )
         return None
     return raw.content
 
