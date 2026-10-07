@@ -5,7 +5,6 @@ this module does no I/O. All CSS and JavaScript are inline; the page makes
 no network requests and works offline, as a CI artifact or on GitHub Pages.
 """
 
-import re
 from collections import Counter
 
 from jinja2 import Environment, StrictUndefined
@@ -19,10 +18,6 @@ from pbi_report_validator.domain.models import (
 from pbi_report_validator.reporting.terminal import data_overview
 
 REPORT_TEMPLATE = "report.html.j2"
-# Parse-issue paths point at the file, e.g. new/.../pages/p/visuals/v/visual.json
-VISUAL_FILE = re.compile(
-    r"pages/(?P<page>[^/]+)/visuals/(?P<visual>[^/]+)/visual\.json$"
-)
 CATEGORY_LABELS = {
     Category.PAGE: "Pages",
     Category.VISUAL: "Visuals",
@@ -73,7 +68,7 @@ def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
         data_overview=data_overview(result),
         data_by_path={s.path: s for s in result.data},
         details=visual_findings(result),
-        visual_key=lambda path: visual_key(path, keys),
+        visual_key=lambda finding: visual_key(finding, keys),
         result=result,
         tool_version=tool_version,
         categories=[
@@ -94,16 +89,17 @@ def visual_findings(result: DiffResult) -> dict[str, list[Finding]]:
     keys = {f"{p.name}/{v.name}" for p in result.pages for v in p.visuals}
     grouped: dict[str, list[Finding]] = {}
     for finding in result.findings:
-        key = visual_key(finding.path, keys)
+        key = visual_key(finding, keys)
         if key is not None:
             grouped.setdefault(key, []).append(finding)
     return grouped
 
 
-def visual_key(path: str, keys: set[str]) -> str | None:
-    """The ``page/visual`` a finding path points into, if any."""
-    file = VISUAL_FILE.search(path)
-    candidate = (
-        f"{file['page']}/{file['visual']}" if file else "/".join(path.split("/")[:2])
-    )
+def visual_key(finding: Finding, keys: set[str]) -> str | None:
+    """The ``page/visual`` a finding belongs to, if any.
+
+    Parse issues name their visual; other findings point into it with a path
+    that starts with ``page/visual``.
+    """
+    candidate = finding.visual or "/".join(finding.path.split("/")[:2])
     return candidate if candidate in keys else None

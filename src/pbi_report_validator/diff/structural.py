@@ -5,6 +5,8 @@ Pure functions only. Paths in findings are ``<page>`` for pages and
 between versions; messages use display names where they help a reader.
 """
 
+from collections.abc import Sequence
+
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -12,6 +14,7 @@ from pbi_report_validator.domain.models import (
     MatchMethod,
     Page,
     PageMatch,
+    ParseIssue,
     Position,
     ReportMatch,
     Visual,
@@ -32,6 +35,32 @@ def diff_pages_and_visuals(match: ReportMatch) -> list[Finding]:
     for page_match in match.pages:
         findings += _page_changes(page_match)
     return findings
+
+
+def without_unparseable_visuals(
+    findings: Sequence[Finding],
+    old_issues: Sequence[ParseIssue],
+    new_issues: Sequence[ParseIssue],
+) -> list[Finding]:
+    """Drop "added"/"removed" for visuals that exist but failed to parse.
+
+    A visual that cannot be parsed in one version is missing from that
+    version's model, which would otherwise read as added or removed. Its
+    parse issue finding already reports the real problem.
+    """
+    broken_in_old = {i.visual for i in old_issues if i.visual}
+    broken_in_new = {i.visual for i in new_issues if i.visual}
+    return [
+        f
+        for f in findings
+        if not (
+            f.category == Category.VISUAL
+            and (
+                (f.change == ChangeKind.REMOVED and f.path in broken_in_new)
+                or (f.change == ChangeKind.ADDED and f.path in broken_in_old)
+            )
+        )
+    ]
 
 
 def _page_added(page: Page) -> Finding:

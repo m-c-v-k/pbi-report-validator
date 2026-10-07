@@ -191,10 +191,12 @@ class ParseIssue(DomainModel):
     """Something in the input that could not be parsed.
 
     Parse issues are reported as findings instead of aborting the run.
+    ``visual`` is the ``page/visual`` the issue belongs to, if any.
     """
 
     path: str
     message: str
+    visual: str | None = None
 
 
 class Report(DomainModel):
@@ -354,6 +356,10 @@ class Finding(DomainModel):
     message: str
     old: str | None = None
     new: str | None = None
+    # The ``page/visual`` a parse issue belongs to. Used to show the issue on
+    # its visual in the HTML report; not part of the JSON output (schema
+    # unchanged), since it is already implied by ``path``.
+    visual: str | None = Field(default=None, exclude=True)
 
     @property
     def sort_key(self) -> tuple[str, str, str, str, str, str]:

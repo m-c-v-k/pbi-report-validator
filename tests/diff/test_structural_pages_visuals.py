@@ -1,10 +1,14 @@
 from pathlib import Path
 
-from pbi_report_validator.diff.structural import diff_pages_and_visuals
+from pbi_report_validator.diff.structural import (
+    diff_pages_and_visuals,
+    without_unparseable_visuals,
+)
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
     Page,
+    ParseIssue,
     Position,
     Visual,
 )
@@ -195,3 +199,17 @@ def test_new_id_and_retype_are_both_reported() -> None:
         ("p/old_id", ChangeKind.RENAMED),
         ("p/old_id", ChangeKind.RETYPED),
     ]
+
+
+def test_unparseable_visuals_are_not_reported_added_or_removed() -> None:
+    findings = diff_pages_and_visuals(
+        match_reports(
+            [page("p", 0, visual("a"), visual("b", x=500))], [page("p", 0, visual("a"))]
+        )
+    )
+    issue = ParseIssue(
+        path="pages/p/visuals/b/visual.json", message="boom", visual="p/b"
+    )
+
+    assert without_unparseable_visuals(findings, [], [issue]) == []
+    assert without_unparseable_visuals(findings, [issue], []) == findings

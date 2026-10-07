@@ -243,7 +243,7 @@ td a, .detail-body a { color: var(--accent); }
         <tr data-category="{{ f.category.value }}">
           <td class="change change-{{ f.change.value }}">{{ f.change.value }}</td>
           <td>{{ labels[f.category.value] }}</td>
-{% set target = visual_key(f.path) %}
+{% set target = visual_key(f) %}
           <td class="mono">{% if target %}<a href="#{{ target }}" data-open="{{ target }}">{{ f.path }}</a>{% else %}{{ f.path }}{% endif %}</td>
           <td>{{ f.message }}</td>
           <td class="values">

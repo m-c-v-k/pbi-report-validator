@@ -1,12 +1,14 @@
 """Orchestrate a structural validation run: load, parse, match, diff."""
 
 import logging
-import re
 from pathlib import Path
 
 from pbi_report_validator.diff.content import diff_content
 from pbi_report_validator.diff.measures import diff_measures
-from pbi_report_validator.diff.structural import diff_pages_and_visuals
+from pbi_report_validator.diff.structural import (
+    diff_pages_and_visuals,
+    without_unparseable_visuals,
+)
 from pbi_report_validator.diff.view import build_page_views
 from pbi_report_validator.domain.models import (
     Category,
@@ -29,10 +31,6 @@ from pbi_report_validator.reporting.markdown import to_markdown
 from pbi_report_validator.services.data import DataRun, validate_data
 
 logger = logging.getLogger(__name__)
-
-VISUAL_FILE = re.compile(
-    r"pages/(?P<page>[^/]+)/visuals/(?P<visual>[^/]+)/visual\.json$"
-)
 
 
 def validate(
@@ -59,8 +57,8 @@ def validate(
     new_report, new_model = _parse(load_project(new_path))
     match = match_reports(old_report.pages, new_report.pages)
     measures = diff_measures(old_model, new_model)
-    structural = _without_unparseable_visuals(
-        diff_pages_and_visuals(match), old_report, new_report
+    structural = without_unparseable_visuals(
+        diff_pages_and_visuals(match), old_report.issues, new_report.issues
     )
     findings = [
         *structural,
@@ -126,36 +124,6 @@ def _parse(project: RawProject) -> tuple[Report, SemanticModel | None]:
     return report, model
 
 
-def _without_unparseable_visuals(
-    findings: list[Finding], old: Report, new: Report
-) -> list[Finding]:
-    """Drop "added"/"removed" for visuals that exist but failed to parse.
-
-    A visual that cannot be parsed in one version is missing from that
-    version's model, which would otherwise read as added or removed. Its
-    parse issue finding already reports the real problem.
-    """
-    broken_in_old = _unparseable_visual_paths(old)
-    broken_in_new = _unparseable_visual_paths(new)
-    return [
-        f
-        for f in findings
-        if not (
-            f.category == Category.VISUAL
-            and (
-                (f.change == ChangeKind.REMOVED and f.path in broken_in_new)
-                or (f.change == ChangeKind.ADDED and f.path in broken_in_old)
-            )
-        )
-    ]
-
-
-def _unparseable_visual_paths(report: Report) -> set[str]:
-    """``page/visual`` paths of visual files with a parse issue."""
-    matches = (VISUAL_FILE.search(issue.path) for issue in report.issues)
-    return {f"{m['page']}/{m['visual']}" for m in matches if m}
-
-
 def _issue_findings(
     side: str, report: Report, model: SemanticModel | None
 ) -> list[Finding]:
@@ -166,6 +134,7 @@ def _issue_findings(
             change=ChangeKind.ERROR,
             path=f"{side}/{issue.path}",
             message=f"Could not fully parse the {side} version: {issue.message}",
+            visual=issue.visual,
         )
         for issue in issues
     ]
