@@ -9,38 +9,15 @@ from collections import Counter
 
 from jinja2 import Environment, StrictUndefined
 
-from pbi_report_validator.domain.models import (
-    Category,
-    DiffResult,
-    Finding,
-    ItemStatus,
+from pbi_report_validator.domain.models import Category, DiffResult, Finding
+from pbi_report_validator.reporting.labels import (
+    CATEGORY_LABELS,
+    STATUS_LABELS,
+    STATUS_MARKS,
+    data_overview,
 )
-from pbi_report_validator.reporting.terminal import data_overview
 
 REPORT_TEMPLATE = "report.html.j2"
-CATEGORY_LABELS = {
-    Category.PAGE: "Pages",
-    Category.VISUAL: "Visuals",
-    Category.FIELD: "Fields",
-    Category.FILTER: "Filters",
-    Category.SLICER: "Slicers",
-    Category.MEASURE: "Measures",
-    Category.PARSE_ISSUE: "Parse issues",
-    Category.DATA: "Data",
-}
-STATUS_LABELS = {
-    ItemStatus.ADDED: "Added",
-    ItemStatus.REMOVED: "Removed",
-    ItemStatus.MODIFIED: "Modified",
-    ItemStatus.UNCHANGED: "Unchanged",
-}
-# A text mark next to the colour, so status is not conveyed by colour alone.
-STATUS_MARKS = {
-    ItemStatus.ADDED: "+",
-    ItemStatus.REMOVED: "-",
-    ItemStatus.MODIFIED: "~",
-    ItemStatus.UNCHANGED: "",
-}
 
 
 def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
