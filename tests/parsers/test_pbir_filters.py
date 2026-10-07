@@ -1,11 +1,9 @@
-from pathlib import Path
 from typing import Any
 
 import pytest
 
 from pbi_report_validator.domain.models import FieldKind, FieldRef, FilterLevel
 from pbi_report_validator.domain.raw import RawJsonFile, RawReport
-from pbi_report_validator.integrations.files import load_project
 from pbi_report_validator.parsers.pbir import parse_report
 from pbi_report_validator.parsers.pbir_filters import (
     UnsupportedConditionError,
@@ -13,8 +11,8 @@ from pbi_report_validator.parsers.pbir_filters import (
     parse_slicer_state,
     render_condition,
 )
+from tests.factories import fixture_report
 
-FIXTURES = Path(__file__).parent.parent / "fixtures"
 YEAR = FieldRef(table="Date", name="Year", kind=FieldKind.COLUMN)
 
 
@@ -37,7 +35,7 @@ def query(*conditions: dict[str, Any]) -> dict[str, Any]:
 
 
 def test_sales_v1_filters_at_every_level() -> None:
-    report = parse_report(load_project(FIXTURES / "sales_v1").report)
+    report = fixture_report("sales_v1")
 
     assert report.issues == ()
     assert [(f.name, f.level, f.condition) for f in report.filters] == [
@@ -62,7 +60,7 @@ def test_sales_v1_filters_at_every_level() -> None:
 
 
 def test_sales_v2_removed_filter_and_changed_slicer() -> None:
-    report = parse_report(load_project(FIXTURES / "sales_v2").report)
+    report = fixture_report("sales_v2")
 
     overview, details = report.pages[0], report.pages[1]
     table = next(v for v in details.visuals if v.name == "table_product_sales")

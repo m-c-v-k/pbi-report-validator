@@ -1,29 +1,18 @@
-from pathlib import Path
-
 import pytest
 
 from pbi_report_validator.domain.models import (
-    FieldKind,
-    FieldRef,
     MatchMethod,
     Page,
     Position,
-    Projection,
     Visual,
 )
-from pbi_report_validator.integrations.files import load_project
 from pbi_report_validator.matching.matcher import (
     match_reports,
     match_visuals,
     similarity,
 )
-from pbi_report_validator.parsers.pbir import parse_report
-
-FIXTURES = Path(__file__).parent.parent / "fixtures"
-
-
-def fixture_pages(name: str) -> tuple[Page, ...]:
-    return parse_report(load_project(FIXTURES / name).report).pages
+from tests import factories
+from tests.factories import fixture_pages
 
 
 def visual(
@@ -34,32 +23,14 @@ def visual(
     x: float = 0,
     y: float = 0,
 ) -> Visual:
-    return Visual(
-        name=name,
-        visual_type=visual_type,
-        title=title,
-        position=Position(x=x, y=y, width=100, height=100),
-        projections=tuple(
-            Projection(
-                role="Values",
-                field=FieldRef(table="Sales", name=f, kind=FieldKind.MEASURE),
-            )
-            for f in fields
-        ),
-    )
+    measures = [factories.measure(f) for f in fields]
+    return factories.visual(name, visual_type, title=title, fields=measures, x=x, y=y)
 
 
 def page(
     name: str, *visuals: Visual, display: str | None = None, ordinal: int = 0
 ) -> Page:
-    return Page(
-        name=name,
-        display_name=display or name.title(),
-        ordinal=ordinal,
-        width=1000,
-        height=1000,
-        visuals=visuals,
-    )
+    return factories.page(name, *visuals, ordinal=ordinal, display=display)
 
 
 def test_fixture_pages_and_visuals_match_by_id() -> None:

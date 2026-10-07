@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-FIXTURES = Path(__file__).parent / "fixtures"
+from tests.factories import FIXTURES
+
 JSON_SUFFIXES = {".json", ".pbip", ".pbir", ".pbism"}
 JSON_FILES = sorted(
     p for p in FIXTURES.rglob("*") if p.is_file() and p.suffix in JSON_SUFFIXES

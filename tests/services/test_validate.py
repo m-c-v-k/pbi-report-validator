@@ -3,8 +3,7 @@ from pathlib import Path
 
 from pbi_report_validator.domain.models import Category, ChangeKind
 from pbi_report_validator.services.validate import validate
-
-FIXTURES = Path(__file__).parent.parent / "fixtures"
+from tests.factories import FIXTURES
 
 
 def test_parse_issues_become_findings(tmp_path: Path) -> None:

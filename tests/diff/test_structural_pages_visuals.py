@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from pbi_report_validator.diff.structural import (
     diff_pages_and_visuals,
     without_unparseable_visuals,
@@ -9,38 +7,27 @@ from pbi_report_validator.domain.models import (
     ChangeKind,
     Page,
     ParseIssue,
-    Position,
     Visual,
 )
-from pbi_report_validator.integrations.files import load_project
 from pbi_report_validator.matching.matcher import match_reports
-from pbi_report_validator.parsers.pbir import parse_report
-
-FIXTURES = Path(__file__).parent.parent / "fixtures"
-
-
-def fixture_pages(name: str) -> tuple[Page, ...]:
-    return parse_report(load_project(FIXTURES / name).report).pages
+from tests import factories
+from tests.factories import fixture_pages
 
 
 def visual(
-    name: str, visual_type: str = "card", title: str | None = "T", **pos: float
+    name: str,
+    visual_type: str = "card",
+    title: str | None = "T",
+    x: float = 0,
+    y: float = 0,
+    width: float = 100,
+    z: int = 0,
 ) -> Visual:
-    position = {"x": 0.0, "y": 0.0, "width": 100.0, "height": 100.0, **pos}
-    return Visual(
-        name=name, visual_type=visual_type, title=title, position=Position(**position)
-    )
+    return factories.visual(name, visual_type, title=title, x=x, y=y, width=width, z=z)
 
 
 def page(name: str, ordinal: int, *visuals: Visual, display: str | None = None) -> Page:
-    return Page(
-        name=name,
-        display_name=display or name.title(),
-        ordinal=ordinal,
-        width=1000,
-        height=1000,
-        visuals=visuals,
-    )
+    return factories.page(name, *visuals, ordinal=ordinal, display=display)
 
 
 def diff(old: list[Page], new: list[Page]) -> list[tuple[str, Category, ChangeKind]]:
