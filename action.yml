@@ -1,0 +1,106 @@
+name: Power BI report validator
+description: Compare two versions of a Power BI report (PBIP) and report what changed.
+author: m-c-v-k
+branding:
+  icon: bar-chart-2
+  color: yellow
+
+# Credentials are never inputs. Pass them as environment variables on the
+# step instead: PBI_TENANT_ID, PBI_CLIENT_ID, PBI_CLIENT_SECRET.
+inputs:
+  old:
+    description: Old PBIP project or .Report folder, relative to the workspace.
+    required: true
+  new:
+    description: New PBIP project or .Report folder, relative to the workspace.
+    required: true
+  html:
+    description: Write a self-contained HTML report to this path.
+    default: ""
+  json:
+    description: Write the full result as JSON to this path.
+    default: ""
+  markdown:
+    description: Write a Markdown summary to this path.
+    default: ""
+  fail-on:
+    description: Fail when a finding has at least this severity (none, info, warning, critical).
+    default: none
+  data:
+    description: Also compare the numbers against the published datasets (needs PBI_* credentials).
+    default: "false"
+  old-dataset:
+    description: Dataset id of the old version (with data).
+    default: ""
+  new-dataset:
+    description: Dataset id of the new version (with data).
+    default: ""
+  abs-tol:
+    description: Allowed absolute difference (with data).
+    default: ""
+  rel-tol:
+    description: Allowed relative difference (with data).
+    default: ""
+
+outputs:
+  json:
+    description: Path of the JSON result (the json input, or a temporary file).
+    value: ${{ steps.run.outputs.json }}
+  html:
+    description: Path of the HTML report, if written.
+    value: ${{ steps.run.outputs.html }}
+  markdown:
+    description: Path of the Markdown summary (the markdown input, or a temporary file).
+    value: ${{ steps.run.outputs.markdown }}
+  findings:
+    description: Number of findings.
+    value: ${{ steps.run.outputs.findings }}
+  critical:
+    description: Number of critical findings.
+    value: ${{ steps.run.outputs.critical }}
+  warning:
+    description: Number of warning findings.
+    value: ${{ steps.run.outputs.warning }}
+  info:
+    description: Number of info findings.
+    value: ${{ steps.run.outputs.info }}
+
+runs:
+  using: composite
+  steps:
+    # A version tag uses the published image of that version; any other ref
+    # (a branch, a commit SHA or a local `uses: ./`) builds the image from
+    # the action's own source, so the code that runs always matches the ref.
+    - name: Prepare image
+      id: image
+      shell: bash
+      env:
+        ACTION_REF: ${{ github.action_ref }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        if [[ "$ACTION_REF" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+          image="ghcr.io/m-c-v-k/pbi-report-validator:${BASH_REMATCH[1]}"
+          docker pull --quiet "$image"
+        else
+          image="pbi-validate:local"
+          docker build --quiet --tag "$image" "$ACTION_PATH"
+        fi
+        echo "image=$image" >> "$GITHUB_OUTPUT"
+
+    - name: Run pbi-validate diff
+      id: run
+      shell: bash
+      env:
+        IMAGE: ${{ steps.image.outputs.image }}
+        IN_OLD: ${{ inputs.old }}
+        IN_NEW: ${{ inputs.new }}
+        IN_HTML: ${{ inputs.html }}
+        IN_JSON: ${{ inputs.json }}
+        IN_MARKDOWN: ${{ inputs.markdown }}
+        IN_FAIL_ON: ${{ inputs.fail-on }}
+        IN_DATA: ${{ inputs.data }}
+        IN_OLD_DATASET: ${{ inputs.old-dataset }}
+        IN_NEW_DATASET: ${{ inputs.new-dataset }}
+        IN_ABS_TOL: ${{ inputs.abs-tol }}
+        IN_REL_TOL: ${{ inputs.rel-tol }}
+      run: bash "$GITHUB_ACTION_PATH/action/run.sh"

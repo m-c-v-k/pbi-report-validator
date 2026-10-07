@@ -44,7 +44,7 @@ jobs:
           docker run --rm pbi-validate:test --version
           docker run --rm -v "$PWD:/work" pbi-validate:test \
             diff tests/fixtures/sales_v1 tests/fixtures/sales_v2 | tee out.txt
-          grep -Eq "^[0-9]+ findings:" out.txt
+          grep -Eq "^[0-9]+ findings" out.txt
           docker image inspect pbi-validate:test --format 'Image size: {{.Size}} bytes'
 
   publish:

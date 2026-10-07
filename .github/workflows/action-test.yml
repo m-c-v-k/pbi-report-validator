@@ -1,0 +1,50 @@
+name: Action
+
+# Run this repository's GitHub Action on the sample reports, so every PR
+# checks action.yml together with the code it builds.
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: action-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  self-test:
+    name: Action on the sample reports
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the action
+        id: diff
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          html: out/report.html
+
+      - name: Check outputs
+        env:
+          FINDINGS: ${{ steps.diff.outputs.findings }}
+          JSON: ${{ steps.diff.outputs.json }}
+          HTML: ${{ steps.diff.outputs.html }}
+          MARKDOWN: ${{ steps.diff.outputs.markdown }}
+        run: |
+          echo "findings=$FINDINGS"
+          test "$FINDINGS" -gt 0
+          test -s "$JSON"
+          test -s "$HTML"
+          grep -q "## Power BI report diff" "$MARKDOWN"
+
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v7
+        with:
+          name: pbi-validate-report
+          path: out/report.html
