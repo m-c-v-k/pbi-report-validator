@@ -9,23 +9,13 @@ by dropping whole findings from the end and saying how many were left out.
 import re
 
 from pbi_report_validator.domain.models import Category, DiffResult, Finding
-from pbi_report_validator.reporting.terminal import data_overview
+from pbi_report_validator.reporting.labels import CATEGORY_LABELS, data_overview
 
 GITHUB_COMMENT_LIMIT = 65_536
 SAFETY_MARGIN = 1_000
 INLINE_VALUE_LIMIT = 80
 TITLE = "## Power BI report diff"
 SEE_JSON = "see the JSON output for the full list."
-CATEGORY_TITLES = {
-    Category.PAGE: "Pages",
-    Category.VISUAL: "Visuals",
-    Category.FIELD: "Fields",
-    Category.FILTER: "Filters",
-    Category.SLICER: "Slicers",
-    Category.MEASURE: "Measures",
-    Category.PARSE_ISSUE: "Parse issues",
-    Category.DATA: "Data",
-}
 MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]|<>#~])")
 
 
@@ -50,7 +40,7 @@ def to_markdown(result: DiffResult, limit: int = GITHUB_COMMENT_LIMIT) -> str:
     for finding in _grouped(result.findings):
         block = _finding(finding)
         if finding.category != current:
-            block = f"\n### {CATEGORY_TITLES[finding.category]}\n\n{block}"
+            block = f"\n### {CATEGORY_LABELS[finding.category]}\n\n{block}"
         if len(block) > budget:
             break
         sections.append(block)
@@ -79,7 +69,7 @@ def _header(result: DiffResult) -> str:
         lines += [overview, ""]
     if result.findings:
         lines += ["| Category | Findings |", "|---|---:|"]
-        lines += [f"| {CATEGORY_TITLES[c]} | {n} |" for c, n in counts.items() if n]
+        lines += [f"| {CATEGORY_LABELS[c]} | {n} |" for c, n in counts.items() if n]
     return "\n".join(lines) + "\n"
 
 
