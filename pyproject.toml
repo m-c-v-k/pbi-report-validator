@@ -76,10 +76,21 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 addopts = "-ra"
 
+[tool.coverage.run]
+source = ["pbi_report_validator"]
+branch = true
+
+[tool.coverage.report]
+# CI fails if coverage drops below this (currently ~98%).
+fail_under = 95
+skip_empty = true
+show_missing = true
+
 [dependency-groups]
 dev = [
     "mypy>=2.4.0",
     "pandas-stubs>=3.0.5.260914",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "ruff>=0.16.10",
 ]

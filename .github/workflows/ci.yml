@@ -27,8 +27,36 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      - name: Tests
-        run: uv run pytest -v
+      - name: Tests with coverage
+        # `shell: bash` adds -o pipefail, so a test failure or a coverage
+        # drop fails the step even though the output is piped into tee.
+        shell: bash
+        run: |
+          uv run pytest -v --cov --cov-report=term --cov-report=html \
+            --junitxml=test-results.xml | tee pytest.log
+
+      - name: Test report
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "## Tests"
+            echo
+            echo "\`$(tail -n 1 pytest.log | tr -d '=' | xargs)\`"
+            echo
+            echo "## Coverage"
+            echo
+            uv run coverage report --format=markdown
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage and test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-report
+          path: |
+            htmlcov/
+            test-results.xml
+          retention-days: 30
 
       - name: Lint
         run: uv run ruff check .
