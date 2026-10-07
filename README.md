@@ -168,8 +168,44 @@ principal; slicer interactions edited in Power BI and slicers synced from
 other pages are not taken into account; the API allows about 120 queries a
 minute (40 on Pro/PPU), and each visual needs two.
 
-Coming next: a GitHub Action that comments on pull requests that change a
-report.
+## GitHub Action
+
+Run the diff in any repository's workflow, with no Python setup. The
+Markdown summary appears on the job's summary page:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: m-c-v-k/pbi-report-validator@v0.2.0
+  with:
+    old: reports/v1        # paths relative to the workspace
+    new: reports/v2
+    html: out/report.html  # optional; also json and markdown
+- uses: actions/upload-artifact@v4
+  with:
+    name: report-diff
+    path: out/report.html
+```
+
+For data validation, add `data: true`, `old-dataset` and `new-dataset`, and
+pass the credentials as environment variables (never as inputs):
+
+```yaml
+  env:
+    PBI_TENANT_ID: ${{ secrets.PBI_TENANT_ID }}
+    PBI_CLIENT_ID: ${{ secrets.PBI_CLIENT_ID }}
+    PBI_CLIENT_SECRET: ${{ secrets.PBI_CLIENT_SECRET }}
+```
+
+Outputs: `json`, `html` and `markdown` (paths), `findings`, and the counts
+`critical`, `warning` and `info`. All inputs are listed in
+[`action.yml`](action.yml).
+
+**Versions.** Pin a full version tag such as `@v0.2.0`; it runs the
+published image of that version. Before 1.0, minor versions can change the
+output, so there is no moving `@v0` tag. Dependabot (`package-ecosystem:
+github-actions`) can keep the tag up to date. Organisations that require it
+can pin a commit SHA instead; the action then builds the image from that
+commit, which takes about a minute longer.
 
 ## Data handling
 
