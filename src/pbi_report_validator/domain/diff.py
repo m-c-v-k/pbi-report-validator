@@ -188,7 +188,8 @@ class DiffResult(DomainModel):
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()
-    # Always derived from ``findings``; any value passed in is replaced.
+    # Always derived from ``findings``; any value passed in is replaced. Must
+    # stay declared after ``findings``: validators only see earlier fields.
     severity_counts: SeverityCounts = Field(
         default_factory=SeverityCounts, validate_default=True
     )

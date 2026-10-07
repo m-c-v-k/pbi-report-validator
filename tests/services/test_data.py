@@ -10,6 +10,7 @@ from pbi_report_validator.domain.models import (
     ChangeKind,
     DataStatus,
     QueryResult,
+    Severity,
 )
 from pbi_report_validator.integrations.powerbi import (
     AuthenticationError,
@@ -316,3 +317,18 @@ def test_cli_invalid_dataset_id_exits_with_error(
 
     assert result.exit_code == 1
     assert "dataset id must be a GUID" in result.stderr
+
+
+def test_data_findings_get_a_severity() -> None:
+    runner = FakeRunner(fail_on="'Sales'[Region]")
+    result = validate(
+        FIXTURES / "sales_v1", FIXTURES / "sales_v2", DataRun(SETTINGS, runner)
+    )
+
+    severities = {
+        (f.change, f.severity) for f in result.findings if f.category == Category.DATA
+    }
+    assert severities == {
+        (ChangeKind.MODIFIED, Severity.CRITICAL),
+        (ChangeKind.ERROR, Severity.WARNING),
+    }

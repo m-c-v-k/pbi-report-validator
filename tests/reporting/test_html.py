@@ -302,3 +302,11 @@ def test_severity_counts_and_column() -> None:
     assert 'data-severity-count="warning">2</div>' in html
     assert 'data-severity-count="info">2</div>' in html
     assert html.count('<td class="severity severity-') == 7
+
+
+def test_visual_details_show_severity() -> None:
+    html = fixture_html()
+    details = html[html.index('id="details-title"') : html.index('id="findings-title"')]
+
+    assert '<span class="severity severity-critical">critical</span>' in details
+    assert '<span class="severity severity-warning">warning</span>' in details
