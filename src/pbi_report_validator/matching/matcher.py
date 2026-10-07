@@ -79,20 +79,10 @@ def match_visuals(
     matches = [
         VisualMatch(old=o, new=n, method=MatchMethod.ID, score=1.0) for o, n in by_id
     ]
-    # Candidates are tracked by list index, not name: a malformed page can
-    # contain duplicate visual names, and those must not hide each other.
-    candidates = sorted(
-        (
-            (score, o.name, n.name, i, j)
-            for i, o in enumerate(old_left)
-            for j, n in enumerate(new_left)
-            if (score := similarity(o, n, old, new)) >= threshold
-        ),
-        key=lambda c: (-c[0], c[1], c[2], c[3], c[4]),
-    )
+    candidates = _similarity_candidates(old_left, new_left, old, new, threshold)
     used_old: set[int] = set()
     used_new: set[int] = set()
-    for score, _, _, i, j in candidates:
+    for score, i, j in candidates:
         if i in used_old or j in used_new:
             continue
         used_old.add(i)
@@ -112,6 +102,30 @@ def match_visuals(
         sorted(removed, key=lambda v: v.name),
         sorted(added, key=lambda v: v.name),
     )
+
+
+def _similarity_candidates(
+    old_left: Sequence[Visual],
+    new_left: Sequence[Visual],
+    old_page: Page,
+    new_page: Page,
+    threshold: float,
+) -> list[tuple[float, int, int]]:
+    """``(score, old index, new index)`` pairs above the threshold, best first.
+
+    Candidates are tracked by list index, not name: a malformed page can
+    contain duplicate visual names, and those must not hide each other.
+    """
+    scored = sorted(
+        (
+            (score, o.name, n.name, i, j)
+            for i, o in enumerate(old_left)
+            for j, n in enumerate(new_left)
+            if (score := similarity(o, n, old_page, new_page)) >= threshold
+        ),
+        key=lambda c: (-c[0], c[1], c[2], c[3], c[4]),
+    )
+    return [(score, i, j) for score, _, _, i, j in scored]
 
 
 def similarity(old: Visual, new: Visual, old_page: Page, new_page: Page) -> float:
