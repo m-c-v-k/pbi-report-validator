@@ -29,6 +29,8 @@ CHANGE_SEVERITY: Final = {
     (Category.MEASURE, ChangeKind.MODIFIED): Severity.CRITICAL,
     (Category.DATA, ChangeKind.ERROR): Severity.WARNING,
 }
+# Order of the severities, from least to most; used for thresholds.
+SEVERITY_RANK: Final = {Severity.INFO: 0, Severity.WARNING: 1, Severity.CRITICAL: 2}
 
 
 def default_severity(category: Category, change: ChangeKind) -> Severity:
@@ -42,3 +44,9 @@ def with_severity(findings: Iterable[Finding]) -> list[Finding]:
         f.model_copy(update={"severity": default_severity(f.category, f.change)})
         for f in findings
     ]
+
+
+def at_least(findings: Iterable[Finding], threshold: Severity) -> list[Finding]:
+    """The findings whose severity is ``threshold`` or higher."""
+    minimum = SEVERITY_RANK[threshold]
+    return [f for f in findings if SEVERITY_RANK[f.severity] >= minimum]

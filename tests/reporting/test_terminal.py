@@ -1,5 +1,11 @@
-from pbi_report_validator.domain.models import Category, ChangeKind, DiffResult, Finding
-from pbi_report_validator.reporting.terminal import format_summary
+from pbi_report_validator.domain.models import (
+    Category,
+    ChangeKind,
+    DiffResult,
+    Finding,
+    Severity,
+)
+from pbi_report_validator.reporting.terminal import format_failure, format_summary
 
 
 def finding(path: str) -> Finding:
@@ -32,3 +38,9 @@ def test_summary_without_findings() -> None:
     result = DiffResult(old_source="a", new_source="b")
 
     assert format_summary(result) == "Compared a -> b\nNo differences found."
+
+
+def test_failure_message() -> None:
+    assert format_failure(1, Severity.CRITICAL) == (
+        "Failed: 1 finding at critical or above (--fail-on critical)"
+    )
