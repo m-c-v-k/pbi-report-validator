@@ -7,6 +7,7 @@ between versions; messages use display names where they help a reader.
 
 from collections.abc import Sequence
 
+from pbi_report_validator.diff.severity import default_severity
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -72,6 +73,7 @@ def _page_added(page: Page) -> Finding:
     return Finding(
         category=Category.PAGE,
         change=ChangeKind.ADDED,
+        severity=default_severity(Category.PAGE, ChangeKind.ADDED),
         path=page.name,
         message=f"Page '{page.display_name}' added with {_count(page)}",
         new=page.display_name,
@@ -82,6 +84,7 @@ def _page_removed(page: Page) -> Finding:
     return Finding(
         category=Category.PAGE,
         change=ChangeKind.REMOVED,
+        severity=default_severity(Category.PAGE, ChangeKind.REMOVED),
         path=page.name,
         message=f"Page '{page.display_name}' removed with {_count(page)}",
         old=page.display_name,
@@ -104,6 +107,7 @@ def _reordered_pages(pages: tuple[PageMatch, ...]) -> list[Finding]:
         Finding(
             category=Category.PAGE,
             change=ChangeKind.REORDERED,
+            severity=default_severity(Category.PAGE, ChangeKind.REORDERED),
             path=m.old.name,
             message=f"Page '{m.new.display_name}' moved from position "
             f"{old_rank[m.old.name] + 1} to {new_rank[m.old.name] + 1}",
@@ -122,6 +126,7 @@ def _page_changes(match: PageMatch) -> list[Finding]:
             Finding(
                 category=Category.PAGE,
                 change=ChangeKind.RENAMED,
+                severity=default_severity(Category.PAGE, ChangeKind.RENAMED),
                 path=match.old.name,
                 message=f"Page renamed from '{match.old.display_name}' "
                 f"to '{match.new.display_name}'",
@@ -134,6 +139,7 @@ def _page_changes(match: PageMatch) -> list[Finding]:
             Finding(
                 category=Category.PAGE,
                 change=ChangeKind.RENAMED,
+                severity=default_severity(Category.PAGE, ChangeKind.RENAMED),
                 path=match.old.name,
                 message=f"Page '{match.new.display_name}' has a new id; "
                 "matched by display name",
@@ -153,6 +159,7 @@ def _visual_added(page: str, visual: Visual) -> Finding:
     return Finding(
         category=Category.VISUAL,
         change=ChangeKind.ADDED,
+        severity=default_severity(Category.VISUAL, ChangeKind.ADDED),
         path=f"{page}/{visual.name}",
         message=f"{_describe(visual)} added",
         new=visual.visual_type,
@@ -163,6 +170,7 @@ def _visual_removed(page: str, visual: Visual) -> Finding:
     return Finding(
         category=Category.VISUAL,
         change=ChangeKind.REMOVED,
+        severity=default_severity(Category.VISUAL, ChangeKind.REMOVED),
         path=f"{page}/{visual.name}",
         message=f"{_describe(visual)} removed",
         old=visual.visual_type,
@@ -186,6 +194,7 @@ def _new_id(path: str, match: VisualMatch) -> Finding | None:
     return Finding(
         category=Category.VISUAL,
         change=ChangeKind.RENAMED,
+        severity=default_severity(Category.VISUAL, ChangeKind.RENAMED),
         path=path,
         message=f"{_describe(match.new)} has a new id; matched by similarity "
         f"({match.score:.2f})",
@@ -200,6 +209,7 @@ def _retyped(path: str, old: Visual, new: Visual) -> Finding | None:
     return Finding(
         category=Category.VISUAL,
         change=ChangeKind.RETYPED,
+        severity=default_severity(Category.VISUAL, ChangeKind.RETYPED),
         path=path,
         message=f"{_describe(old)} changed type to {new.visual_type}",
         old=old.visual_type,
@@ -213,6 +223,7 @@ def _retitled(path: str, old: Visual, new: Visual) -> Finding | None:
     return Finding(
         category=Category.VISUAL,
         change=ChangeKind.MODIFIED,
+        severity=default_severity(Category.VISUAL, ChangeKind.MODIFIED),
         path=path,
         message=f"Title of {old.visual_type} '{old.name}' changed",
         old=old.title,
@@ -227,6 +238,7 @@ def _moved(path: str, old: Visual, new: Visual) -> Finding | None:
     return Finding(
         category=Category.VISUAL,
         change=ChangeKind.MOVED,
+        severity=default_severity(Category.VISUAL, ChangeKind.MOVED),
         path=path,
         message=f"{_describe(new)} {movement}",
         old=_format_position(old.position),

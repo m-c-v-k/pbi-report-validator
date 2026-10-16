@@ -1,12 +1,12 @@
 from itertools import product
 
 import pytest
+from pydantic import ValidationError
 
 from pbi_report_validator.diff.severity import (
     SEVERITY_RANK,
     at_least,
     default_severity,
-    with_severity,
 )
 from pbi_report_validator.domain.models import Category, ChangeKind, Finding, Severity
 from pbi_report_validator.services.validate import validate
@@ -57,15 +57,11 @@ def test_every_combination_has_a_severity() -> None:
         assert default_severity(category, change) in Severity
 
 
-def test_with_severity_sets_default_and_keeps_the_rest() -> None:
-    finding = Finding(
-        category=C.FILTER, change=K.REMOVED, path="p/v/filters/f", message="gone"
-    )
-
-    [updated] = with_severity([finding])
-
-    assert updated.severity is S.CRITICAL
-    assert updated.model_copy(update={"severity": S.INFO}) == finding
+def test_finding_without_severity_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="severity"):
+        Finding(
+            category=C.FILTER, change=K.REMOVED, path="p/v/filters/f", message="gone"
+        )
 
 
 def test_fixture_pair_has_every_severity() -> None:

@@ -9,6 +9,7 @@ reported again for every visual or filter that uses it.
 import re
 from collections.abc import Mapping
 
+from pbi_report_validator.diff.severity import default_severity
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -84,6 +85,7 @@ def _diff_slicer(
     return Finding(
         category=Category.SLICER,
         change=change,
+        severity=default_severity(Category.SLICER, change),
         path=path,
         message=message,
         old=old_condition,
@@ -114,6 +116,7 @@ def _diff_fields(
             Finding(
                 category=Category.FIELD,
                 change=change,
+                severity=default_severity(Category.FIELD, change),
                 path=f"{path}/fields/{key}",
                 message=message,
                 old=before,
@@ -160,6 +163,7 @@ def _diff_filters(
             Finding(
                 category=Category.FILTER,
                 change=change,
+                severity=default_severity(Category.FILTER, change),
                 path=path,
                 message=message,
                 old=old_by_name.get(name),
