@@ -213,12 +213,11 @@ def _cell(value: object) -> CellValue:
 
 def _row_finding(path: str, label: str, only_new: bool) -> Finding:
     where = "new" if only_new else "old"
+    change = ChangeKind.ADDED if only_new else ChangeKind.REMOVED
     return Finding(
         category=Category.DATA,
-        change=ChangeKind.ADDED if only_new else ChangeKind.REMOVED,
-        severity=default_severity(
-            Category.DATA, ChangeKind.ADDED if only_new else ChangeKind.REMOVED
-        ),
+        change=change,
+        severity=default_severity(Category.DATA, change),
         path=f"{path}/data/{label}",
         message=f"Row {label} only in the {where} version",
     )
