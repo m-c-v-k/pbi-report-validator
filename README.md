@@ -225,7 +225,8 @@ pass the credentials as environment variables (never as inputs):
 
 To show the summary on the pull request, set `comment: true` and give the
 job `pull-requests: write`. The action posts one comment per compared pair
-of reports and updates it on later pushes; very long summaries are cut,
+of reports and updates it on later pushes (two steps with the same `old` and
+`new` share one comment, so the last one wins); very long summaries are cut,
 with a link to the run. Without write permission (for example on a pull
 request from a fork) the comment is skipped with a warning:
 

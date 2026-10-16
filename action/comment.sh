@@ -32,8 +32,8 @@ body="$marker"$'\n'"$summary"$'\n'"$footer"
 comments="repos/$GITHUB_REPOSITORY/issues/$pr_number/comments"
 listing="$(gh api --paginate "$comments" --jq '.[] | {id, body}')" \
   || warn "could not read the comments of #$pr_number."
-existing="$(jq -r --arg marker "$marker" \
-  'select(.body | startswith($marker)) | .id' <<<"$listing" | head -n 1)"
+existing="$(jq -rn --arg marker "$marker" \
+  'first(inputs | select(.body | startswith($marker)) | .id) // empty' <<<"$listing")"
 
 payload="$(jq -n --arg body "$body" '{body: $body}')"
 if [[ -n "$existing" ]]; then

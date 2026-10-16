@@ -118,6 +118,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
+        # The paths must match the old/new inputs above (see comment.sh).
         run: |
           id="$(printf '%s\n%s' tests/fixtures/sales_v1 tests/fixtures/sales_v2 | sha256sum | cut -c1-12)"
           marker="<!-- pbi-report-validator:$id -->"
