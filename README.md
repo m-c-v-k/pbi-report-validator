@@ -104,12 +104,17 @@ files are still written, and the run ends with, for example:
 Failed: 3 findings at critical or above (--fail-on critical)
 ```
 
+With `--data`, a visual whose data could not be compared (for example a
+failed query) is a `warning`, so `--fail-on critical` does not catch it. Add
+`--fail-on-data-error` to also fail when the data of any visual was not
+fully validated.
+
 | Exit code | Meaning |
 |---|---|
-| `0` | The comparison ran (with or without differences), and nothing reached the `--fail-on` severity |
+| `0` | The comparison ran (with or without differences), and neither `--fail-on` nor `--fail-on-data-error` was triggered |
 | `1` | A project could not be loaded, an output file could not be written, or data validation could not run |
 | `2` | Invalid options |
-| `3` | At least one finding at or above the `--fail-on` severity |
+| `3` | At least one finding at or above the `--fail-on` severity, or (with `--fail-on-data-error`) data that was not fully validated |
 
 ### What it compares
 
@@ -217,6 +222,10 @@ pass the credentials as environment variables (never as inputs):
     PBI_CLIENT_ID: ${{ secrets.PBI_CLIENT_ID }}
     PBI_CLIENT_SECRET: ${{ secrets.PBI_CLIENT_SECRET }}
 ```
+
+To fail the step, set `fail-on` (`info`, `warning` or `critical`) and, with
+`data: true`, `fail-on-data-error: true`; they work as the CLI options of the
+same name. Outputs are still set when the step fails.
 
 Outputs: `json`, `html` and `markdown` (paths), `findings`, and the counts
 `critical`, `warning` and `info`. All inputs are listed in

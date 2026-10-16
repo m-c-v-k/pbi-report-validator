@@ -65,6 +65,45 @@ jobs:
           test ! -e "$JSON"
           test "$JSON" != "$FIRST_JSON"
 
+      # --fail-on fails the step, and the outputs are still set.
+      - name: Run the action with fail-on critical
+        id: fail-on
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          fail-on: critical
+
+      - name: Check the fail-on run
+        env:
+          OUTCOME: ${{ steps.fail-on.outcome }}
+          CRITICAL: ${{ steps.fail-on.outputs.critical }}
+          JSON: ${{ steps.fail-on.outputs.json }}
+        run: |
+          test "$OUTCOME" = failure
+          test "$CRITICAL" -gt 0
+          test -s "$JSON"
+
+      # fail-on-data-error reaches the CLI, which rejects it without data
+      # before writing anything.
+      - name: Run the action with fail-on-data-error but no data
+        id: no-data
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          fail-on-data-error: "True"
+
+      - name: Check the fail-on-data-error run
+        env:
+          OUTCOME: ${{ steps.no-data.outcome }}
+          JSON: ${{ steps.no-data.outputs.json }}
+        run: |
+          test "$OUTCOME" = failure
+          test ! -e "$JSON"
+
       - name: Upload HTML report
         uses: actions/upload-artifact@v7
         with:

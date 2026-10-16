@@ -9,13 +9,18 @@ from typing import Annotated
 
 import typer
 
+from pbi_report_validator.diff.data import not_fully_validated
 from pbi_report_validator.diff.severity import at_least
-from pbi_report_validator.domain.models import Severity
+from pbi_report_validator.domain.models import DiffResult, Severity
 from pbi_report_validator.integrations.config import MissingCredentialsError
 from pbi_report_validator.integrations.files import OutputWriteError, ProjectLoadError
 from pbi_report_validator.integrations.powerbi import PowerBIError
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
-from pbi_report_validator.reporting.terminal import format_failure, format_summary
+from pbi_report_validator.reporting.terminal import (
+    format_data_failure,
+    format_failure,
+    format_summary,
+)
 from pbi_report_validator.services.data import (
     DataRun,
     InvalidDataOptionsError,
@@ -120,6 +125,14 @@ def diff(
             help="Exit with code 3 when a finding has at least this severity.",
         ),
     ] = FailOn.NONE,
+    fail_on_data_error: Annotated[
+        bool,
+        typer.Option(
+            "--fail-on-data-error",
+            help="With --data, exit with code 3 when the data of a visual could "
+            "not be fully validated.",
+        ),
+    ] = False,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show progress logging.")
     ] = False,
@@ -129,6 +142,9 @@ def diff(
         level=logging.INFO if verbose else logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
     )
+    if fail_on_data_error and not data:
+        typer.echo("Error: --fail-on-data-error needs --data", err=True)
+        raise typer.Exit(EXIT_USAGE)
     try:
         settings = (
             data_settings(old_dataset, new_dataset, abs_tol, rel_tol) if data else None
@@ -159,9 +175,22 @@ def diff(
     for label, path in outputs:
         if path is not None:
             typer.echo(f"\n{label} written to {path.as_posix()}")
+    failures = _failures(result, fail_on, fail_on_data_error)
+    for failure in failures:
+        typer.echo(f"\n{failure}", err=True)
+    if failures:
+        raise typer.Exit(EXIT_FINDINGS)
+
+
+def _failures(
+    result: DiffResult, fail_on: FailOn, fail_on_data_error: bool
+) -> list[str]:
+    """Why the run fails under ``--fail-on`` and ``--fail-on-data-error``."""
+    failures = []
     if fail_on is not FailOn.NONE:
         threshold = Severity(fail_on.value)
-        failing = at_least(result.findings, threshold)
-        if failing:
-            typer.echo(f"\n{format_failure(len(failing), threshold)}", err=True)
-            raise typer.Exit(EXIT_FINDINGS)
+        if failing := at_least(result.findings, threshold):
+            failures.append(format_failure(len(failing), threshold))
+    if fail_on_data_error and (unchecked := not_fully_validated(result.findings)):
+        failures.append(format_data_failure(len(unchecked)))
+    return failures

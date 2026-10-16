@@ -33,11 +33,17 @@ check_path html "$IN_HTML"
 check_path json "$IN_JSON"
 check_path markdown "$IN_MARKDOWN"
 
-case "${IN_DATA,,}" in
-  true) data=true ;;
-  false | "") data=false ;;
-  *) fail_usage "Input data must be true or false, not '$IN_DATA'" ;;
-esac
+# Set variable $1 to true or false from boolean input $2 (any case; empty
+# is false).
+boolean() {
+  case "${3,,}" in
+    true) printf -v "$1" true ;;
+    false | "") printf -v "$1" false ;;
+    *) fail_usage "Input $2 must be true or false, not '$3'" ;;
+  esac
+}
+boolean data data "$IN_DATA"
+boolean fail_on_data_error fail-on-data-error "$IN_FAIL_ON_DATA_ERROR"
 
 # A folder per step, so a second run in the same job never reads the first
 # run's results.
@@ -54,6 +60,7 @@ add() {
 args=(diff "$IN_OLD" "$IN_NEW" --json "$json" --markdown "$markdown")
 add --html "$IN_HTML"
 if [[ "$IN_FAIL_ON" != "none" ]]; then add --fail-on "$IN_FAIL_ON"; fi
+if [[ "$fail_on_data_error" == true ]]; then args+=(--fail-on-data-error); fi
 if [[ "$data" == true ]]; then
   args+=(--data)
   add --old-dataset "$IN_OLD_DATASET"
