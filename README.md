@@ -223,6 +223,10 @@ pass the credentials as environment variables (never as inputs):
     PBI_CLIENT_SECRET: ${{ secrets.PBI_CLIENT_SECRET }}
 ```
 
+To fail the step, set `fail-on` (`info`, `warning` or `critical`) and, with
+`data: true`, `fail-on-data-error: true`; they work as the CLI options of the
+same name. Outputs are still set when the step fails.
+
 Outputs: `json`, `html` and `markdown` (paths), `findings`, and the counts
 `critical`, `warning` and `info`. All inputs are listed in
 [`action.yml`](action.yml).

@@ -26,6 +26,9 @@ inputs:
   fail-on:
     description: Fail when a finding has at least this severity (none, info, warning, critical).
     default: none
+  fail-on-data-error:
+    description: With data, fail when the data of a visual could not be fully validated.
+    default: "false"
   data:
     description: Also compare the numbers against the published datasets (needs PBI_* credentials).
     default: "false"
@@ -100,6 +103,7 @@ runs:
         IN_JSON: ${{ inputs.json }}
         IN_MARKDOWN: ${{ inputs.markdown }}
         IN_FAIL_ON: ${{ inputs.fail-on }}
+        IN_FAIL_ON_DATA_ERROR: ${{ inputs.fail-on-data-error }}
         IN_DATA: ${{ inputs.data }}
         IN_OLD_DATASET: ${{ inputs.old-dataset }}
         IN_NEW_DATASET: ${{ inputs.new-dataset }}
