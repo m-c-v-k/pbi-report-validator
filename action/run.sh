@@ -4,10 +4,47 @@
 # into the script), credentials as PBI_* variables from the calling step.
 set -euo pipefail
 
-work_dir="$RUNNER_TEMP/pbi-validate"
-mkdir -p "$work_dir"
+EXIT_USAGE=2  # same meaning as the CLI's exit code 2
+
+fail_usage() {
+  echo "::error::$1"
+  exit "$EXIT_USAGE"
+}
+
+# Inside a job container (`container:`) the runner paths are not the Docker
+# host's paths, so the volumes below would mount empty folders.
+if [[ "$GITHUB_WORKSPACE" == /__w/* ]]; then
+  fail_usage "The action cannot run inside a job container; run the job directly on a Linux runner."
+fi
+
+# Only the workspace and the runner's temp folder are mounted; a path
+# elsewhere would be read or written inside the container and lost.
+check_path() {
+  local path="$2"
+  [[ -z "$path" || "$path" != /* ]] && return 0
+  case "$path" in
+    "$GITHUB_WORKSPACE"/* | "$RUNNER_TEMP"/*) return 0 ;;
+  esac
+  fail_usage "Input $1 must be inside the workspace or \$RUNNER_TEMP: $path"
+}
+check_path old "$IN_OLD"
+check_path new "$IN_NEW"
+check_path html "$IN_HTML"
+check_path json "$IN_JSON"
+check_path markdown "$IN_MARKDOWN"
+
+case "${IN_DATA,,}" in
+  true) data=true ;;
+  false | "") data=false ;;
+  *) fail_usage "Input data must be true or false, not '$IN_DATA'" ;;
+esac
+
+# A folder per step, so a second run in the same job never reads the first
+# run's results.
+work_dir="$(mktemp -d "$RUNNER_TEMP/pbi-validate.XXXXXX")"
 json="${IN_JSON:-$work_dir/result.json}"
 markdown="${IN_MARKDOWN:-$work_dir/summary.md}"
+rm -f "$json" "$markdown" ${IN_HTML:+"$IN_HTML"}
 
 # Add "--option value" when the value is not empty.
 add() {
@@ -17,7 +54,7 @@ add() {
 args=(diff "$IN_OLD" "$IN_NEW" --json "$json" --markdown "$markdown")
 add --html "$IN_HTML"
 if [[ "$IN_FAIL_ON" != "none" ]]; then add --fail-on "$IN_FAIL_ON"; fi
-if [[ "$IN_DATA" == "true" ]]; then
+if [[ "$data" == true ]]; then
   args+=(--data)
   add --old-dataset "$IN_OLD_DATASET"
   add --new-dataset "$IN_NEW_DATASET"

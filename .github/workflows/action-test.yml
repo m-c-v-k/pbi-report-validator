@@ -43,6 +43,28 @@ jobs:
           test -s "$HTML"
           grep -q "## Power BI report diff" "$MARKDOWN"
 
+      # A second run in the same job that fails must fail the step and must
+      # not report the first run's results.
+      - name: Run the action on a missing project
+        id: missing
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/does_not_exist
+          new: tests/fixtures/sales_v2
+
+      - name: Check the failed run
+        env:
+          OUTCOME: ${{ steps.missing.outcome }}
+          FINDINGS: ${{ steps.missing.outputs.findings }}
+          JSON: ${{ steps.missing.outputs.json }}
+          FIRST_JSON: ${{ steps.diff.outputs.json }}
+        run: |
+          test "$OUTCOME" = failure
+          test -z "$FINDINGS"
+          test ! -e "$JSON"
+          test "$JSON" != "$FIRST_JSON"
+
       - name: Upload HTML report
         uses: actions/upload-artifact@v7
         with:

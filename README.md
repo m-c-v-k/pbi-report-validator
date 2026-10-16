@@ -179,7 +179,8 @@ minute (40 on Pro/PPU), and each visual needs two.
 ## GitHub Action
 
 Run the diff in any repository's workflow, with no Python setup. The
-Markdown summary appears on the job's summary page:
+Markdown summary appears on the job's summary page. The action is available
+from v0.2.0:
 
 ```yaml
 - uses: actions/checkout@v4
@@ -207,6 +208,10 @@ pass the credentials as environment variables (never as inputs):
 Outputs: `json`, `html` and `markdown` (paths), `findings`, and the counts
 `critical`, `warning` and `info`. All inputs are listed in
 [`action.yml`](action.yml).
+
+The action needs a Linux runner with Docker (such as `ubuntu-latest`) and
+cannot run inside a job `container:`. Input and output paths must be
+relative to the workspace or lie inside it or `$RUNNER_TEMP`.
 
 **Versions.** Pin a full version tag such as `@v0.2.0`; it runs the
 published image of that version. Before 1.0, minor versions can change the

@@ -80,9 +80,11 @@ runs:
       run: |
         if [[ "$ACTION_REF" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
           image="ghcr.io/m-c-v-k/pbi-report-validator:${BASH_REMATCH[1]}"
+          echo "Using the published image $image"
           docker pull --quiet "$image"
         else
           image="pbi-validate:local"
+          echo "Building the image from source (ref '${ACTION_REF}' is not a version tag)"
           docker build --quiet --tag "$image" "$ACTION_PATH"
         fi
         echo "image=$image" >> "$GITHUB_OUTPUT"
