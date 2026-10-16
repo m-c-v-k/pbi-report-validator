@@ -44,6 +44,7 @@ boolean() {
 }
 boolean data data "$IN_DATA"
 boolean fail_on_data_error fail-on-data-error "$IN_FAIL_ON_DATA_ERROR"
+boolean comment comment "$IN_COMMENT"
 
 # A folder per step, so a second run in the same job never reads the first
 # run's results.
@@ -95,5 +96,10 @@ fi
         | "\($s)=\(.severity_counts[$s] // 0)")' "$json"
   fi
 } >> "$GITHUB_OUTPUT"
+
+if [[ "$comment" == true && -f "$markdown" ]]; then
+  bash "$GITHUB_ACTION_PATH/action/comment.sh" "$markdown" "$IN_OLD" "$IN_NEW" \
+    || echo "::warning::Pull request comment failed; the diff result is unaffected."
+fi
 
 exit "$status"

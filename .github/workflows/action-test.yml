@@ -19,6 +19,9 @@ jobs:
   self-test:
     name: Action on the sample reports
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write  # the comment test; read-only on forks
     steps:
       - uses: actions/checkout@v7
 
@@ -29,6 +32,7 @@ jobs:
           old: tests/fixtures/sales_v1
           new: tests/fixtures/sales_v2
           html: out/report.html
+          comment: ${{ github.event_name == 'pull_request' }}
 
       - name: Check outputs
         env:
@@ -74,6 +78,7 @@ jobs:
           old: tests/fixtures/sales_v1
           new: tests/fixtures/sales_v2
           fail-on: critical
+          comment: ${{ github.event_name == 'pull_request' }}
 
       - name: Check the fail-on run
         env:
@@ -103,6 +108,24 @@ jobs:
         run: |
           test "$OUTCOME" = failure
           test ! -e "$JSON"
+
+      # Both runs above compare the same versions, so the second one must have
+      # updated the first one's comment instead of adding a new one.
+      - name: Check the pull request comment
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          id="$(printf '%s\n%s' tests/fixtures/sales_v1 tests/fixtures/sales_v2 | sha256sum | cut -c1-12)"
+          marker="<!-- pbi-report-validator:$id -->"
+          bodies="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --jq '.[].body')"
+          count="$(grep -cF "$marker" <<<"$bodies" || true)"
+          echo "comments with the marker: $count"
+          test "$count" -eq 1
+          grep -q "## Power BI report diff" <<<"$bodies"
 
       - name: Upload HTML report
         uses: actions/upload-artifact@v7

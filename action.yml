@@ -29,6 +29,12 @@ inputs:
   fail-on-data-error:
     description: With data, fail when the data of a visual could not be fully validated.
     default: "false"
+  comment:
+    description: Post the Markdown summary as a pull request comment, updated on later runs (needs pull-requests write).
+    default: "false"
+  github-token:
+    description: Token for the pull request comment.
+    default: ${{ github.token }}
   data:
     description: Also compare the numbers against the published datasets (needs PBI_* credentials).
     default: "false"
@@ -104,6 +110,8 @@ runs:
         IN_MARKDOWN: ${{ inputs.markdown }}
         IN_FAIL_ON: ${{ inputs.fail-on }}
         IN_FAIL_ON_DATA_ERROR: ${{ inputs.fail-on-data-error }}
+        IN_COMMENT: ${{ inputs.comment }}
+        GH_TOKEN: ${{ inputs.github-token }}
         IN_DATA: ${{ inputs.data }}
         IN_OLD_DATASET: ${{ inputs.old-dataset }}
         IN_NEW_DATASET: ${{ inputs.new-dataset }}
