@@ -223,6 +223,24 @@ pass the credentials as environment variables (never as inputs):
     PBI_CLIENT_SECRET: ${{ secrets.PBI_CLIENT_SECRET }}
 ```
 
+To show the summary on the pull request, set `comment: true` and give the
+job `pull-requests: write`. The action posts one comment per compared pair
+of reports and updates it on later pushes (two steps with the same `old` and
+`new` share one comment, so the last one wins); very long summaries are cut,
+with a link to the run. Without write permission (for example on a pull
+request from a fork) the comment is skipped with a warning:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+# ...
+    with:
+      old: reports/v1
+      new: reports/v2
+      comment: true
+```
+
 To fail the step, set `fail-on` (`info`, `warning` or `critical`) and, with
 `data: true`, `fail-on-data-error: true`; they work as the CLI options of the
 same name. Outputs are still set when the step fails.
