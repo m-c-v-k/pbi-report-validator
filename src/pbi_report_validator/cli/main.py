@@ -163,5 +163,5 @@ def diff(
         threshold = Severity(fail_on.value)
         failing = at_least(result.findings, threshold)
         if failing:
-            typer.echo(f"\n{format_failure(len(failing), threshold)}")
+            typer.echo(f"\n{format_failure(len(failing), threshold)}", err=True)
             raise typer.Exit(EXIT_FINDINGS)

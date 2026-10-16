@@ -3,7 +3,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from pbi_report_validator.cli.main import app
+from pbi_report_validator.cli.main import FailOn, app
+from pbi_report_validator.domain.models import Severity
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
 from tests.factories import REPO_ROOT, SNAPSHOTS
 
@@ -156,7 +157,7 @@ def test_fail_on_threshold(threshold: str, exit_code: int, message: str | None) 
     result = runner.invoke(app, ["diff", OLD, NEW, "--fail-on", threshold])
 
     assert result.exit_code == exit_code
-    assert (message in result.stdout) if message else ("Failed:" not in result.stdout)
+    assert (message in result.stderr) if message else ("Failed:" not in result.stderr)
 
 
 def test_fail_on_passes_without_findings() -> None:
@@ -182,6 +183,23 @@ def test_error_wins_over_fail_on(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 1
+
+
+def test_output_error_wins_over_fail_on(tmp_path: Path) -> None:
+    blocker = tmp_path / "file"
+    blocker.write_text("")
+
+    result = runner.invoke(
+        app,
+        ["diff", OLD, NEW, "--json", str(blocker / "x.json"), "--fail-on", "info"],
+    )
+
+    assert result.exit_code == 1
+    assert "Failed:" not in result.stderr
+
+
+def test_fail_on_offers_every_severity() -> None:
+    assert [v.value for v in FailOn] == ["none", *(s.value for s in Severity)]
 
 
 def test_invalid_fail_on_is_a_usage_error() -> None:

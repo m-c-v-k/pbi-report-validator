@@ -3,6 +3,7 @@ from itertools import product
 import pytest
 
 from pbi_report_validator.diff.severity import (
+    SEVERITY_RANK,
     at_least,
     default_severity,
     with_severity,
@@ -93,3 +94,8 @@ def test_at_least(threshold: S, expected: list[S]) -> None:
     ]
 
     assert [f.severity for f in at_least(findings, threshold)] == expected
+
+
+def test_severity_rank_covers_every_severity_in_order() -> None:
+    assert list(SEVERITY_RANK) == list(Severity)
+    assert list(SEVERITY_RANK.values()) == list(range(len(Severity)))
