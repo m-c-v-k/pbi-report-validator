@@ -4,7 +4,7 @@ import pytest
 from typer.testing import CliRunner
 
 from pbi_report_validator.cli.main import app
-from pbi_report_validator.diff.data import compare_results
+from pbi_report_validator.diff.data import compare_results, not_fully_validated
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -332,3 +332,88 @@ def test_data_findings_get_a_severity() -> None:
         (ChangeKind.MODIFIED, Severity.CRITICAL),
         (ChangeKind.ERROR, Severity.WARNING),
     }
+
+
+DATA_ARGS = [
+    "diff",
+    "tests/fixtures/sales_v1",
+    "tests/fixtures/sales_v2",
+    "--data",
+    "--old-dataset",
+    OLD_DS,
+    "--new-dataset",
+    NEW_DS,
+]
+
+
+def test_fail_on_data_error_passes_when_all_data_is_validated(
+    repo_root: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "pbi_report_validator.cli.main.create_runner", lambda env: FakeRunner()
+    )
+
+    result = cli.invoke(app, [*DATA_ARGS, "--fail-on-data-error"])
+
+    assert result.exit_code == 0
+    assert "Failed:" not in result.stderr
+
+
+def test_fail_on_data_error_fails_on_a_failed_query(
+    repo_root: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "pbi_report_validator.cli.main.create_runner",
+        lambda env: FakeRunner(fail_on="'Sales'[Region]"),
+    )
+
+    result = cli.invoke(app, [*DATA_ARGS, "--fail-on-data-error"])
+
+    assert result.exit_code == 3
+    assert re.search(
+        r"Failed: data of \d+ visuals? not fully validated \(--fail-on-data-error\)",
+        result.stderr,
+    )
+
+
+def test_fail_on_and_fail_on_data_error_both_report(
+    repo_root: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "pbi_report_validator.cli.main.create_runner",
+        lambda env: FakeRunner(fail_on="'Sales'[Region]"),
+    )
+
+    both = cli.invoke(
+        app, [*DATA_ARGS, "--fail-on", "critical", "--fail-on-data-error"]
+    )
+
+    assert both.exit_code == 3
+    assert "(--fail-on critical)" in both.stderr
+    assert "(--fail-on-data-error)" in both.stderr
+
+
+def test_fail_on_data_error_needs_data(repo_root: None) -> None:
+    result = cli.invoke(
+        app,
+        [*DATA_ARGS[:3], "--fail-on-data-error"],
+    )
+
+    assert result.exit_code == 2
+    assert "--fail-on-data-error needs --data" in result.stderr
+
+
+def test_not_fully_validated_selects_data_errors() -> None:
+    runner = FakeRunner(fail_on="'Sales'[Region]")
+    result = validate(
+        FIXTURES / "sales_v1", FIXTURES / "sales_v2", DataRun(SETTINGS, runner)
+    )
+
+    unchecked = not_fully_validated(result.findings)
+
+    assert unchecked
+    assert {(f.category, f.change) for f in unchecked} == {
+        (Category.DATA, ChangeKind.ERROR)
+    }
+    not_validated = [s for s in result.data if s.status == DataStatus.NOT_VALIDATED]
+    assert len(unchecked) >= len(not_validated)

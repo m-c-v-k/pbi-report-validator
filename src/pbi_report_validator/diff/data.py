@@ -6,7 +6,7 @@ Findings are capped per visual; the ``DataSummary`` keeps the full counts.
 Pure functions only: the query results come in as domain models.
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
 import pandas as pd
 
@@ -134,6 +134,15 @@ def not_validated(path: str, reason: str) -> DataComparison:
     )
     summary = DataSummary(path=path, status=DataStatus.NOT_VALIDATED, reason=reason)
     return DataComparison(summary=summary, findings=(finding,))
+
+
+def not_fully_validated(findings: Iterable[Finding]) -> list[Finding]:
+    """The findings of visuals whose data was not, or only partly, compared."""
+    return [
+        f
+        for f in findings
+        if (f.category, f.change) == (Category.DATA, ChangeKind.ERROR)
+    ]
 
 
 def _frame(

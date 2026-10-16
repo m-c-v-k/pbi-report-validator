@@ -52,3 +52,9 @@ def format_failure(count: int, threshold: Severity) -> str:
         f"Failed: {count} {noun} at {threshold.value} or above "
         f"(--fail-on {threshold.value})"
     )
+
+
+def format_data_failure(count: int) -> str:
+    """Why ``--fail-on-data-error`` failed the run."""
+    noun = "visual" if count == 1 else "visuals"
+    return f"Failed: data of {count} {noun} not fully validated (--fail-on-data-error)"

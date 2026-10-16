@@ -5,7 +5,11 @@ from pbi_report_validator.domain.models import (
     Finding,
     Severity,
 )
-from pbi_report_validator.reporting.terminal import format_failure, format_summary
+from pbi_report_validator.reporting.terminal import (
+    format_data_failure,
+    format_failure,
+    format_summary,
+)
 
 
 def finding(path: str) -> Finding:
@@ -44,3 +48,10 @@ def test_failure_message() -> None:
     assert format_failure(1, Severity.CRITICAL) == (
         "Failed: 1 finding at critical or above (--fail-on critical)"
     )
+
+
+def test_format_data_failure() -> None:
+    assert format_data_failure(1) == (
+        "Failed: data of 1 visual not fully validated (--fail-on-data-error)"
+    )
+    assert format_data_failure(2).startswith("Failed: data of 2 visuals")
