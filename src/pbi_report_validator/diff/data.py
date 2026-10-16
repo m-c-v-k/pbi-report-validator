@@ -10,6 +10,7 @@ from collections.abc import Iterable, Sequence
 
 import pandas as pd
 
+from pbi_report_validator.diff.severity import default_severity
 from pbi_report_validator.domain.models import (
     Category,
     CellValue,
@@ -129,6 +130,7 @@ def not_validated(path: str, reason: str) -> DataComparison:
     finding = Finding(
         category=Category.DATA,
         change=ChangeKind.ERROR,
+        severity=default_severity(Category.DATA, ChangeKind.ERROR),
         path=f"{path}/data",
         message=f"Data not validated: {reason}",
     )
@@ -211,9 +213,11 @@ def _cell(value: object) -> CellValue:
 
 def _row_finding(path: str, label: str, only_new: bool) -> Finding:
     where = "new" if only_new else "old"
+    change = ChangeKind.ADDED if only_new else ChangeKind.REMOVED
     return Finding(
         category=Category.DATA,
-        change=ChangeKind.ADDED if only_new else ChangeKind.REMOVED,
+        change=change,
+        severity=default_severity(Category.DATA, change),
         path=f"{path}/data/{label}",
         message=f"Row {label} only in the {where} version",
     )
@@ -225,6 +229,7 @@ def _value_finding(
     return Finding(
         category=Category.DATA,
         change=ChangeKind.MODIFIED,
+        severity=default_severity(Category.DATA, ChangeKind.MODIFIED),
         path=f"{path}/data/{label}/{name}",
         message=f"{name} differs for {label}",
         old=display(before),

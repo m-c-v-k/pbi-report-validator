@@ -95,12 +95,12 @@ class Finding(DomainModel):
 
     ``path`` locates the object, e.g. ``details/table_product_sales/filters/
     visual_filter_category`` or ``model/Sales/Total Sales``. ``severity`` is
-    set by ``diff.severity``; findings are created with the lowest level.
+    required; ``diff.severity.default_severity`` gives the usual level.
     """
 
     category: Category
     change: ChangeKind
-    severity: Severity = Severity.INFO
+    severity: Severity
     path: str
     message: str
     old: str | None = None

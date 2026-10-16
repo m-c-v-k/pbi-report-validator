@@ -12,6 +12,7 @@ added, and fields and filters that use it are reported as changed too.
 
 from pydantic import Field
 
+from pbi_report_validator.diff.severity import default_severity
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -105,6 +106,7 @@ def _renamed(table: str, old: Measure, new: Measure) -> Finding:
     return Finding(
         category=Category.MEASURE,
         change=ChangeKind.RENAMED,
+        severity=default_severity(Category.MEASURE, ChangeKind.RENAMED),
         path=_path(table, old.name),
         message=f"Measure {table}[{old.name}] renamed to {table}[{new.name}]",
         old=old.name,
@@ -116,6 +118,7 @@ def _removed(table: str, measure: Measure) -> Finding:
     return Finding(
         category=Category.MEASURE,
         change=ChangeKind.REMOVED,
+        severity=default_severity(Category.MEASURE, ChangeKind.REMOVED),
         path=_path(table, measure.name),
         message=f"Measure {table}[{measure.name}] removed",
         old=measure.expression,
@@ -126,6 +129,7 @@ def _added(table: str, measure: Measure) -> Finding:
     return Finding(
         category=Category.MEASURE,
         change=ChangeKind.ADDED,
+        severity=default_severity(Category.MEASURE, ChangeKind.ADDED),
         path=_path(table, measure.name),
         message=f"Measure {table}[{measure.name}] added",
         new=measure.expression,
@@ -136,6 +140,7 @@ def _modified(table: str, old: Measure, new: Measure) -> Finding:
     return Finding(
         category=Category.MEASURE,
         change=ChangeKind.MODIFIED,
+        severity=default_severity(Category.MEASURE, ChangeKind.MODIFIED),
         path=_path(table, old.name),
         message=f"Expression of measure {table}[{old.name}] changed",
         old=old.expression,

@@ -13,6 +13,7 @@ from typing import Protocol
 
 from pbi_report_validator.dax.builder import build_query
 from pbi_report_validator.diff.data import compare_results, not_validated
+from pbi_report_validator.diff.severity import default_severity
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -176,6 +177,7 @@ def _with_unpaired(
     finding = Finding(
         category=Category.DATA,
         change=ChangeKind.ERROR,
+        severity=default_severity(Category.DATA, ChangeKind.ERROR),
         path=f"{path}/data",
         message=f"Data partly validated, {note}",
     )
