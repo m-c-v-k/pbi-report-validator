@@ -146,6 +146,14 @@ def test_no_where_gives_no_condition(value: Any) -> None:
         {"In": {"Expressions": [col("zz", "A")], "Values": [[lit("1")]]}},
         {"In": {"Expressions": [col("s", "A")], "Values": [[{"Parameter": {}}]]}},
         {"And": {"Left": None, "Right": None}},
+        {"In": {"Expressions": [col("s", "A")], "Values": [[{"Literal": "1"}]]}},
+        {
+            "Comparison": {
+                "ComparisonKind": 0,
+                "Left": col("s", "A"),
+                "Right": {"Literal": None},
+            }
+        },
     ],
 )
 def test_unsupported_conditions_raise(condition: dict[str, Any]) -> None:
@@ -261,4 +269,27 @@ def test_report_filter_problem_becomes_issue_with_path() -> None:
             "Sales.Report/definition/report.json",
             "filter f: unsupported condition (Between)",
         )
+    ]
+
+
+def test_malformed_literal_becomes_issue_not_crash() -> None:
+    right = {"Literal": "1"}
+    malformed = {
+        "Comparison": {"ComparisonKind": 0, "Left": col("s", "A"), "Right": right}
+    }
+    raw = RawReport(
+        path="Sales.Report",
+        report=RawJsonFile(
+            path="Sales.Report/definition/report.json",
+            content={
+                "filterConfig": {"filters": [{"name": "f", "filter": query(malformed)}]}
+            },
+        ),
+    )
+
+    report = parse_report(raw)
+
+    assert report.filters[0].condition is None
+    assert [i.message for i in report.issues] == [
+        "filter f: unsupported condition (non-literal value)"
     ]

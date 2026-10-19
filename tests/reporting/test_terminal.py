@@ -14,7 +14,11 @@ from pbi_report_validator.reporting.terminal import (
 
 def finding(path: str) -> Finding:
     return Finding(
-        category=Category.VISUAL, change=ChangeKind.ADDED, path=path, message="added"
+        category=Category.VISUAL,
+        change=ChangeKind.ADDED,
+        severity=Severity.INFO,
+        path=path,
+        message="added",
     )
 
 

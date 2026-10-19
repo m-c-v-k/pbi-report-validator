@@ -1,8 +1,16 @@
 import shutil
 from pathlib import Path
 
-from pbi_report_validator.domain.models import Category, ChangeKind
-from pbi_report_validator.services.validate import validate
+import pytest
+
+from pbi_report_validator.domain.models import (
+    Category,
+    ChangeKind,
+    DiffResult,
+    Finding,
+    Severity,
+)
+from pbi_report_validator.services.validate import failure_reasons, validate
 from tests.factories import FIXTURES
 
 
@@ -70,3 +78,48 @@ def test_tmdl_issues_become_findings(tmp_path: Path) -> None:
     assert issues[0].path.startswith(
         "new/Sales.SemanticModel/definition/tables/Sales.tmdl:"
     )
+
+
+def result_with(*findings: Finding) -> DiffResult:
+    return DiffResult(old_source="old", new_source="new", findings=findings)
+
+
+WARNING = Finding(
+    category=Category.FIELD,
+    change=ChangeKind.ADDED,
+    severity=Severity.WARNING,
+    path="p/v/fields/x",
+    message="m",
+)
+DATA_ERROR = Finding(
+    category=Category.DATA,
+    change=ChangeKind.ERROR,
+    severity=Severity.WARNING,
+    path="p/v/data",
+    message="m",
+)
+
+
+@pytest.mark.parametrize(
+    ("fail_on", "fail_on_data_error", "expected"),
+    [
+        (None, False, []),
+        (Severity.CRITICAL, False, []),
+        (
+            Severity.WARNING,
+            False,
+            ["Failed: 2 findings at warning or above (--fail-on warning)"],
+        ),
+        (
+            None,
+            True,
+            ["Failed: data of 1 visual not fully validated (--fail-on-data-error)"],
+        ),
+    ],
+)
+def test_failure_reasons(
+    fail_on: Severity | None, fail_on_data_error: bool, expected: list[str]
+) -> None:
+    result = result_with(WARNING, DATA_ERROR)
+
+    assert failure_reasons(result, fail_on, fail_on_data_error) == expected
