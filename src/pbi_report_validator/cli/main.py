@@ -5,11 +5,11 @@ import os
 from enum import StrEnum
 from importlib.metadata import version
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, NamedTuple, NoReturn
 
 import typer
 
-from pbi_report_validator.domain.models import Severity
+from pbi_report_validator.domain.models import DataSettings, DiffResult, Severity
 from pbi_report_validator.integrations.config import MissingCredentialsError
 from pbi_report_validator.integrations.files import OutputWriteError, ProjectLoadError
 from pbi_report_validator.integrations.powerbi import PowerBIError
@@ -143,6 +143,31 @@ def diff(
     ] = False,
 ) -> None:
     """Compare two report versions: structure, and with --data also the numbers."""
+    _configure_logging(verbose)
+    if fail_on_data_error and not data:
+        _fail("--fail-on-data-error needs --data", EXIT_USAGE)
+    if show_data_values and not data:
+        _fail("--show-data-values needs --data", EXIT_USAGE)
+    settings = (
+        _settings_or_exit(old_dataset, new_dataset, abs_tol, rel_tol, show_data_values)
+        if data
+        else None
+    )
+    outputs = Outputs(json=json_path, markdown=markdown_path, html=html_path)
+    result = _run_or_exit(old, new, settings, outputs)
+    _print_result(result, outputs)
+    _exit_on_failures(result, fail_on, fail_on_data_error)
+
+
+class Outputs(NamedTuple):
+    """The files ``diff`` writes; ``None`` skips that format."""
+
+    json: Path | None
+    markdown: Path | None
+    html: Path | None
+
+
+def _configure_logging(verbose: bool) -> None:
     logging.basicConfig(
         level=logging.INFO if verbose else logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
@@ -150,30 +175,39 @@ def diff(
     # httpx logs every request URL at INFO, and the URLs contain dataset ids.
     for name in ("httpx", "httpcore"):
         logging.getLogger(name).setLevel(logging.WARNING)
-    if fail_on_data_error and not data:
-        typer.echo("Error: --fail-on-data-error needs --data", err=True)
-        raise typer.Exit(EXIT_USAGE)
-    if show_data_values and not data:
-        typer.echo("Error: --show-data-values needs --data", err=True)
-        raise typer.Exit(EXIT_USAGE)
+
+
+def _fail(message: str, code: int) -> NoReturn:
+    typer.echo(f"Error: {message}", err=True)
+    raise typer.Exit(code)
+
+
+def _settings_or_exit(
+    old_dataset: str | None,
+    new_dataset: str | None,
+    abs_tol: float,
+    rel_tol: float,
+    show_values: bool,
+) -> DataSettings:
     try:
-        settings = (
-            data_settings(old_dataset, new_dataset, abs_tol, rel_tol, show_data_values)
-            if data
-            else None
-        )
+        return data_settings(old_dataset, new_dataset, abs_tol, rel_tol, show_values)
     except InvalidDataOptionsError as exc:
-        typer.echo(f"Error: {exc}", err=True)
-        raise typer.Exit(EXIT_USAGE) from exc
+        _fail(str(exc), EXIT_USAGE)
+
+
+def _run_or_exit(
+    old: Path, new: Path, settings: DataSettings | None, outputs: Outputs
+) -> DiffResult:
+    """Validate and write the requested outputs; errors exit with code 1."""
     try:
         runner = create_runner(os.environ) if settings else None
         result = validate(old, new, settings, runner)
-        if json_path is not None:
-            write_json(result, json_path)
-        if markdown_path is not None:
-            write_markdown(result, markdown_path)
-        if html_path is not None:
-            write_html(result, html_path, version(PACKAGE_NAME))
+        if outputs.json is not None:
+            write_json(result, outputs.json)
+        if outputs.markdown is not None:
+            write_markdown(result, outputs.markdown)
+        if outputs.html is not None:
+            write_html(result, outputs.html, version(PACKAGE_NAME))
     except (
         ProjectLoadError,
         OutputWriteError,
@@ -181,15 +215,23 @@ def diff(
         MissingCredentialsError,
         PowerBIError,
     ) as exc:
-        typer.echo(f"Error: {exc}", err=True)
-        raise typer.Exit(EXIT_ERROR) from exc
+        _fail(str(exc), EXIT_ERROR)
+    return result
+
+
+def _print_result(result: DiffResult, outputs: Outputs) -> None:
     typer.echo(format_summary(result))
-    outputs = (("JSON", json_path), ("Markdown", markdown_path), ("HTML", html_path))
-    for label, path in outputs:
+    labels = ("JSON", "Markdown", "HTML")
+    for label, path in zip(labels, outputs, strict=True):
         if path is not None:
             typer.echo(f"\n{label} written to {path.as_posix()}")
     if result.data_values_shown:
         typer.echo(f"\n{format_unmasked_warning()}", err=True)
+
+
+def _exit_on_failures(
+    result: DiffResult, fail_on: FailOn, fail_on_data_error: bool
+) -> None:
     threshold = None if fail_on is FailOn.NONE else Severity(fail_on.value)
     failures = failure_reasons(result, threshold, fail_on_data_error)
     for failure in failures:
