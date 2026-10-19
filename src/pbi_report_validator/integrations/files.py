@@ -8,6 +8,7 @@ so the output does not depend on where the project lives.
 import json
 import logging
 import os
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from pbi_report_validator.domain.raw import (
@@ -55,6 +56,15 @@ class UnreadableFileError(ProjectLoadError):
         self.path = path
 
 
+class UnreadableFolderError(ProjectLoadError):
+    """A folder in the project could not be listed."""
+
+    def __init__(self, path: str, reason: str) -> None:
+        """Create the error for folder ``path`` with the underlying ``reason``."""
+        super().__init__(f"{path}: could not list folder ({reason})")
+        self.path = path
+
+
 class OutputWriteError(Exception):
     """An output file (e.g. the JSON report) could not be written."""
 
@@ -76,6 +86,7 @@ def load_project(path: Path) -> RawProject:
         InvalidJsonError: ``report.json``, ``pages.json`` or ``definition.pbir``
             is unreadable or not valid JSON.
         UnreadableFileError: A ``.tmdl`` file could not be read.
+        UnreadableFolderError: A project folder could not be listed.
     """
     report_dir = _find_report_dir(path)
     root = report_dir.parent
@@ -106,7 +117,9 @@ def _find_report_dir(path: Path) -> Path:
         raise ProjectNotFoundError(f"{path} is not a folder")
     if path.name.endswith(REPORT_SUFFIX):
         return path
-    candidates = sorted(p for p in path.glob(f"*{REPORT_SUFFIX}") if p.is_dir())
+    candidates = sorted(
+        p for p in _list(path, lambda: path.glob(f"*{REPORT_SUFFIX}")) if p.is_dir()
+    )
     if len(candidates) != 1:
         found = ", ".join(p.name for p in candidates) or "none"
         raise ProjectNotFoundError(
@@ -174,7 +187,10 @@ def _load_page(page_dir: Path, root: Path) -> RawPage:
 
 def _load_semantic_model(model_dir: Path, root: Path) -> RawSemanticModel:
     definition = model_dir / "definition"
-    files = sorted(definition.rglob("*.tmdl"), key=lambda p: p.relative_to(definition))
+    files = sorted(
+        _list(definition, lambda: definition.rglob("*.tmdl")),
+        key=lambda p: p.relative_to(definition),
+    )
     return RawSemanticModel(
         path=_relative(model_dir, root),
         files=tuple(_read_text(f, root) for f in files),
@@ -211,7 +227,15 @@ def _read_json(path: Path, root: Path) -> RawJsonFile:
 def _sorted_subdirs(path: Path) -> list[Path]:
     if not path.is_dir():
         return []
-    return sorted(p for p in path.iterdir() if p.is_dir())
+    return sorted(p for p in _list(path, path.iterdir) if p.is_dir())
+
+
+def _list(folder: Path, entries: Callable[[], Iterable[Path]]) -> list[Path]:
+    """Collect ``entries()``, turning listing failures into a typed error."""
+    try:
+        return list(entries())
+    except OSError as exc:
+        raise UnreadableFolderError(str(folder), str(exc)) from exc
 
 
 def _relative(path: Path, root: Path) -> str:

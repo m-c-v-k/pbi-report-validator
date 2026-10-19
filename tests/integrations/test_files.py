@@ -9,6 +9,7 @@ from pbi_report_validator.integrations.files import (
     MissingDefinitionError,
     ProjectNotFoundError,
     UnreadableFileError,
+    UnreadableFolderError,
     load_project,
 )
 from tests.factories import FIXTURES
@@ -227,3 +228,17 @@ def test_model_outside_project_gets_relative_path(project_copy: Path) -> None:
 
     assert project.semantic_model is not None
     assert project.semantic_model.path == "../Shared"
+
+
+@pytest.mark.parametrize("method", ["glob", "iterdir", "rglob"])
+def test_unreadable_folder_raises(
+    project_copy: Path, monkeypatch: pytest.MonkeyPatch, method: str
+) -> None:
+    def deny(self: Path, *args: object) -> None:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, method, deny)
+
+    with pytest.raises(UnreadableFolderError, match="Permission denied") as info:
+        load_project(project_copy)
+    assert info.value.path
