@@ -1,14 +1,26 @@
-"""The optional AI layer: resolve ``--ai`` against the environment.
+"""The optional AI layer: resolve ``--ai`` and contain AI failures.
 
 AI is off unless asked for. ``PBI_VALIDATE_AI=disabled`` blocks it whatever
 the flags say. Every check runs before the validation, so a missing extra
-or key is a usage error and never a failure halfway through a run.
+or key is a usage error and never a failure halfway through a run; a
+failing AI call during a run becomes an ``info`` finding.
 """
 
-from collections.abc import Mapping
+import logging
+from collections.abc import Callable, Mapping
 
-from pbi_report_validator.domain.models import AiMode, AiSettings
-from pbi_report_validator.integrations.anthropic_client import ensure_available
+from pbi_report_validator.diff.severity import make_finding
+from pbi_report_validator.domain.models import (
+    AiMode,
+    AiSettings,
+    Category,
+    ChangeKind,
+    Finding,
+)
+from pbi_report_validator.integrations.anthropic_client import (
+    AiError,
+    ensure_available,
+)
 from pbi_report_validator.integrations.config import (
     AI_DISABLED,
     AI_ENV_VAR,
@@ -16,6 +28,8 @@ from pbi_report_validator.integrations.config import (
     load_ai_policy,
     load_anthropic_config,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class InvalidAiOptionsError(ValueError):
@@ -54,3 +68,25 @@ def ai_settings(
     ensure_available()
     config = load_anthropic_config(environ)
     return AiSettings(mode=mode, model=config.model, allow_data=allow_data)
+
+
+def guarded[T](call: Callable[[], T], path: str) -> T | Finding:
+    """Run an AI call; a failure becomes an ``info`` finding, never a crash.
+
+    Args:
+        call: The AI step, e.g. explaining one finding.
+        path: Where the finding points, e.g. ``ai/explanations``.
+
+    Returns:
+        The call's result, or the finding that says why AI was not applied.
+    """
+    try:
+        return call()
+    except AiError as exc:
+        logger.warning("AI step %s failed: %s", path, exc)
+        return make_finding(
+            Category.AI,
+            ChangeKind.ERROR,
+            path=path,
+            message=f"AI (not applied): {exc}",
+        )
