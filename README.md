@@ -274,6 +274,8 @@ commit, which takes about a minute longer.
 ## Data handling
 
 - Runs locally or in your own CI; nothing is sent anywhere by default.
+- Only files inside the project folder are read: a `definition.pbir` that
+  points to a semantic model outside it is rejected with an error.
 - With `--data`, queries go only to the Power BI API of your own tenant.
   Query results stay in memory and are never logged or sent anywhere else.
   The output files contain only masked rows unless you pass
