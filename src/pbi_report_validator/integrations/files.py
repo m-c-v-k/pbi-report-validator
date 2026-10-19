@@ -38,6 +38,10 @@ class MissingDefinitionError(ProjectLoadError):
     """A ``.Report`` folder has no PBIR ``definition/report.json``."""
 
 
+class ModelOutsideProjectError(ProjectLoadError):
+    """``definition.pbir`` points to a semantic model outside the project."""
+
+
 class InvalidJsonError(ProjectLoadError):
     """A file the whole report depends on is unreadable or not valid JSON."""
 
@@ -87,6 +91,8 @@ def load_project(path: Path) -> RawProject:
             is unreadable or not valid JSON.
         UnreadableFileError: A ``.tmdl`` file could not be read.
         UnreadableFolderError: A project folder could not be listed.
+        ModelOutsideProjectError: ``definition.pbir`` points to a semantic
+            model outside the project folder.
     """
     report_dir = _find_report_dir(path)
     root = report_dir.parent
@@ -137,6 +143,7 @@ def _find_model_dir(report_dir: Path) -> Path | None:
         if isinstance(by_path, dict) and isinstance(by_path.get("path"), str):
             model_path: str = by_path["path"]
             candidate = (report_dir / model_path).resolve()
+            _require_inside(candidate, report_dir.parent.resolve(), pbir.name)
             if candidate.is_dir():
                 return candidate
             logger.warning("%s points to missing folder %s", pbir.name, candidate)
@@ -147,6 +154,13 @@ def _find_model_dir(report_dir: Path) -> Path | None:
         report_dir.name.removesuffix(REPORT_SUFFIX) + MODEL_SUFFIX
     )
     return sibling if sibling.is_dir() else None
+
+
+def _require_inside(path: Path, root: Path, source: str) -> None:
+    if not path.is_relative_to(root):
+        raise ModelOutsideProjectError(
+            f"{source} points to {path}, which is outside the project folder {root}"
+        )
 
 
 def _load_report(report_dir: Path, root: Path) -> RawReport:

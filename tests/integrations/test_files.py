@@ -1,3 +1,4 @@
+import json
 import shutil
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from pbi_report_validator.domain.raw import RawPage, RawProject
 from pbi_report_validator.integrations.files import (
     InvalidJsonError,
     MissingDefinitionError,
+    ModelOutsideProjectError,
     ProjectNotFoundError,
     UnreadableFileError,
     UnreadableFolderError,
@@ -218,16 +220,47 @@ def test_model_path_to_missing_folder_gives_no_model(project_copy: Path) -> None
     assert project.semantic_model is None
 
 
-def test_model_outside_project_gets_relative_path(project_copy: Path) -> None:
-    shutil.move(project_copy / "Sales.SemanticModel", project_copy.parent / "Shared")
+def write_model_path(project_copy: Path, model_path: str) -> None:
     (project_copy / "Sales.Report/definition.pbir").write_text(
-        '{"datasetReference": {"byPath": {"path": "../../Shared"}}}'
+        json.dumps({"datasetReference": {"byPath": {"path": model_path}}})
+    )
+
+
+def test_model_in_sibling_folder_outside_project_raises(project_copy: Path) -> None:
+    shutil.move(project_copy / "Sales.SemanticModel", project_copy.parent / "Shared")
+    write_model_path(project_copy, "../../Shared")
+
+    with pytest.raises(ModelOutsideProjectError, match="outside the project"):
+        load_project(project_copy)
+
+
+def test_absolute_model_path_outside_project_raises(
+    project_copy: Path, tmp_path: Path
+) -> None:
+    outside = tmp_path / "elsewhere.SemanticModel"
+    shutil.copytree(project_copy / "Sales.SemanticModel", outside)
+    write_model_path(project_copy, str(outside.resolve()))
+
+    with pytest.raises(ModelOutsideProjectError):
+        load_project(project_copy)
+
+
+def test_model_path_climbing_to_filesystem_root_raises(project_copy: Path) -> None:
+    write_model_path(project_copy, "../../../../../../../../../..")
+
+    with pytest.raises(ModelOutsideProjectError):
+        load_project(project_copy)
+
+
+def test_absolute_model_path_inside_project_is_allowed(project_copy: Path) -> None:
+    write_model_path(
+        project_copy, str((project_copy / "Sales.SemanticModel").resolve())
     )
 
     project = load_project(project_copy)
 
     assert project.semantic_model is not None
-    assert project.semantic_model.path == "../Shared"
+    assert project.semantic_model.path == "Sales.SemanticModel"
 
 
 @pytest.mark.parametrize("method", ["glob", "iterdir", "rglob"])
