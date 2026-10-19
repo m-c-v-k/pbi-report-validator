@@ -1,6 +1,12 @@
 import pytest
 
-from pbi_report_validator.domain.models import Category, ChangeKind, DiffResult, Finding
+from pbi_report_validator.domain.models import (
+    Category,
+    ChangeKind,
+    DiffResult,
+    Finding,
+    Severity,
+)
 from pbi_report_validator.reporting.markdown import escape, to_markdown
 
 
@@ -9,6 +15,7 @@ def finding(path: str, **kwargs: str | None) -> Finding:
     return Finding(
         category=Category.MEASURE,
         change=ChangeKind.MODIFIED,
+        severity=Severity.INFO,
         path=path,
         message=values["message"] or "",
         old=values["old"],

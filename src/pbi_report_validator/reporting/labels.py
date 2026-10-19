@@ -33,6 +33,13 @@ STATUS_MARKS = {
     ItemStatus.UNCHANGED: "",
 }
 
+# Shown in every report when row-level data was not masked (--show-data-values).
+UNMASKED_WARNING = (
+    "This report contains unmasked row-level data: the keys and values of the "
+    "compared rows. Do not publish it, attach it to a pull request or share it "
+    "outside the people allowed to see the datasets."
+)
+
 
 def severity_overview(result: DiffResult) -> str:
     """Findings per severity, most severe first: ``1 critical, 0 warning, 2 info``."""

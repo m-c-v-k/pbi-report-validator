@@ -14,7 +14,7 @@ from pbi_report_validator.domain.report import (
     Visual,
 )
 
-SCHEMA_VERSION: Final = "1.3"
+SCHEMA_VERSION: Final = "1.4"
 
 
 class MatchMethod(StrEnum):
@@ -95,12 +95,12 @@ class Finding(DomainModel):
 
     ``path`` locates the object, e.g. ``details/table_product_sales/filters/
     visual_filter_category`` or ``model/Sales/Total Sales``. ``severity`` is
-    set by ``diff.severity``; findings are created with the lowest level.
+    required; ``diff.severity.make_finding`` sets the usual level.
     """
 
     category: Category
     change: ChangeKind
-    severity: Severity = Severity.INFO
+    severity: Severity
     path: str
     message: str
     old: str | None = None
@@ -180,11 +180,12 @@ class DiffResult(DomainModel):
 
     Schema history: 1.0 had sources and findings; 1.1 added ``pages``;
     1.2 added the ``data`` category and per-visual ``data`` summaries;
-    1.3 added ``severity`` on findings and ``severity_counts``.
+    1.3 added ``severity`` on findings and ``severity_counts``; 1.4 added
+    ``data_values_shown`` (row keys and values are masked unless it is true).
     """
 
     # Keep the Literal in sync with SCHEMA_VERSION (enforced by a test).
-    schema_version: Literal["1.3"] = SCHEMA_VERSION
+    schema_version: Literal["1.4"] = SCHEMA_VERSION
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()
@@ -195,6 +196,7 @@ class DiffResult(DomainModel):
     )
     pages: tuple[PageView, ...] = ()
     data: tuple[DataSummary, ...] = ()
+    data_values_shown: bool = False
 
     @field_validator("findings")
     @classmethod

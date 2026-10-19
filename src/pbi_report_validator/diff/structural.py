@@ -7,6 +7,7 @@ between versions; messages use display names where they help a reader.
 
 from collections.abc import Sequence
 
+from pbi_report_validator.diff.severity import make_finding
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -69,9 +70,9 @@ def _broken(issues: Sequence[ParseIssue]) -> set[str]:
 
 
 def _page_added(page: Page) -> Finding:
-    return Finding(
-        category=Category.PAGE,
-        change=ChangeKind.ADDED,
+    return make_finding(
+        Category.PAGE,
+        ChangeKind.ADDED,
         path=page.name,
         message=f"Page '{page.display_name}' added with {_count(page)}",
         new=page.display_name,
@@ -79,9 +80,9 @@ def _page_added(page: Page) -> Finding:
 
 
 def _page_removed(page: Page) -> Finding:
-    return Finding(
-        category=Category.PAGE,
-        change=ChangeKind.REMOVED,
+    return make_finding(
+        Category.PAGE,
+        ChangeKind.REMOVED,
         path=page.name,
         message=f"Page '{page.display_name}' removed with {_count(page)}",
         old=page.display_name,
@@ -101,9 +102,9 @@ def _reordered_pages(pages: tuple[PageMatch, ...]) -> list[Finding]:
         m.old.name: i for i, m in enumerate(sorted(pages, key=lambda m: m.new.ordinal))
     }
     return [
-        Finding(
-            category=Category.PAGE,
-            change=ChangeKind.REORDERED,
+        make_finding(
+            Category.PAGE,
+            ChangeKind.REORDERED,
             path=m.old.name,
             message=f"Page '{m.new.display_name}' moved from position "
             f"{old_rank[m.old.name] + 1} to {new_rank[m.old.name] + 1}",
@@ -119,9 +120,9 @@ def _page_changes(match: PageMatch) -> list[Finding]:
     findings = []
     if match.old.display_name != match.new.display_name:
         findings.append(
-            Finding(
-                category=Category.PAGE,
-                change=ChangeKind.RENAMED,
+            make_finding(
+                Category.PAGE,
+                ChangeKind.RENAMED,
                 path=match.old.name,
                 message=f"Page renamed from '{match.old.display_name}' "
                 f"to '{match.new.display_name}'",
@@ -131,9 +132,9 @@ def _page_changes(match: PageMatch) -> list[Finding]:
         )
     if match.old.name != match.new.name:
         findings.append(
-            Finding(
-                category=Category.PAGE,
-                change=ChangeKind.RENAMED,
+            make_finding(
+                Category.PAGE,
+                ChangeKind.RENAMED,
                 path=match.old.name,
                 message=f"Page '{match.new.display_name}' has a new id; "
                 "matched by display name",
@@ -150,9 +151,9 @@ def _page_changes(match: PageMatch) -> list[Finding]:
 
 
 def _visual_added(page: str, visual: Visual) -> Finding:
-    return Finding(
-        category=Category.VISUAL,
-        change=ChangeKind.ADDED,
+    return make_finding(
+        Category.VISUAL,
+        ChangeKind.ADDED,
         path=f"{page}/{visual.name}",
         message=f"{_describe(visual)} added",
         new=visual.visual_type,
@@ -160,9 +161,9 @@ def _visual_added(page: str, visual: Visual) -> Finding:
 
 
 def _visual_removed(page: str, visual: Visual) -> Finding:
-    return Finding(
-        category=Category.VISUAL,
-        change=ChangeKind.REMOVED,
+    return make_finding(
+        Category.VISUAL,
+        ChangeKind.REMOVED,
         path=f"{page}/{visual.name}",
         message=f"{_describe(visual)} removed",
         old=visual.visual_type,
@@ -183,9 +184,9 @@ def _visual_changes(page: str, match: VisualMatch) -> list[Finding]:
 def _new_id(path: str, match: VisualMatch) -> Finding | None:
     if match.method != MatchMethod.SIMILARITY:
         return None
-    return Finding(
-        category=Category.VISUAL,
-        change=ChangeKind.RENAMED,
+    return make_finding(
+        Category.VISUAL,
+        ChangeKind.RENAMED,
         path=path,
         message=f"{_describe(match.new)} has a new id; matched by similarity "
         f"({match.score:.2f})",
@@ -197,9 +198,9 @@ def _new_id(path: str, match: VisualMatch) -> Finding | None:
 def _retyped(path: str, old: Visual, new: Visual) -> Finding | None:
     if old.visual_type == new.visual_type:
         return None
-    return Finding(
-        category=Category.VISUAL,
-        change=ChangeKind.RETYPED,
+    return make_finding(
+        Category.VISUAL,
+        ChangeKind.RETYPED,
         path=path,
         message=f"{_describe(old)} changed type to {new.visual_type}",
         old=old.visual_type,
@@ -210,9 +211,9 @@ def _retyped(path: str, old: Visual, new: Visual) -> Finding | None:
 def _retitled(path: str, old: Visual, new: Visual) -> Finding | None:
     if old.title == new.title:
         return None
-    return Finding(
-        category=Category.VISUAL,
-        change=ChangeKind.MODIFIED,
+    return make_finding(
+        Category.VISUAL,
+        ChangeKind.MODIFIED,
         path=path,
         message=f"Title of {old.visual_type} '{old.name}' changed",
         old=old.title,
@@ -224,9 +225,9 @@ def _moved(path: str, old: Visual, new: Visual) -> Finding | None:
     movement = _movement(old.position, new.position)
     if not movement:
         return None
-    return Finding(
-        category=Category.VISUAL,
-        change=ChangeKind.MOVED,
+    return make_finding(
+        Category.VISUAL,
+        ChangeKind.MOVED,
         path=path,
         message=f"{_describe(new)} {movement}",
         old=_format_position(old.position),

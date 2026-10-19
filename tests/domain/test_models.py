@@ -120,12 +120,14 @@ def test_diff_result_sorts_findings_and_sets_schema_version() -> None:
     later = Finding(
         category=Category.VISUAL,
         change=ChangeKind.MOVED,
+        severity=Severity.INFO,
         path="overview/chart",
         message="Visual moved",
     )
     earlier = Finding(
         category=Category.PAGE,
         change=ChangeKind.ADDED,
+        severity=Severity.INFO,
         path="details",
         message="Page added",
     )
@@ -141,6 +143,7 @@ def test_diff_result_order_is_independent_of_input_order() -> None:
     first = Finding(
         category=Category.FILTER,
         change=ChangeKind.MODIFIED,
+        severity=Severity.INFO,
         path="overview/card",
         message="Filter changed",
         old="a",
