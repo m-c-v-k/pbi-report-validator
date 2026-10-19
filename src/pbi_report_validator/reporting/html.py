@@ -14,6 +14,7 @@ from pbi_report_validator.reporting.labels import (
     CATEGORY_LABELS,
     STATUS_LABELS,
     STATUS_MARKS,
+    UNMASKED_WARNING,
     data_overview,
 )
 
@@ -48,6 +49,7 @@ def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
         visual_key=lambda finding: visual_key(finding, keys),
         result=result,
         tool_version=tool_version,
+        unmasked_warning=UNMASKED_WARNING,
         categories=[
             (c.value, CATEGORY_LABELS[c], counts[c]) for c in Category if counts[c]
         ],

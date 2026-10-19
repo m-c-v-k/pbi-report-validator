@@ -50,11 +50,16 @@ class InvalidDataOptionsError(ValueError):
 
 
 class DataSettings(DomainModel):
-    """What ``--data`` compares against."""
+    """What ``--data`` compares against.
+
+    ``show_values`` puts row keys and values in the findings; by default
+    they are masked.
+    """
 
     old_dataset: str
     new_dataset: str
     tolerance: Tolerance = Tolerance()
+    show_values: bool = False
 
 
 @dataclass(frozen=True)
@@ -70,6 +75,7 @@ def data_settings(
     new_dataset: str | None,
     absolute: float = 0.0,
     relative: float = 1e-9,
+    show_values: bool = False,
 ) -> DataSettings:
     """Settings from the CLI options.
 
@@ -82,6 +88,7 @@ def data_settings(
         old_dataset=old_dataset,
         new_dataset=new_dataset,
         tolerance=Tolerance(absolute=absolute, relative=relative),
+        show_values=show_values,
     )
 
 
@@ -157,7 +164,13 @@ def _compare(
         if new in new_query.values
     ]
     comparison = compare_results(
-        path, old_result, new_result, keys, values, settings.tolerance
+        path,
+        old_result,
+        new_result,
+        keys,
+        values,
+        settings.tolerance,
+        show_values=settings.show_values,
     )
     only_old = [old for old, new in paired.items() if new not in new_query.values]
     only_new = [n for n in new_query.values if n not in paired.values()]
