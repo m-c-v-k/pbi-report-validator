@@ -10,3 +10,11 @@ updates:
     target-branch: develop
     schedule:
       interval: weekly
+    # The stack is fixed at Python 3.12 (see CLAUDE.md); moving to a newer
+    # Python is a deliberate change with its own issue. Digest and patch
+    # updates of the 3.12 image still come through.
+    ignore:
+      - dependency-name: python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
