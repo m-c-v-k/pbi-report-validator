@@ -19,7 +19,6 @@ from pbi_report_validator.reporting.terminal import (
     format_unmasked_warning,
 )
 from pbi_report_validator.services.data import (
-    DataRun,
     InvalidDataOptionsError,
     create_runner,
     data_settings,
@@ -164,8 +163,8 @@ def diff(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(EXIT_USAGE) from exc
     try:
-        run = DataRun(settings, create_runner(os.environ)) if settings else None
-        result = validate(old, new, run)
+        runner = create_runner(os.environ) if settings else None
+        result = validate(old, new, settings, runner)
         if json_path is not None:
             write_json(result, json_path)
         if markdown_path is not None:

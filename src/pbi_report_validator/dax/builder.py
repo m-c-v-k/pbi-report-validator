@@ -25,7 +25,9 @@ row shows as missing rather than as blank in a data comparison.
 import re
 from collections.abc import Sequence
 from datetime import datetime
+from typing import assert_never
 
+from pbi_report_validator.domain.helpers import field_key
 from pbi_report_validator.domain.models import (
     AllCondition,
     BinaryCondition,
@@ -190,7 +192,9 @@ def _predicate(condition: Condition) -> str:
         return (
             f"({_predicate(condition.left)}) {operator} ({_predicate(condition.right)})"
         )
-    return " && ".join(f"({_predicate(item)})" for item in condition.items)
+    if isinstance(condition, AllCondition):
+        return " && ".join(f"({_predicate(item)})" for item in condition.items)
+    assert_never(condition)
 
 
 def _fields(condition: Condition) -> list[FieldRef]:
@@ -202,7 +206,9 @@ def _fields(condition: Condition) -> list[FieldRef]:
         return _fields(condition.operand)
     if isinstance(condition, BinaryCondition):
         return [*_fields(condition.left), *_fields(condition.right)]
-    return [f for item in condition.items for f in _fields(item)]
+    if isinstance(condition, AllCondition):
+        return [f for item in condition.items for f in _fields(item)]
+    assert_never(condition)
 
 
 def _row(values: Sequence[LiteralValue], width: int) -> str:
@@ -233,6 +239,19 @@ def column(field: FieldRef) -> str:
     """A fully qualified column reference, e.g. ``'Sales'[Amount]``."""
     table = field.table.replace("'", "''")
     return f"'{table}'[{_escape_bracket(field.name)}]"
+
+
+def result_column(reference: str) -> str:
+    """The column name ``executeQueries`` returns for a ``column()`` reference.
+
+    For example ``'Date'[Month]`` -> ``Date[Month]``: the table loses its
+    DAX quoting.
+    """
+    table, _, name = reference.partition("[")
+    return field_key(
+        table.removeprefix("'").removesuffix("'").replace("''", "'"),
+        name.removesuffix("]"),
+    )
 
 
 def text(value: str) -> str:

@@ -9,6 +9,7 @@ the same pairing.
 import math
 from collections.abc import Callable, Sequence
 
+from pbi_report_validator.domain.helpers import unique_by
 from pbi_report_validator.domain.models import (
     MatchMethod,
     Page,
@@ -165,22 +166,13 @@ def _match_by_key[T: (Page, Visual)](
     old: Sequence[T], new: Sequence[T], key: Callable[[T], str]
 ) -> tuple[list[tuple[T, T]], list[T], list[T]]:
     """Pair items whose key is equal and unique on both sides."""
-    old_by_key = _unique_by_key(old, key)
-    new_by_key = _unique_by_key(new, key)
+    old_by_key = unique_by(old, key)
+    new_by_key = unique_by(new, key)
     shared = old_by_key.keys() & new_by_key.keys()
     pairs = [(old_by_key[k], new_by_key[k]) for k in sorted(shared)]
     old_left = [item for item in old if key(item) not in shared]
     new_left = [item for item in new if key(item) not in shared]
     return pairs, old_left, new_left
-
-
-def _unique_by_key[T: (Page, Visual)](
-    items: Sequence[T], key: Callable[[T], str]
-) -> dict[str, T]:
-    counts: dict[str, int] = {}
-    for item in items:
-        counts[key(item)] = counts.get(key(item), 0) + 1
-    return {key(item): item for item in items if counts[key(item)] == 1}
 
 
 def _field_keys(visual: Visual) -> set[str]:

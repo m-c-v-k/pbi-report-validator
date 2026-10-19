@@ -14,6 +14,7 @@ they are kept as part of the DAX.
 import re
 from dataclasses import dataclass, field
 
+from pbi_report_validator.domain.helpers import field_key
 from pbi_report_validator.domain.models import (
     Column,
     Measure,
@@ -22,6 +23,7 @@ from pbi_report_validator.domain.models import (
     Table,
 )
 from pbi_report_validator.domain.raw import RawSemanticModel
+from pbi_report_validator.parsers.quoting import unquote
 
 SPACES_PER_LEVEL = 4
 EXPRESSION_DEPTH = 3  # table (0) > measure (1) > properties (2) > expression
@@ -96,7 +98,7 @@ def parse_tmdl(text: str, path: str) -> tuple[list[Table], list[ParseIssue]]:
                 tables.append(current.build())
             is_table = match is not None and match["kind"] == "table"
             current = (
-                _TableBuilder(_unquote(match["name"])) if match and is_table else None
+                _TableBuilder(unquote(match["name"])) if match and is_table else None
             )
             index += 1
         elif current and line.depth == 1 and match and match["kind"] == "measure":
@@ -118,7 +120,7 @@ def _read_measure(
     path: str,
     issues: list[ParseIssue],
 ) -> int:
-    name = _unquote(match["name"])
+    name = unquote(match["name"])
     start = lines[index]
     body, index = _collect_body(lines, index + 1, start.depth)
     expression = (
@@ -128,7 +130,7 @@ def _read_measure(
         issues.append(
             ParseIssue(
                 path=f"{path}:{start.number}",
-                message=f"measure {table.name}[{name}] has no expression",
+                message=f"measure {field_key(table.name, name)} has no expression",
             )
         )
         return index
@@ -146,7 +148,7 @@ def _read_column(
         type_match = DATA_TYPE_LINE.match(line.text)
         if line.depth == start.depth + 1 and type_match:
             data_type = type_match["value"]
-    table.columns.append(Column(name=_unquote(match["name"]), data_type=data_type))
+    table.columns.append(Column(name=unquote(match["name"]), data_type=data_type))
     return index
 
 
@@ -202,9 +204,3 @@ def _dedent(line: _Line, depth: int) -> str:
         elif text.startswith(" " * SPACES_PER_LEVEL):
             text = text[SPACES_PER_LEVEL:]
     return text
-
-
-def _unquote(name: str) -> str:
-    if len(name) >= 2 and name.startswith("'") and name.endswith("'"):
-        return name[1:-1].replace("''", "'")
-    return name

@@ -6,10 +6,12 @@ import pytest
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
+    DataSettings,
     DiffResult,
     Finding,
     Severity,
 )
+from pbi_report_validator.services.data import InvalidDataOptionsError
 from pbi_report_validator.services.validate import failure_reasons, validate
 from tests.factories import FIXTURES
 
@@ -123,3 +125,10 @@ def test_failure_reasons(
     result = result_with(WARNING, DATA_ERROR)
 
     assert failure_reasons(result, fail_on, fail_on_data_error) == expected
+
+
+def test_data_settings_without_runner_is_rejected() -> None:
+    settings = DataSettings(old_dataset="a", new_dataset="b")
+
+    with pytest.raises(InvalidDataOptionsError):
+        validate(FIXTURES / "sales_v1", FIXTURES / "sales_v2", settings)

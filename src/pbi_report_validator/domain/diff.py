@@ -4,7 +4,7 @@ from collections import Counter
 from enum import StrEnum
 from typing import Final, Literal
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, TypeAdapter, field_validator, model_validator
 
 from pbi_report_validator.domain.base import DomainModel
 from pbi_report_validator.domain.data import DataSummary
@@ -95,7 +95,7 @@ class Finding(DomainModel):
 
     ``path`` locates the object, e.g. ``details/table_product_sales/filters/
     visual_filter_category`` or ``model/Sales/Total Sales``. ``severity`` is
-    required; ``diff.severity.default_severity`` gives the usual level.
+    required; ``diff.severity.make_finding`` sets the usual level.
     """
 
     category: Category
@@ -160,11 +160,31 @@ class PageView(DomainModel):
     visuals: tuple[VisualView, ...] = ()
 
 
+class RowComparison(DomainModel):
+    """The outcome of comparing the aligned rows of one visual.
+
+    ``rows_differing`` counts rows present in both versions with at least
+    one differing value; ``deltas`` are all numeric differences, including
+    those within the tolerance.
+    """
+
+    findings: tuple[Finding, ...] = ()
+    rows_differing: int = Field(default=0, ge=0)
+    deltas: tuple[float, ...] = ()
+
+
 class DataComparison(DomainModel):
     """Summary and findings from comparing one visual's data."""
 
     summary: DataSummary
     findings: tuple[Finding, ...] = ()
+
+
+class MeasureDiff(DomainModel):
+    """Measure findings plus the renames found, keyed by old field key."""
+
+    findings: tuple[Finding, ...] = ()
+    renames: dict[str, str] = Field(default_factory=dict)
 
 
 class SeverityCounts(DomainModel):
@@ -189,11 +209,8 @@ class DiffResult(DomainModel):
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()
-    # Always derived from ``findings``; any value passed in is replaced. Must
-    # stay declared after ``findings``: validators only see earlier fields.
-    severity_counts: SeverityCounts = Field(
-        default_factory=SeverityCounts, validate_default=True
-    )
+    # Always derived from ``findings``; any value passed in is replaced.
+    severity_counts: SeverityCounts = Field(default_factory=SeverityCounts)
     pages: tuple[PageView, ...] = ()
     data: tuple[DataSummary, ...] = ()
     data_values_shown: bool = False
@@ -203,11 +220,16 @@ class DiffResult(DomainModel):
     def _sort_findings(cls, findings: tuple[Finding, ...]) -> tuple[Finding, ...]:
         return tuple(sorted(findings, key=lambda f: f.sort_key))
 
-    @field_validator("severity_counts")
+    @model_validator(mode="before")
     @classmethod
-    def _count_severities(
-        cls, _: SeverityCounts, info: ValidationInfo
-    ) -> SeverityCounts:
-        findings: tuple[Finding, ...] = info.data.get("findings", ())
+    def _count_severities(cls, data: object) -> object:
+        """Replace ``severity_counts`` with the counts of ``findings``."""
+        if not isinstance(data, dict):
+            return data
+        findings = _FINDINGS.validate_python(data.get("findings", ()))
         counts = Counter(f.severity for f in findings)
-        return SeverityCounts(**{s.value: counts[s] for s in Severity})
+        severity_counts = SeverityCounts(**{s.value: counts[s] for s in Severity})
+        return {**data, "severity_counts": severity_counts}
+
+
+_FINDINGS: Final = TypeAdapter(tuple[Finding, ...])

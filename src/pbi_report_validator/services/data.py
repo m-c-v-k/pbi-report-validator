@@ -8,24 +8,24 @@ are never sent anywhere else.
 
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from typing import Protocol
 
-from pbi_report_validator.dax.builder import build_query
+from pbi_report_validator.dax.builder import build_query, result_column
 from pbi_report_validator.diff.data import compare_results, not_validated
-from pbi_report_validator.diff.severity import default_severity
+from pbi_report_validator.diff.severity import make_finding
+from pbi_report_validator.domain.helpers import field_name, visual_path
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
     DataComparison,
+    DataSettings,
     DaxQuery,
-    DomainModel,
-    Finding,
     QueryResult,
     Report,
     ReportMatch,
     Tolerance,
     UnsupportedQuery,
+    ValuePairing,
 )
 from pbi_report_validator.integrations.config import load_powerbi_config
 from pbi_report_validator.integrations.powerbi import (
@@ -48,27 +48,6 @@ class QueryRunner(Protocol):
 
 class InvalidDataOptionsError(ValueError):
     """The data validation options are incomplete or inconsistent."""
-
-
-class DataSettings(DomainModel):
-    """What ``--data`` compares against.
-
-    ``show_values`` puts row keys and values in the findings; by default
-    they are masked.
-    """
-
-    old_dataset: str
-    new_dataset: str
-    tolerance: Tolerance = Tolerance()
-    show_values: bool = False
-
-
-@dataclass(frozen=True)
-class DataRun:
-    """Data validation settings plus the runner that executes the queries."""
-
-    settings: DataSettings
-    runner: QueryRunner
 
 
 def data_settings(
@@ -128,7 +107,7 @@ def validate_data(
         for visual_match in page_match.visuals:
             if visual_match.old.slicer or visual_match.new.slicer:
                 continue
-            path = f"{page_match.old.name}/{visual_match.old.name}"
+            path = visual_path(page_match.old.name, visual_match.old.name)
             old_query = build_query(visual_match.old, page_match.old, old.filters)
             new_query = build_query(visual_match.new, page_match.new, new.filters)
             comparisons.append(
@@ -183,29 +162,23 @@ def _comparable_queries(
     return old, new
 
 
-@dataclass(frozen=True)
-class _ValuePairs:
-    """Value columns to compare, and the values found in one version only."""
-
-    columns: list[tuple[str, str]]
-    only_old: list[str]
-    only_new: list[str]
-
-
 def _pair_values(
     old: Sequence[str], new: Sequence[str], value_renames: Mapping[str, str]
-) -> _ValuePairs:
+) -> ValuePairing:
     """Pair old and new value names, following measure renames."""
     renamed = {name: value_renames.get(name, name) for name in old}
-    return _ValuePairs(
-        columns=[(f"[{o}]", f"[{n}]") for o, n in renamed.items() if n in new],
-        only_old=[o for o, n in renamed.items() if n not in new],
-        only_new=[n for n in new if n not in renamed.values()],
+    return ValuePairing(
+        columns=tuple((f"[{o}]", f"[{n}]") for o, n in renamed.items() if n in new),
+        only_old=tuple(o for o, n in renamed.items() if n not in new),
+        only_new=tuple(n for n in new if n not in renamed.values()),
     )
 
 
 def _with_unpaired(
-    comparison: DataComparison, path: str, only_old: list[str], only_new: list[str]
+    comparison: DataComparison,
+    path: str,
+    only_old: Sequence[str],
+    only_new: Sequence[str],
 ) -> DataComparison:
     """Note values that exist in only one version, so they are not hidden."""
     parts = [f"[{n}] is only in the old visual" for n in only_old]
@@ -213,10 +186,9 @@ def _with_unpaired(
     if not parts:
         return comparison
     note = "not compared: " + "; ".join(parts)
-    finding = Finding(
-        category=Category.DATA,
-        change=ChangeKind.ERROR,
-        severity=default_severity(Category.DATA, ChangeKind.ERROR),
+    finding = make_finding(
+        Category.DATA,
+        ChangeKind.ERROR,
         path=f"{path}/data",
         message=f"Data partly validated, {note}",
     )
@@ -224,16 +196,6 @@ def _with_unpaired(
     return DataComparison(summary=summary, findings=(*comparison.findings, finding))
 
 
-def result_column(reference: str) -> str:
-    """The API's name for a group-by column: ``'Date'[Month]`` -> ``Date[Month]``."""
-    table, _, column = reference.partition("[")
-    name = table.removeprefix("'").removesuffix("'").replace("''", "'")
-    return f"{name}[{column}"
-
-
 def _value_renames(renames: Mapping[str, str]) -> dict[str, str]:
     """Measure renames by name: ``Sales[Margin %]`` -> ``Margin %``."""
-    return {
-        old.partition("[")[2].removesuffix("]"): new.partition("[")[2].removesuffix("]")
-        for old, new in renames.items()
-    }
+    return {field_name(old): field_name(new) for old, new in renames.items()}

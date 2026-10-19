@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from pbi_report_validator.domain.base import DomainModel
+from pbi_report_validator.domain.helpers import field_key
 
 
 class FieldKind(StrEnum):
@@ -29,7 +30,7 @@ class FieldRef(DomainModel):
     @property
     def key(self) -> str:
         """DAX-style identifier, e.g. ``Sales[Total Sales]``."""
-        return f"{self.table}[{self.name}]"
+        return field_key(self.table, self.name)
 
 
 class Projection(DomainModel):
