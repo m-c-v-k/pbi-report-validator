@@ -60,7 +60,7 @@ matching/     Pair old and new pages/visuals/fields (deterministic first, AI fal
 diff/         Pure functions: domain models → diff models.
 dax/          Pure functions: visual + filter context → DAX query string.
 reporting/    Diff models → JSON / Markdown / HTML.
-domain/       Pydantic models only. No I/O, no imports from other layers.
+domain/       Pydantic models and pure helpers on them. No I/O, no imports from other layers.
 integrations/ ALL I/O: filesystem, Power BI REST API, Anthropic API, env config.
 ```
 
@@ -75,8 +75,13 @@ integrations/ ALL I/O: filesystem, Power BI REST API, Anthropic API, env config.
   swallow exceptions. A visual that cannot be parsed or queried becomes a
   finding in the report, not a crash of the whole run.
 - Output is deterministic (stable ordering) and the JSON has a `schema_version`.
+- Shared conventions every layer needs (the `page/visual` path, the
+  `Table[Name]` field key) live as pure helper functions in `domain/`, never as
+  f-strings repeated across layers.
 - Tests are written alongside implementation, not after. Every diff category has
-  an old/new fixture pair in `tests/fixtures/` that demonstrates it.
+  an old/new fixture pair in `tests/fixtures/` that demonstrates it. The `data`
+  category needs a published dataset, so it is demonstrated with recorded query
+  results (a fake query runner) instead.
 
 ### Power BI formats (domain notes)
 
