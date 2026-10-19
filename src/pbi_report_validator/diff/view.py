@@ -84,15 +84,7 @@ def _unmatched_visual(
     versions but failed to parse in one; it is shown as modified.
     """
     status = _one_sided_status(f"{page}/{visual.name}", change, changes)
-    is_old = change == ChangeKind.REMOVED
-    return VisualView(
-        name=visual.name,
-        visual_type=visual.visual_type,
-        title=visual.title,
-        status=status,
-        old_position=visual.position if is_old else None,
-        new_position=None if is_old else visual.position,
-    )
+    return _one_sided_view(visual, status, is_old=change == ChangeKind.REMOVED)
 
 
 def _whole_page(
@@ -114,16 +106,21 @@ def _whole_page(
         width=page.width,
         height=page.height,
         visuals=tuple(
-            VisualView(
-                name=v.name,
-                visual_type=v.visual_type,
-                title=v.title,
-                status=status,
-                old_position=v.position if is_old else None,
-                new_position=None if is_old else v.position,
-            )
+            _one_sided_view(v, status, is_old)
             for v in sorted(page.visuals, key=lambda v: v.name)
         ),
+    )
+
+
+def _one_sided_view(visual: Visual, status: ItemStatus, is_old: bool) -> VisualView:
+    """A visual that has a position in the old or the new version only."""
+    return VisualView(
+        name=visual.name,
+        visual_type=visual.visual_type,
+        title=visual.title,
+        status=status,
+        old_position=visual.position if is_old else None,
+        new_position=None if is_old else visual.position,
     )
 
 

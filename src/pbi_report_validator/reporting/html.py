@@ -6,6 +6,7 @@ no network requests and works offline, as a CI artifact or on GitHub Pages.
 """
 
 from collections import Counter
+from collections.abc import Sequence
 
 from jinja2 import Environment, StrictUndefined
 
@@ -14,6 +15,7 @@ from pbi_report_validator.reporting.labels import (
     CATEGORY_LABELS,
     STATUS_LABELS,
     STATUS_MARKS,
+    UNMASKED_WARNING,
     data_overview,
 )
 
@@ -44,10 +46,11 @@ def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
     return environment.from_string(template_source).render(
         data_overview=data_overview(result),
         data_by_path={s.path: s for s in result.data},
-        details=visual_findings(result),
+        details=visual_findings(result.findings, keys),
         visual_key=lambda finding: visual_key(finding, keys),
         result=result,
         tool_version=tool_version,
+        unmasked_warning=UNMASKED_WARNING,
         categories=[
             (c.value, CATEGORY_LABELS[c], counts[c]) for c in Category if counts[c]
         ],
@@ -58,15 +61,16 @@ def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
     )
 
 
-def visual_findings(result: DiffResult) -> dict[str, list[Finding]]:
+def visual_findings(
+    findings: Sequence[Finding], keys: set[str]
+) -> dict[str, list[Finding]]:
     """Group findings by the visual they belong to (``page/visual``).
 
     Includes findings inside a visual (fields, filters) and parse issues on
-    its ``visual.json``. Findings not tied to a visual are left out.
+    its ``visual.json``. Findings not tied to one of ``keys`` are left out.
     """
-    keys = {f"{p.name}/{v.name}" for p in result.pages for v in p.visuals}
     grouped: dict[str, list[Finding]] = {}
-    for finding in result.findings:
+    for finding in findings:
         key = visual_key(finding, keys)
         if key is not None:
             grouped.setdefault(key, []).append(finding)

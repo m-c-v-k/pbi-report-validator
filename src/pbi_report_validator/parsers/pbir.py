@@ -110,20 +110,20 @@ def _parse_visual_or_issue(
     content = _content_or_issue(raw, issues, visual=key)
     if content is None:
         return None
+    visual, problems = _try_parse_visual(content)
+    issues.extend(ParseIssue(path=raw.path, message=m, visual=key) for m in problems)
+    return visual
+
+
+def _try_parse_visual(content: dict[str, Any]) -> tuple[Visual | None, list[str]]:
+    """The visual and its problems, or ``None`` and why it could not be parsed."""
     problems: list[str] = []
     try:
-        visual = parse_visual(content, problems)
+        return parse_visual(content, problems), problems
     except VisualParseError as exc:
-        problems = [str(exc)]
+        return None, [str(exc)]
     except ValidationError as exc:
-        problems = [_first_error(exc)]
-    else:
-        issues.extend(
-            ParseIssue(path=raw.path, message=m, visual=key) for m in problems
-        )
-        return visual
-    issues.extend(ParseIssue(path=raw.path, message=m, visual=key) for m in problems)
-    return None
+        return None, [_first_error(exc)]
 
 
 def parse_visual(content: dict[str, Any], problems: list[str]) -> Visual:
