@@ -57,6 +57,18 @@ def test_missing_project_exits_with_error(tmp_path: Path) -> None:
     assert "Error:" in result.stderr
 
 
+def test_unreadable_folder_exits_with_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def deny(self: Path) -> None:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "iterdir", deny)
+    result = runner.invoke(app, ["diff", OLD, NEW])
+
+    assert result.exit_code == 1
+    assert "Error:" in result.stderr
+    assert "could not list folder" in result.stderr
+
+
 def test_unwritable_json_path_exits_with_error(tmp_path: Path) -> None:
     blocker = tmp_path / "file"
     blocker.write_text("")

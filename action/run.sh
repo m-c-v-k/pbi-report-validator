@@ -18,9 +18,14 @@ if [[ "$GITHUB_WORKSPACE" == /__w/* ]]; then
 fi
 
 # Only the workspace and the runner's temp folder are mounted; a path
-# elsewhere would be read or written inside the container and lost.
+# elsewhere would be read or written inside the container and lost. A ".."
+# segment could lead a relative path out of the workspace, and the outputs
+# are removed on the runner below.
 check_path() {
   local path="$2"
+  if [[ "$path" =~ (^|/)\.\.(/|$) ]]; then
+    fail_usage "Input $1 must not contain a '..' path segment: $path"
+  fi
   [[ -z "$path" || "$path" != /* ]] && return 0
   case "$path" in
     "$GITHUB_WORKSPACE"/* | "$RUNNER_TEMP"/*) return 0 ;;
