@@ -9,8 +9,10 @@ from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
     DataStatus,
+    DaxQuery,
     QueryResult,
     Severity,
+    UnsupportedQuery,
 )
 from pbi_report_validator.integrations.powerbi import (
     AuthenticationError,
@@ -26,6 +28,8 @@ from pbi_report_validator.services.data import (
     DataRun,
     DataSettings,
     InvalidDataOptionsError,
+    _comparable_queries,
+    _pair_values,
     _with_unpaired,
     data_settings,
     result_column,
@@ -417,3 +421,36 @@ def test_not_fully_validated_selects_data_errors() -> None:
     }
     not_validated = [s for s in result.data if s.status == DataStatus.NOT_VALIDATED]
     assert len(unchecked) >= len(not_validated)
+
+
+BY_MONTH = DaxQuery(dax="q1", group_by=("'Date'[Month]",), values=("Sales",))
+BY_YEAR = DaxQuery(dax="q2", group_by=("'Date'[Year]",), values=("Sales",))
+UNSUPPORTED = UnsupportedQuery(reason="visual type map is not supported")
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "expected"),
+    [
+        (UNSUPPORTED, BY_MONTH, "visual type map is not supported"),
+        (BY_MONTH, UNSUPPORTED, "visual type map is not supported"),
+        (BY_MONTH, BY_YEAR, "the visual is grouped by different columns"),
+        (BY_MONTH, BY_MONTH, (BY_MONTH, BY_MONTH)),
+    ],
+)
+def test_comparable_queries(
+    old: DaxQuery | UnsupportedQuery,
+    new: DaxQuery | UnsupportedQuery,
+    expected: tuple[DaxQuery, DaxQuery] | str,
+) -> None:
+    assert _comparable_queries(old, new) == expected
+
+
+def test_pair_values_follows_renames_and_lists_unpaired() -> None:
+    pairs = _pair_values(
+        ("Margin %", "Sales", "Old only"),
+        ("Gross Margin %", "Sales", "New only"),
+        {"Margin %": "Gross Margin %"},
+    )
+
+    assert pairs.columns == [("[Margin %]", "[Gross Margin %]"), ("[Sales]", "[Sales]")]
+    assert (pairs.only_old, pairs.only_new) == (["Old only"], ["New only"])
