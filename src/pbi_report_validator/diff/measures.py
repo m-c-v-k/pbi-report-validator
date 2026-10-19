@@ -10,27 +10,18 @@ the same change cannot be recognised. It is reported as removed plus
 added, and fields and filters that use it are reported as changed too.
 """
 
-from pydantic import Field
-
 from pbi_report_validator.diff.severity import make_finding
 from pbi_report_validator.domain.helpers import field_key, unique_by
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
-    DomainModel,
     Finding,
     Measure,
+    MeasureDiff,
     SemanticModel,
 )
 
 MODEL_PATH = "model"
-
-
-class MeasureDiff(DomainModel):
-    """Measure findings plus the renames found, keyed by old field key."""
-
-    findings: tuple[Finding, ...] = ()
-    renames: dict[str, str] = Field(default_factory=dict)
 
 
 def diff_measures(old: SemanticModel | None, new: SemanticModel | None) -> MeasureDiff:
