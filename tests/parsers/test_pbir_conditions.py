@@ -145,7 +145,7 @@ def test_unsupported_filter_has_neither_condition_nor_expression() -> None:
         "filterConfig": {"filters": [{"name": "f", "filter": query({"Between": {}})}]}
     }
 
-    (parsed,) = parse_filters(container, FilterLevel.PAGE, [])
+    (parsed,), _ = parse_filters(container, FilterLevel.PAGE)
 
     assert (parsed.condition, parsed.expression) == (None, None)
 
