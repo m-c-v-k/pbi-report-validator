@@ -84,5 +84,5 @@ def visual_key(finding: Finding, keys: set[str]) -> str | None:
     Parse issues name their visual; other findings point into it with a path
     that starts with ``page/visual``.
     """
-    candidate = finding.visual or visual_path_of(finding.path)
+    candidate = finding.visual_path or visual_path_of(finding.path)
     return candidate if candidate in keys else None

@@ -13,7 +13,7 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from pbi_report_validator.dax.builder import build_query, result_column
-from pbi_report_validator.diff.data import compare_results, not_validated
+from pbi_report_validator.diff.results import compare_results, not_validated
 from pbi_report_validator.diff.severity import make_finding
 from pbi_report_validator.domain.helpers import field_name, visual_path
 from pbi_report_validator.domain.models import (

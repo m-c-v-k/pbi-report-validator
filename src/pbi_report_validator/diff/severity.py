@@ -46,7 +46,7 @@ def make_finding(
     message: str,
     old: str | None = None,
     new: str | None = None,
-    visual: str | None = None,
+    visual_path: str | None = None,
 ) -> Finding:
     """A finding with the default severity of its category and change."""
     return Finding(
@@ -57,7 +57,7 @@ def make_finding(
         message=message,
         old=old,
         new=new,
-        visual=visual,
+        visual_path=visual_path,
     )
 
 

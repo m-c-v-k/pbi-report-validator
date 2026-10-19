@@ -7,7 +7,7 @@ re-exports them all.
 """
 
 from pbi_report_validator.domain.base import DomainModel
-from pbi_report_validator.domain.data import (
+from pbi_report_validator.domain.data_validation import (
     CellValue,
     DataSettings,
     DataStatus,

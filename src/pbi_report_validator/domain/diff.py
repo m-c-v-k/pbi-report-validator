@@ -7,7 +7,7 @@ from typing import Final, Literal
 from pydantic import Field, TypeAdapter, field_validator, model_validator
 
 from pbi_report_validator.domain.base import DomainModel
-from pbi_report_validator.domain.data import DataSummary
+from pbi_report_validator.domain.data_validation import DataSummary
 from pbi_report_validator.domain.report import (
     Page,
     Position,
@@ -108,7 +108,7 @@ class Finding(DomainModel):
     # The ``page/visual`` a parse issue belongs to. Used to show the issue on
     # its visual in the HTML report; not part of the JSON output (schema
     # unchanged), since it is already implied by ``path``.
-    visual: str | None = Field(default=None, exclude=True)
+    visual_path: str | None = Field(default=None, exclude=True)
 
     @property
     def sort_key(self) -> tuple[str, str, str, str, str, str]:
