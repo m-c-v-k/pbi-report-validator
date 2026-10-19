@@ -1,0 +1,28 @@
+table Product
+	lineageTag: 1dc6571d-2877-5bfe-a80d-5e1d6764e9b8
+
+	column ProductKey
+		dataType: int64
+		lineageTag: 8336e6e0-aa51-5a37-8ea8-5be56fbf47d6
+		summarizeBy: none
+		sourceColumn: ProductKey
+
+	column Product
+		dataType: string
+		lineageTag: 718296dc-0885-5630-b2a6-5ba078046e0c
+		summarizeBy: none
+		sourceColumn: Product
+
+	column Category
+		dataType: string
+		lineageTag: 0e944d13-9c77-5c78-a941-7874668ab808
+		summarizeBy: none
+		sourceColumn: Category
+
+	partition Product = m
+		mode: import
+		source =
+				let
+				    Source = #table(type table [ProductKey = Int64.Type, Product = text, Category = text], {{1, "Road Bike", "Bikes"}, {2, "Jersey", "Clothing"}, {3, "Bottle", "Accessories"}})
+				in
+				    Source
