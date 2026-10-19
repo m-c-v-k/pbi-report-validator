@@ -3,11 +3,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from pbi_report_validator.cli.main import app
+from pbi_report_validator.cli.main import FailOn, app
+from pbi_report_validator.domain.models import Severity
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
+from tests.factories import REPO_ROOT, SNAPSHOTS
 
-REPO_ROOT = Path(__file__).parent.parent.parent
-SNAPSHOT = REPO_ROOT / "tests/snapshots/diff_sales_v1_v2.json"
+SNAPSHOT = SNAPSHOTS / "diff_sales_v1_v2.json"
 OLD = "tests/fixtures/sales_v1"
 NEW = "tests/fixtures/sales_v2"
 
@@ -23,7 +24,7 @@ def test_diff_prints_summary() -> None:
     result = runner.invoke(app, ["diff", OLD, NEW])
 
     assert result.exit_code == 0
-    assert "7 findings:" in result.stdout
+    assert "7 findings (3 critical, 2 warning, 2 info):" in result.stdout
     assert "[added] trends: Page 'Trends' added with 1 visual" in result.stdout
 
 
@@ -56,6 +57,18 @@ def test_missing_project_exits_with_error(tmp_path: Path) -> None:
     assert "Error:" in result.stderr
 
 
+def test_unreadable_folder_exits_with_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def deny(self: Path) -> None:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "iterdir", deny)
+    result = runner.invoke(app, ["diff", OLD, NEW])
+
+    assert result.exit_code == 1
+    assert "Error:" in result.stderr
+    assert "could not list folder" in result.stderr
+
+
 def test_unwritable_json_path_exits_with_error(tmp_path: Path) -> None:
     blocker = tmp_path / "file"
     blocker.write_text("")
@@ -82,7 +95,7 @@ def test_report_folder_can_be_passed_directly() -> None:
     result = runner.invoke(app, ["diff", f"{OLD}/Sales.Report", f"{NEW}/Sales.Report"])
 
     assert result.exit_code == 0
-    assert "7 findings:" in result.stdout
+    assert "7 findings (3 critical, 2 warning, 2 info):" in result.stdout
 
 
 def test_verbose_logs_progress(caplog: pytest.LogCaptureFixture) -> None:
@@ -102,7 +115,7 @@ def test_diff_markdown_matches_snapshot(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert "Markdown written to" in result.stdout
-    expected = REPO_ROOT / "tests/snapshots/diff_sales_v1_v2.md"
+    expected = SNAPSHOTS / "diff_sales_v1_v2.md"
     assert target.read_bytes() == expected.read_bytes()
 
 
@@ -141,3 +154,67 @@ def test_missing_html_template_exits_with_error(
 
     assert result.exit_code == 1
     assert "Error: template report.html.j2 not found" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("threshold", "exit_code", "message"),
+    [
+        ("none", 0, None),
+        ("info", 3, "Failed: 7 findings at info or above (--fail-on info)"),
+        ("warning", 3, "Failed: 5 findings at warning or above (--fail-on warning)"),
+        ("critical", 3, "Failed: 3 findings at critical or above (--fail-on critical)"),
+    ],
+)
+def test_fail_on_threshold(threshold: str, exit_code: int, message: str | None) -> None:
+    result = runner.invoke(app, ["diff", OLD, NEW, "--fail-on", threshold])
+
+    assert result.exit_code == exit_code
+    assert (message in result.stderr) if message else ("Failed:" not in result.stderr)
+
+
+def test_fail_on_passes_without_findings() -> None:
+    result = runner.invoke(app, ["diff", OLD, OLD, "--fail-on", "info"])
+
+    assert result.exit_code == 0
+
+
+def test_fail_on_still_writes_outputs(tmp_path: Path) -> None:
+    target = tmp_path / "diff.json"
+
+    result = runner.invoke(
+        app, ["diff", OLD, NEW, "--json", str(target), "--fail-on", "critical"]
+    )
+
+    assert result.exit_code == 3
+    assert target.read_bytes() == SNAPSHOT.read_bytes()
+
+
+def test_error_wins_over_fail_on(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["diff", str(tmp_path / "missing"), NEW, "--fail-on", "info"]
+    )
+
+    assert result.exit_code == 1
+
+
+def test_output_error_wins_over_fail_on(tmp_path: Path) -> None:
+    blocker = tmp_path / "file"
+    blocker.write_text("")
+
+    result = runner.invoke(
+        app,
+        ["diff", OLD, NEW, "--json", str(blocker / "x.json"), "--fail-on", "info"],
+    )
+
+    assert result.exit_code == 1
+    assert "Failed:" not in result.stderr
+
+
+def test_fail_on_offers_every_severity() -> None:
+    assert [v.value for v in FailOn] == ["none", *(s.value for s in Severity)]
+
+
+def test_invalid_fail_on_is_a_usage_error() -> None:
+    result = runner.invoke(app, ["diff", OLD, NEW, "--fail-on", "severe"])
+
+    assert result.exit_code == 2

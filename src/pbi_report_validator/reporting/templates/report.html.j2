@@ -44,10 +44,15 @@ tr:last-child td { border-bottom: 0; }
 .change-removed { color: var(--removed); }
 .change-error { color: var(--removed); }
 .change-modified, .change-moved, .change-retyped, .change-renamed, .change-reordered { color: var(--modified); }
+.severity { font-weight: 600; white-space: nowrap; }
+.severity-critical { color: var(--removed); }
+.severity-warning { color: var(--modified); }
+.severity-info { color: var(--unchanged); }
 .values pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
 .values .old { color: var(--removed); }
 .values .new { color: var(--added); }
 .empty { color: var(--muted); }
+.data-overview { margin: 0 0 12px; }
 footer { margin-top: 40px; color: var(--muted); font-size: 0.85rem; }
 footer a { color: var(--accent); }
 .legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 16px; padding: 0; list-style: none; color: var(--muted); }
@@ -97,10 +102,15 @@ footer a { color: var(--accent); }
 .detail-body ul { margin: 0; padding-left: 18px; }
 .detail-body li { margin: 6px 0; }
 td a, .detail-body a { color: var(--accent); }
+.unmasked { border: 3px solid var(--removed); border-radius: 8px; padding: 12px 16px; margin: 0 0 16px; }
+.unmasked strong { color: var(--removed); }
 </style>
 </head>
 <body>
 <main>
+{% if result.data_values_shown %}
+<div class="unmasked" role="alert"><strong>Warning: unmasked data.</strong> {{ unmasked_warning }}</div>
+{% endif %}
 <header>
   <h1>Power BI report diff</h1>
   <p class="sources"><code>{{ result.old_source }}</code> &rarr; <code>{{ result.new_source }}</code></p>
@@ -108,9 +118,15 @@ td a, .detail-body a { color: var(--accent); }
 
 <section aria-labelledby="summary-title">
   <h2 id="summary-title">Summary</h2>
+{% if data_overview %}
+  <p class="data-overview">{{ data_overview }}</p>
+{% endif %}
 {% if result.findings %}
   <div class="cards">
     <div class="card"><div class="n" data-count="total">{{ result.findings | length }}</div><div class="label">Findings</div></div>
+{% for key, count in severities %}
+    <div class="card"><div class="n severity-{{ key }}" data-severity-count="{{ key }}">{{ count }}</div><div class="label">{{ key | capitalize }}</div></div>
+{% endfor %}
 {% for key, label, count in categories %}
     <div class="card"><div class="n" data-count="{{ key }}">{{ count }}</div><div class="label">{{ label }}</div></div>
 {% endfor %}
@@ -195,10 +211,14 @@ td a, .detail-body a { color: var(--accent); }
         <dt>Page</dt><dd><a href="#page-{{ page.name }}">{{ page.display_name }}</a></dd>
         <dt>Type</dt><dd>{{ v.visual_type }}</dd>
         <dt>Position</dt><dd>{{ position(v.old_position) }} &rarr; {{ position(v.new_position) }}</dd>
+{% set data = data_by_path.get(key) %}
+{% if data %}
+        <dt>Data</dt><dd>{% if data.status.value == 'not_validated' %}not validated: {{ data.reason }}{% else %}{{ data.status.value }}: {{ data.rows_matched }} rows matched, {{ data.rows_differing }} differing, {{ data.rows_only_old }} only old, {{ data.rows_only_new }} only new{% if data.max_abs_delta is not none %}, largest difference {{ data.max_abs_delta }}{% endif %}{% endif %}</dd>
+{% endif %}
       </dl>
       <ul>
 {% for f in details[key] %}
-        <li><span class="change change-{{ f.change.value }}">{{ f.change.value }}</span> {{ labels[f.category.value] }}: {{ f.message }}
+        <li><span class="severity severity-{{ f.severity.value }}">{{ f.severity.value }}</span> <span class="change change-{{ f.change.value }}">{{ f.change.value }}</span> {{ labels[f.category.value] }}: {{ f.message }}
 {% if f.old is not none or f.new is not none %}
           <div class="values">
 {% if f.old is not none %}            <pre class="old">{{ f.old }}</pre>
@@ -229,13 +249,14 @@ td a, .detail-body a { color: var(--accent); }
   </div>
   <div class="table-wrap">
     <table id="findings">
-      <thead><tr><th>Change</th><th>Category</th><th>Where</th><th>What</th><th>Old &rarr; new</th></tr></thead>
+      <thead><tr><th>Severity</th><th>Change</th><th>Category</th><th>Where</th><th>What</th><th>Old &rarr; new</th></tr></thead>
       <tbody>
 {% for f in result.findings %}
-        <tr data-category="{{ f.category.value }}">
+        <tr data-category="{{ f.category.value }}" data-severity="{{ f.severity.value }}">
+          <td class="severity severity-{{ f.severity.value }}">{{ f.severity.value }}</td>
           <td class="change change-{{ f.change.value }}">{{ f.change.value }}</td>
           <td>{{ labels[f.category.value] }}</td>
-{% set target = visual_key(f.path) %}
+{% set target = visual_key(f) %}
           <td class="mono">{% if target %}<a href="#{{ target }}" data-open="{{ target }}">{{ f.path }}</a>{% else %}{{ f.path }}{% endif %}</td>
           <td>{{ f.message }}</td>
           <td class="values">

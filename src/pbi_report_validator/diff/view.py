@@ -7,6 +7,7 @@ findings. Pure functions only.
 
 from collections.abc import Sequence
 
+from pbi_report_validator.domain.helpers import is_within, visual_path
 from pbi_report_validator.domain.models import (
     ChangeKind,
     Finding,
@@ -31,8 +32,8 @@ def build_page_views(
     paths = {f.path for f in findings}
     changes = {(f.path, f.change) for f in findings}
     views = [_matched_page(m, paths, changes) for m in match.pages]
-    views += [_whole_page(p, ItemStatus.ADDED) for p in match.added_pages]
-    views += [_whole_page(p, ItemStatus.REMOVED) for p in match.removed_pages]
+    views += [_whole_page(p, ChangeKind.ADDED, changes) for p in match.added_pages]
+    views += [_whole_page(p, ChangeKind.REMOVED, changes) for p in match.removed_pages]
     return tuple(
         sorted(views, key=lambda v: (v.ordinal, v.status == ItemStatus.REMOVED, v.name))
     )
@@ -47,7 +48,7 @@ def _matched_page(
             name=v.old.name,
             visual_type=v.new.visual_type,
             title=v.new.title,
-            status=_status_if_changed(f"{page}/{v.old.name}", paths),
+            status=_status_if_changed(visual_path(page, v.old.name), paths),
             old_position=v.old.position,
             new_position=v.new.position,
         )
@@ -83,12 +84,37 @@ def _unmatched_visual(
     Without a matching added/removed finding the visual exists in both
     versions but failed to parse in one; it is shown as modified.
     """
-    path = f"{page}/{visual.name}"
-    if (path, change) not in changes:
-        status = ItemStatus.MODIFIED
-    else:
-        status = ItemStatus.ADDED if change == ChangeKind.ADDED else ItemStatus.REMOVED
+    status = _one_sided_status(visual_path(page, visual.name), change, changes)
+    return _one_sided_view(visual, status, is_old=change == ChangeKind.REMOVED)
+
+
+def _whole_page(
+    page: Page, change: ChangeKind, changes: set[tuple[str, ChangeKind]]
+) -> PageView:
+    """A page on one side only.
+
+    Without a matching added/removed finding the page exists in both
+    versions but failed to parse in one; it and its visuals are shown as
+    modified.
+    """
+    status = _one_sided_status(page.name, change, changes)
     is_old = change == ChangeKind.REMOVED
+    return PageView(
+        name=page.name,
+        display_name=page.display_name,
+        status=status,
+        ordinal=page.ordinal,
+        width=page.width,
+        height=page.height,
+        visuals=tuple(
+            _one_sided_view(v, status, is_old)
+            for v in sorted(page.visuals, key=lambda v: v.name)
+        ),
+    )
+
+
+def _one_sided_view(visual: Visual, status: ItemStatus, is_old: bool) -> VisualView:
+    """A visual that has a position in the old or the new version only."""
     return VisualView(
         name=visual.name,
         visual_type=visual.visual_type,
@@ -99,31 +125,15 @@ def _unmatched_visual(
     )
 
 
-def _whole_page(page: Page, status: ItemStatus) -> PageView:
-    is_old = status == ItemStatus.REMOVED
-    return PageView(
-        name=page.name,
-        display_name=page.display_name,
-        status=status,
-        ordinal=page.ordinal,
-        width=page.width,
-        height=page.height,
-        visuals=tuple(
-            VisualView(
-                name=v.name,
-                visual_type=v.visual_type,
-                title=v.title,
-                status=status,
-                old_position=v.position if is_old else None,
-                new_position=None if is_old else v.position,
-            )
-            for v in sorted(page.visuals, key=lambda v: v.name)
-        ),
-    )
+def _one_sided_status(
+    path: str, change: ChangeKind, changes: set[tuple[str, ChangeKind]]
+) -> ItemStatus:
+    if (path, change) not in changes:
+        return ItemStatus.MODIFIED
+    return ItemStatus.ADDED if change == ChangeKind.ADDED else ItemStatus.REMOVED
 
 
 def _status_if_changed(path: str, paths: set[str]) -> ItemStatus:
     """Modified if any finding is about ``path`` or something inside it."""
-    prefix = f"{path}/"
-    changed = path in paths or any(p.startswith(prefix) for p in paths)
+    changed = any(is_within(p, path) for p in paths)
     return ItemStatus.MODIFIED if changed else ItemStatus.UNCHANGED

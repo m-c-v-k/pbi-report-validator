@@ -9,6 +9,7 @@ the same pairing.
 import math
 from collections.abc import Callable, Sequence
 
+from pbi_report_validator.domain.helpers import unique_by
 from pbi_report_validator.domain.models import (
     MatchMethod,
     Page,
@@ -79,20 +80,10 @@ def match_visuals(
     matches = [
         VisualMatch(old=o, new=n, method=MatchMethod.ID, score=1.0) for o, n in by_id
     ]
-    # Candidates are tracked by list index, not name: a malformed page can
-    # contain duplicate visual names, and those must not hide each other.
-    candidates = sorted(
-        (
-            (score, o.name, n.name, i, j)
-            for i, o in enumerate(old_left)
-            for j, n in enumerate(new_left)
-            if (score := similarity(o, n, old, new)) >= threshold
-        ),
-        key=lambda c: (-c[0], c[1], c[2], c[3], c[4]),
-    )
+    candidates = _similarity_candidates(old_left, new_left, old, new, threshold)
     used_old: set[int] = set()
     used_new: set[int] = set()
-    for score, _, _, i, j in candidates:
+    for score, i, j in candidates:
         if i in used_old or j in used_new:
             continue
         used_old.add(i)
@@ -112,6 +103,30 @@ def match_visuals(
         sorted(removed, key=lambda v: v.name),
         sorted(added, key=lambda v: v.name),
     )
+
+
+def _similarity_candidates(
+    old_left: Sequence[Visual],
+    new_left: Sequence[Visual],
+    old_page: Page,
+    new_page: Page,
+    threshold: float,
+) -> list[tuple[float, int, int]]:
+    """``(score, old index, new index)`` pairs above the threshold, best first.
+
+    Candidates are tracked by list index, not name: a malformed page can
+    contain duplicate visual names, and those must not hide each other.
+    """
+    scored = sorted(
+        (
+            (score, o.name, n.name, i, j)
+            for i, o in enumerate(old_left)
+            for j, n in enumerate(new_left)
+            if (score := similarity(o, n, old_page, new_page)) >= threshold
+        ),
+        key=lambda c: (-c[0], c[1], c[2], c[3], c[4]),
+    )
+    return [(score, i, j) for score, _, _, i, j in scored]
 
 
 def similarity(old: Visual, new: Visual, old_page: Page, new_page: Page) -> float:
@@ -151,22 +166,13 @@ def _match_by_key[T: (Page, Visual)](
     old: Sequence[T], new: Sequence[T], key: Callable[[T], str]
 ) -> tuple[list[tuple[T, T]], list[T], list[T]]:
     """Pair items whose key is equal and unique on both sides."""
-    old_by_key = _unique_by_key(old, key)
-    new_by_key = _unique_by_key(new, key)
+    old_by_key = unique_by(old, key)
+    new_by_key = unique_by(new, key)
     shared = old_by_key.keys() & new_by_key.keys()
     pairs = [(old_by_key[k], new_by_key[k]) for k in sorted(shared)]
     old_left = [item for item in old if key(item) not in shared]
     new_left = [item for item in new if key(item) not in shared]
     return pairs, old_left, new_left
-
-
-def _unique_by_key[T: (Page, Visual)](
-    items: Sequence[T], key: Callable[[T], str]
-) -> dict[str, T]:
-    counts: dict[str, int] = {}
-    for item in items:
-        counts[key(item)] = counts.get(key(item), 0) + 1
-    return {key(item): item for item in items if counts[key(item)] == 1}
 
 
 def _field_keys(visual: Visual) -> set[str]:

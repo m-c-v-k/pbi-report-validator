@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from pbi_report_validator.diff.content import diff_content
 from pbi_report_validator.diff.measures import diff_measures
 from pbi_report_validator.diff.structural import diff_pages_and_visuals
@@ -10,8 +8,6 @@ from pbi_report_validator.domain.models import (
     FieldRef,
     Filter,
     FilterLevel,
-    Page,
-    Position,
     Projection,
     Report,
     SlicerState,
@@ -21,8 +17,9 @@ from pbi_report_validator.integrations.files import load_project
 from pbi_report_validator.matching.matcher import match_reports
 from pbi_report_validator.parsers.pbir import parse_report
 from pbi_report_validator.parsers.tmdl import parse_semantic_model
+from tests import factories
+from tests.factories import FIXTURES, fixture_report
 
-FIXTURES = Path(__file__).parent.parent / "fixtures"
 RENAMES = {"Sales[Margin %]": "Sales[Gross Margin %]"}
 
 
@@ -37,21 +34,13 @@ def visual(
     filters: tuple[Filter, ...] = (),
     slicer: SlicerState | None = None,
 ) -> Visual:
-    return Visual(
-        name="v",
-        visual_type="table",
-        position=Position(x=0, y=0, width=10, height=10),
-        projections=projections,
-        filters=filters,
-        slicer=slicer,
+    return factories.visual(
+        "v", "table", projections=projections, filters=filters, slicer=slicer
     )
 
 
 def report(v: Visual, filters: tuple[Filter, ...] = ()) -> Report:
-    page = Page(
-        name="p", display_name="P", ordinal=0, width=100, height=100, visuals=(v,)
-    )
-    return Report(filters=filters, pages=(page,))
+    return factories.report(factories.page("p", v), filters=filters)
 
 
 def content(
@@ -65,9 +54,7 @@ def content(
 def flt(
     name: str, condition: str | None, level: FilterLevel = FilterLevel.VISUAL
 ) -> Filter:
-    return Filter(
-        name=name, level=level, filter_type="Categorical", condition=condition
-    )
+    return factories.filter_card(name=name, condition=condition, level=level)
 
 
 def test_fixture_pair_gives_exactly_the_expected_changes() -> None:
@@ -105,7 +92,7 @@ def test_fixture_pair_gives_exactly_the_expected_changes() -> None:
 
 
 def test_identical_fixture_has_no_content_findings() -> None:
-    old = parse_report(load_project(FIXTURES / "sales_v1").report)
+    old = fixture_report("sales_v1")
 
     assert diff_content(old, old, match_reports(old.pages, old.pages), {}) == []
 

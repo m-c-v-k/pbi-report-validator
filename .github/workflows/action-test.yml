@@ -1,0 +1,135 @@
+name: Action
+
+# Run this repository's GitHub Action on the sample reports, so every PR
+# checks action.yml together with the code it builds.
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: action-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  self-test:
+    name: Action on the sample reports
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write  # the comment test; read-only on forks
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Run the action
+        id: diff
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          html: out/report.html
+          comment: ${{ github.event_name == 'pull_request' }}
+
+      - name: Check outputs
+        env:
+          FINDINGS: ${{ steps.diff.outputs.findings }}
+          JSON: ${{ steps.diff.outputs.json }}
+          HTML: ${{ steps.diff.outputs.html }}
+          MARKDOWN: ${{ steps.diff.outputs.markdown }}
+        run: |
+          echo "findings=$FINDINGS"
+          test "$FINDINGS" -gt 0
+          test -s "$JSON"
+          test -s "$HTML"
+          grep -q "## Power BI report diff" "$MARKDOWN"
+
+      # A second run in the same job that fails must fail the step and must
+      # not report the first run's results.
+      - name: Run the action on a missing project
+        id: missing
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/does_not_exist
+          new: tests/fixtures/sales_v2
+
+      - name: Check the failed run
+        env:
+          OUTCOME: ${{ steps.missing.outcome }}
+          FINDINGS: ${{ steps.missing.outputs.findings }}
+          JSON: ${{ steps.missing.outputs.json }}
+          FIRST_JSON: ${{ steps.diff.outputs.json }}
+        run: |
+          test "$OUTCOME" = failure
+          test -z "$FINDINGS"
+          test ! -e "$JSON"
+          test "$JSON" != "$FIRST_JSON"
+
+      # --fail-on fails the step, and the outputs are still set.
+      - name: Run the action with fail-on critical
+        id: fail-on
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          fail-on: critical
+          comment: ${{ github.event_name == 'pull_request' }}
+
+      - name: Check the fail-on run
+        env:
+          OUTCOME: ${{ steps.fail-on.outcome }}
+          CRITICAL: ${{ steps.fail-on.outputs.critical }}
+          JSON: ${{ steps.fail-on.outputs.json }}
+        run: |
+          test "$OUTCOME" = failure
+          test "$CRITICAL" -gt 0
+          test -s "$JSON"
+
+      # fail-on-data-error reaches the CLI, which rejects it without data
+      # before writing anything.
+      - name: Run the action with fail-on-data-error but no data
+        id: no-data
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          fail-on-data-error: "True"
+
+      - name: Check the fail-on-data-error run
+        env:
+          OUTCOME: ${{ steps.no-data.outcome }}
+          JSON: ${{ steps.no-data.outputs.json }}
+        run: |
+          test "$OUTCOME" = failure
+          test ! -e "$JSON"
+
+      # Both runs above compare the same versions, so the second one must have
+      # updated the first one's comment instead of adding a new one.
+      - name: Check the pull request comment
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        # The paths must match the old/new inputs above (see comment.sh).
+        run: |
+          id="$(printf '%s\n%s' tests/fixtures/sales_v1 tests/fixtures/sales_v2 | sha256sum | cut -c1-12)"
+          marker="<!-- pbi-report-validator:$id -->"
+          bodies="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --jq '.[].body')"
+          count="$(grep -cF "$marker" <<<"$bodies" || true)"
+          echo "comments with the marker: $count"
+          test "$count" -eq 1
+          grep -q "## Power BI report diff" <<<"$bodies"
+
+      - name: Upload HTML report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: pbi-validate-report
+          path: out/report.html

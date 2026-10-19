@@ -1,11 +1,8 @@
-from pathlib import Path
-
 from pbi_report_validator.domain.models import Column, Measure
 from pbi_report_validator.domain.raw import RawSemanticModel, RawTextFile
 from pbi_report_validator.integrations.files import load_project
 from pbi_report_validator.parsers.tmdl import parse_semantic_model, parse_tmdl
-
-FIXTURES = Path(__file__).parent.parent / "fixtures"
+from tests.factories import FIXTURES
 
 
 def test_parses_sales_v1_model() -> None:

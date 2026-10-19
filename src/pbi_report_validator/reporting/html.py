@@ -5,45 +5,22 @@ this module does no I/O. All CSS and JavaScript are inline; the page makes
 no network requests and works offline, as a CI artifact or on GitHub Pages.
 """
 
-import re
 from collections import Counter
+from collections.abc import Sequence
 
 from jinja2 import Environment, StrictUndefined
 
-from pbi_report_validator.domain.models import (
-    Category,
-    DiffResult,
-    Finding,
-    ItemStatus,
+from pbi_report_validator.domain.helpers import visual_path, visual_path_of
+from pbi_report_validator.domain.models import Category, DiffResult, Finding
+from pbi_report_validator.reporting.labels import (
+    CATEGORY_LABELS,
+    STATUS_LABELS,
+    STATUS_MARKS,
+    UNMASKED_WARNING,
+    data_overview,
 )
 
 REPORT_TEMPLATE = "report.html.j2"
-# Parse-issue paths point at the file, e.g. new/.../pages/p/visuals/v/visual.json
-VISUAL_FILE = re.compile(
-    r"pages/(?P<page>[^/]+)/visuals/(?P<visual>[^/]+)/visual\.json$"
-)
-CATEGORY_LABELS = {
-    Category.PAGE: "Pages",
-    Category.VISUAL: "Visuals",
-    Category.FIELD: "Fields",
-    Category.FILTER: "Filters",
-    Category.SLICER: "Slicers",
-    Category.MEASURE: "Measures",
-    Category.PARSE_ISSUE: "Parse issues",
-}
-STATUS_LABELS = {
-    ItemStatus.ADDED: "Added",
-    ItemStatus.REMOVED: "Removed",
-    ItemStatus.MODIFIED: "Modified",
-    ItemStatus.UNCHANGED: "Unchanged",
-}
-# A text mark next to the colour, so status is not conveyed by colour alone.
-STATUS_MARKS = {
-    ItemStatus.ADDED: "+",
-    ItemStatus.REMOVED: "-",
-    ItemStatus.MODIFIED: "~",
-    ItemStatus.UNCHANGED: "",
-}
 
 
 def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
@@ -66,40 +43,46 @@ def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
         keep_trailing_newline=True,
     )
     counts = Counter(f.category for f in result.findings)
-    keys = {f"{p.name}/{v.name}" for p in result.pages for v in p.visuals}
+    keys = {visual_path(p.name, v.name) for p in result.pages for v in p.visuals}
     return environment.from_string(template_source).render(
-        details=visual_findings(result),
-        visual_key=lambda path: visual_key(path, keys),
+        data_overview=data_overview(result),
+        data_by_path={s.path: s for s in result.data},
+        details=visual_findings(result.findings, keys),
+        visual_key=lambda finding: visual_key(finding, keys),
         result=result,
         tool_version=tool_version,
+        unmasked_warning=UNMASKED_WARNING,
         categories=[
             (c.value, CATEGORY_LABELS[c], counts[c]) for c in Category if counts[c]
         ],
+        severities=list(result.severity_counts.model_dump().items()),
         labels={c.value: CATEGORY_LABELS[c] for c in Category},
         status_labels={s.value: label for s, label in STATUS_LABELS.items()},
         status_marks={s.value: mark for s, mark in STATUS_MARKS.items()},
     )
 
 
-def visual_findings(result: DiffResult) -> dict[str, list[Finding]]:
+def visual_findings(
+    findings: Sequence[Finding], keys: set[str]
+) -> dict[str, list[Finding]]:
     """Group findings by the visual they belong to (``page/visual``).
 
     Includes findings inside a visual (fields, filters) and parse issues on
-    its ``visual.json``. Findings not tied to a visual are left out.
+    its ``visual.json``. Findings not tied to one of ``keys`` are left out.
     """
-    keys = {f"{p.name}/{v.name}" for p in result.pages for v in p.visuals}
     grouped: dict[str, list[Finding]] = {}
-    for finding in result.findings:
-        key = visual_key(finding.path, keys)
+    for finding in findings:
+        key = visual_key(finding, keys)
         if key is not None:
             grouped.setdefault(key, []).append(finding)
     return grouped
 
 
-def visual_key(path: str, keys: set[str]) -> str | None:
-    """The ``page/visual`` a finding path points into, if any."""
-    file = VISUAL_FILE.search(path)
-    candidate = (
-        f"{file['page']}/{file['visual']}" if file else "/".join(path.split("/")[:2])
-    )
+def visual_key(finding: Finding, keys: set[str]) -> str | None:
+    """The ``page/visual`` a finding belongs to, if any.
+
+    Parse issues name their visual; other findings point into it with a path
+    that starts with ``page/visual``.
+    """
+    candidate = finding.visual_path or visual_path_of(finding.path)
     return candidate if candidate in keys else None

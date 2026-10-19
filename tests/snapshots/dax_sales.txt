@@ -1,0 +1,113 @@
+-- sales_v1 overview/card_margin
+EVALUATE
+SUMMARIZECOLUMNS(
+    TREATAS({2024, 2025}, 'Date'[Year]),
+    FILTER(ALL('Product'[Category]), NOT('Product'[Category] IN {"Accessories"})),
+    TREATAS({2025}, 'Date'[Year]),
+    "Margin %", [Margin %]
+)
+
+-- sales_v1 overview/card_total_sales
+EVALUATE
+SUMMARIZECOLUMNS(
+    TREATAS({2024, 2025}, 'Date'[Year]),
+    FILTER(ALL('Product'[Category]), NOT('Product'[Category] IN {"Accessories"})),
+    TREATAS({2025}, 'Date'[Year]),
+    "Total Sales", [Total Sales]
+)
+
+-- sales_v1 overview/chart_sales_by_month
+EVALUATE
+SUMMARIZECOLUMNS(
+    'Date'[Month],
+    TREATAS({2024, 2025}, 'Date'[Year]),
+    FILTER(ALL('Product'[Category]), NOT('Product'[Category] IN {"Accessories"})),
+    TREATAS({2025}, 'Date'[Year]),
+    "Total Sales", [Total Sales]
+)
+ORDER BY 'Date'[Month]
+
+-- sales_v1 overview/slicer_year
+-- unsupported: slicers only filter other visuals
+
+-- sales_v1 details/chart_sales_by_region
+EVALUATE
+SUMMARIZECOLUMNS(
+    'Sales'[Region],
+    TREATAS({2024, 2025}, 'Date'[Year]),
+    "Total Sales", [Total Sales]
+)
+ORDER BY 'Sales'[Region]
+
+-- sales_v1 details/table_product_sales
+EVALUATE
+SUMMARIZECOLUMNS(
+    'Product'[Category],
+    'Product'[Product],
+    TREATAS({2024, 2025}, 'Date'[Year]),
+    TREATAS({"Bikes", "Clothing"}, 'Product'[Category]),
+    "Total Sales", [Total Sales],
+    "Margin %", [Margin %]
+)
+ORDER BY 'Product'[Category], 'Product'[Product]
+
+-- sales_v2 overview/card_margin
+EVALUATE
+SUMMARIZECOLUMNS(
+    TREATAS({2024, 2025}, 'Date'[Year]),
+    FILTER(ALL('Product'[Category]), NOT('Product'[Category] IN {"Accessories"})),
+    TREATAS({2024}, 'Date'[Year]),
+    "Gross Margin %", [Gross Margin %]
+)
+
+-- sales_v2 overview/card_total_sales
+EVALUATE
+SUMMARIZECOLUMNS(
+    TREATAS({2024, 2025}, 'Date'[Year]),
+    FILTER(ALL('Product'[Category]), NOT('Product'[Category] IN {"Accessories"})),
+    TREATAS({2024}, 'Date'[Year]),
+    "Total Sales", [Total Sales]
+)
+
+-- sales_v2 overview/chart_sales_by_month
+EVALUATE
+SUMMARIZECOLUMNS(
+    'Date'[Month],
+    TREATAS({2024, 2025}, 'Date'[Year]),
+    FILTER(ALL('Product'[Category]), NOT('Product'[Category] IN {"Accessories"})),
+    TREATAS({2024}, 'Date'[Year]),
+    "Total Sales", [Total Sales]
+)
+ORDER BY 'Date'[Month]
+
+-- sales_v2 overview/slicer_year
+-- unsupported: slicers only filter other visuals
+
+-- sales_v2 details/chart_sales_by_region
+EVALUATE
+SUMMARIZECOLUMNS(
+    'Sales'[Region],
+    TREATAS({2024, 2025}, 'Date'[Year]),
+    "Total Sales", [Total Sales]
+)
+ORDER BY 'Sales'[Region]
+
+-- sales_v2 details/table_product_sales
+EVALUATE
+SUMMARIZECOLUMNS(
+    'Product'[Category],
+    'Product'[Product],
+    TREATAS({2024, 2025}, 'Date'[Year]),
+    "Total Sales", [Total Sales],
+    "Gross Margin %", [Gross Margin %]
+)
+ORDER BY 'Product'[Category], 'Product'[Product]
+
+-- sales_v2 trends/chart_margin_by_month
+EVALUATE
+SUMMARIZECOLUMNS(
+    'Date'[Month],
+    TREATAS({2024, 2025}, 'Date'[Year]),
+    "Gross Margin %", [Gross Margin %]
+)
+ORDER BY 'Date'[Month]

@@ -1,6 +1,12 @@
 import pytest
 
-from pbi_report_validator.domain.models import Category, ChangeKind, DiffResult, Finding
+from pbi_report_validator.domain.models import (
+    Category,
+    ChangeKind,
+    DiffResult,
+    Finding,
+    Severity,
+)
 from pbi_report_validator.reporting.markdown import escape, to_markdown
 
 
@@ -9,6 +15,7 @@ def finding(path: str, **kwargs: str | None) -> Finding:
     return Finding(
         category=Category.MEASURE,
         change=ChangeKind.MODIFIED,
+        severity=Severity.INFO,
         path=path,
         message=values["message"] or "",
         old=values["old"],
@@ -100,3 +107,10 @@ def test_truncates_to_limit_with_note() -> None:
 
 def test_escape_leaves_plain_text() -> None:
     assert escape("Total Sales 2025") == "Total Sales 2025"
+
+
+def test_severity_overview_and_per_finding() -> None:
+    text = to_markdown(result(finding("model/Sales/M")))
+
+    assert "Severity: 0 critical, 0 warning, 1 info\n" in text
+    assert "- info · **modified** `model/Sales/M`: changed" in text

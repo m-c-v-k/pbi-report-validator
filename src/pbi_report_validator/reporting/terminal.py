@@ -2,7 +2,12 @@
 
 from collections import Counter
 
-from pbi_report_validator.domain.models import Category, DiffResult
+from pbi_report_validator.domain.models import Category, DiffResult, Severity
+from pbi_report_validator.reporting.labels import (
+    UNMASKED_WARNING,
+    data_overview,
+    severity_overview,
+)
 
 DEFAULT_LIMIT = 20
 
@@ -18,10 +23,16 @@ def format_summary(result: DiffResult, limit: int = DEFAULT_LIMIT) -> str:
         Multi-line text without a trailing newline.
     """
     header = f"Compared {result.old_source} -> {result.new_source}"
+    overview = data_overview(result)
+    if overview:
+        header += "\n" + overview
     if not result.findings:
         return f"{header}\nNo differences found."
     counts = Counter(f.category for f in result.findings)
-    lines = [header, f"{len(result.findings)} findings:"]
+    lines = [
+        header,
+        f"{len(result.findings)} findings ({severity_overview(result)}):",
+    ]
     lines += [
         f"  {category.value:<12} {counts[category]}"
         for category in Category
@@ -29,9 +40,31 @@ def format_summary(result: DiffResult, limit: int = DEFAULT_LIMIT) -> str:
     ]
     lines.append("")
     lines += [
-        f"  [{f.change.value}] {f.path}: {f.message}" for f in result.findings[:limit]
+        f"  {f.severity.value:<8} [{f.change.value}] {f.path}: {f.message}"
+        for f in result.findings[:limit]
     ]
     hidden = len(result.findings) - limit
     if hidden > 0:
         lines.append(f"  ... and {hidden} more (use --json for the full list)")
     return "\n".join(lines)
+
+
+def format_failure(count: int, threshold: Severity) -> str:
+    """Why ``--fail-on`` failed the run, e.g. ``Failed: 2 findings at ...``."""
+    noun = "finding" if count == 1 else "findings"
+    return (
+        f"Failed: {count} {noun} at {threshold.value} or above "
+        f"(--fail-on {threshold.value})"
+    )
+
+
+def format_data_failure(count: int) -> str:
+    """Why ``--fail-on-data-error`` failed the run."""
+    noun = "visual" if count == 1 else "visuals"
+    return f"Failed: data of {count} {noun} not fully validated (--fail-on-data-error)"
+
+
+def format_unmasked_warning() -> str:
+    """A block that stands out in the terminal, for ``--show-data-values``."""
+    rule = "!" * 72
+    return "\n".join([rule, "WARNING: UNMASKED DATA", UNMASKED_WARNING, rule])

@@ -1,16 +1,30 @@
 """Entry point for the ``pbi-validate`` command line interface."""
 
 import logging
+import os
+from enum import StrEnum
 from importlib.metadata import version
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, NamedTuple, NoReturn
 
 import typer
 
+from pbi_report_validator.domain.models import DataSettings, DiffResult, Severity
+from pbi_report_validator.integrations.config import MissingCredentialsError
 from pbi_report_validator.integrations.files import OutputWriteError, ProjectLoadError
+from pbi_report_validator.integrations.powerbi import PowerBIError
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
-from pbi_report_validator.reporting.terminal import format_summary
+from pbi_report_validator.reporting.terminal import (
+    format_summary,
+    format_unmasked_warning,
+)
+from pbi_report_validator.services.data_validation import (
+    InvalidDataOptionsError,
+    create_runner,
+    data_settings,
+)
 from pbi_report_validator.services.validate import (
+    failure_reasons,
     validate,
     write_html,
     write_json,
@@ -18,7 +32,19 @@ from pbi_report_validator.services.validate import (
 )
 
 PACKAGE_NAME = "pbi-report-validator"
-EXIT_ERROR = 1  # project could not be loaded or output not written
+EXIT_ERROR = 1  # project not loadable, output not writable or data validation failed
+EXIT_USAGE = 2  # invalid combination of options
+EXIT_FINDINGS = 3  # a finding at or above the --fail-on severity
+
+
+class FailOn(StrEnum):
+    """Values of ``--fail-on``: a severity, or ``none`` to never fail."""
+
+    NONE = "none"
+    INFO = Severity.INFO.value
+    WARNING = Severity.WARNING.value
+    CRITICAL = Severity.CRITICAL.value
+
 
 app = typer.Typer(
     name="pbi-validate",
@@ -67,28 +93,148 @@ def diff(
         Path | None,
         typer.Option("--html", help="Write a self-contained HTML report to this file."),
     ] = None,
+    compare_data: Annotated[
+        bool,
+        typer.Option(
+            "--data",
+            help="Also compare the numbers: run each visual as a DAX query against "
+            "the old and new published datasets (needs PBI_* credentials).",
+        ),
+    ] = False,
+    old_dataset: Annotated[
+        str | None, typer.Option("--old-dataset", help="Dataset id of the old version.")
+    ] = None,
+    new_dataset: Annotated[
+        str | None, typer.Option("--new-dataset", help="Dataset id of the new version.")
+    ] = None,
+    abs_tol: Annotated[
+        float,
+        typer.Option("--abs-tol", min=0, help="Allowed absolute difference."),
+    ] = 0.0,
+    rel_tol: Annotated[
+        float,
+        typer.Option("--rel-tol", min=0, help="Allowed relative difference."),
+    ] = 1e-9,
+    fail_on: Annotated[
+        FailOn,
+        typer.Option(
+            "--fail-on",
+            help="Exit with code 3 when a finding has at least this severity.",
+        ),
+    ] = FailOn.NONE,
+    fail_on_data_error: Annotated[
+        bool,
+        typer.Option(
+            "--fail-on-data-error",
+            help="With --data, exit with code 3 when the data of a visual could "
+            "not be fully validated.",
+        ),
+    ] = False,
+    show_data_values: Annotated[
+        bool,
+        typer.Option(
+            "--show-data-values",
+            help="With --data, show row keys and values in the findings instead of "
+            "masking them. The reports then contain row-level data.",
+        ),
+    ] = False,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show progress logging.")
     ] = False,
 ) -> None:
-    """Compare the structure of two report versions."""
+    """Compare two report versions: structure, and with --data also the numbers."""
+    _configure_logging(verbose)
+    if fail_on_data_error and not compare_data:
+        _fail("--fail-on-data-error needs --data", EXIT_USAGE)
+    if show_data_values and not compare_data:
+        _fail("--show-data-values needs --data", EXIT_USAGE)
+    settings = (
+        _settings_or_exit(old_dataset, new_dataset, abs_tol, rel_tol, show_data_values)
+        if compare_data
+        else None
+    )
+    outputs = Outputs(json=json_path, markdown=markdown_path, html=html_path)
+    result = _run_or_exit(old, new, settings, outputs)
+    _print_result(result, outputs)
+    _exit_on_failures(result, fail_on, fail_on_data_error)
+
+
+class Outputs(NamedTuple):
+    """The files ``diff`` writes; ``None`` skips that format."""
+
+    json: Path | None
+    markdown: Path | None
+    html: Path | None
+
+
+def _configure_logging(verbose: bool) -> None:
     logging.basicConfig(
         level=logging.INFO if verbose else logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
     )
+    # httpx logs every request URL at INFO, and the URLs contain dataset ids.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
+def _fail(message: str, code: int) -> NoReturn:
+    typer.echo(f"Error: {message}", err=True)
+    raise typer.Exit(code)
+
+
+def _settings_or_exit(
+    old_dataset: str | None,
+    new_dataset: str | None,
+    abs_tol: float,
+    rel_tol: float,
+    show_values: bool,
+) -> DataSettings:
     try:
-        result = validate(old, new)
-        if json_path is not None:
-            write_json(result, json_path)
-        if markdown_path is not None:
-            write_markdown(result, markdown_path)
-        if html_path is not None:
-            write_html(result, html_path, version(PACKAGE_NAME))
-    except (ProjectLoadError, OutputWriteError, TemplateNotFoundError) as exc:
-        typer.echo(f"Error: {exc}", err=True)
-        raise typer.Exit(EXIT_ERROR) from exc
+        return data_settings(old_dataset, new_dataset, abs_tol, rel_tol, show_values)
+    except InvalidDataOptionsError as exc:
+        _fail(str(exc), EXIT_USAGE)
+
+
+def _run_or_exit(
+    old: Path, new: Path, settings: DataSettings | None, outputs: Outputs
+) -> DiffResult:
+    """Validate and write the requested outputs; errors exit with code 1."""
+    try:
+        runner = create_runner(os.environ) if settings else None
+        result = validate(old, new, settings, runner)
+        if outputs.json is not None:
+            write_json(result, outputs.json)
+        if outputs.markdown is not None:
+            write_markdown(result, outputs.markdown)
+        if outputs.html is not None:
+            write_html(result, outputs.html, version(PACKAGE_NAME))
+    except (
+        ProjectLoadError,
+        OutputWriteError,
+        TemplateNotFoundError,
+        MissingCredentialsError,
+        PowerBIError,
+    ) as exc:
+        _fail(str(exc), EXIT_ERROR)
+    return result
+
+
+def _print_result(result: DiffResult, outputs: Outputs) -> None:
     typer.echo(format_summary(result))
-    outputs = (("JSON", json_path), ("Markdown", markdown_path), ("HTML", html_path))
-    for label, path in outputs:
+    labels = ("JSON", "Markdown", "HTML")
+    for label, path in zip(labels, outputs, strict=True):
         if path is not None:
             typer.echo(f"\n{label} written to {path.as_posix()}")
+    if result.data_values_shown:
+        typer.echo(f"\n{format_unmasked_warning()}", err=True)
+
+
+def _exit_on_failures(
+    result: DiffResult, fail_on: FailOn, fail_on_data_error: bool
+) -> None:
+    threshold = None if fail_on is FailOn.NONE else Severity(fail_on.value)
+    failures = failure_reasons(result, threshold, fail_on_data_error)
+    for failure in failures:
+        typer.echo(f"\n{failure}", err=True)
+    if failures:
+        raise typer.Exit(EXIT_FINDINGS)

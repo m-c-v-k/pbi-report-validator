@@ -9,6 +9,8 @@ reported again for every visual or filter that uses it.
 import re
 from collections.abc import Mapping
 
+from pbi_report_validator.diff.severity import make_finding
+from pbi_report_validator.domain.helpers import visual_path
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -46,7 +48,7 @@ def diff_content(
         )
         for visual_match in page_match.visuals:
             findings += _diff_visual(
-                f"{page}/{visual_match.old.name}", visual_match, renames
+                visual_path(page, visual_match.old.name), visual_match, renames
             )
     return findings
 
@@ -81,9 +83,9 @@ def _diff_slicer(
         change, message = ChangeKind.ADDED, "Slicer selection added"
     else:
         change, message = ChangeKind.REMOVED, "Slicer selection removed"
-    return Finding(
-        category=Category.SLICER,
-        change=change,
+    return make_finding(
+        Category.SLICER,
+        change,
         path=path,
         message=message,
         old=old_condition,
@@ -111,9 +113,9 @@ def _diff_fields(
         else:
             change, message = ChangeKind.MODIFIED, f"Field {key} moved to another role"
         findings.append(
-            Finding(
-                category=Category.FIELD,
-                change=change,
+            make_finding(
+                Category.FIELD,
+                change,
                 path=f"{path}/fields/{key}",
                 message=message,
                 old=before,
@@ -157,9 +159,9 @@ def _diff_filters(
         else:
             continue
         findings.append(
-            Finding(
-                category=Category.FILTER,
-                change=change,
+            make_finding(
+                Category.FILTER,
+                change,
                 path=path,
                 message=message,
                 old=old_by_name.get(name),

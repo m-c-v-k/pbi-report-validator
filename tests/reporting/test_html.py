@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from pbi_report_validator.domain.models import (
+    SCHEMA_VERSION,
     Category,
     ChangeKind,
     DiffResult,
@@ -12,6 +13,7 @@ from pbi_report_validator.domain.models import (
     ItemStatus,
     PageView,
     Position,
+    Severity,
     VisualView,
 )
 from pbi_report_validator.integrations.templates import (
@@ -19,14 +21,14 @@ from pbi_report_validator.integrations.templates import (
     read_template,
 )
 from pbi_report_validator.reporting.html import (
-    CATEGORY_LABELS,
     REPORT_TEMPLATE,
     to_html,
     visual_key,
 )
+from pbi_report_validator.reporting.labels import CATEGORY_LABELS
 from pbi_report_validator.services.validate import validate
+from tests.factories import FIXTURES
 
-FIXTURES = Path(__file__).parent.parent / "fixtures"
 TEMPLATE = read_template(REPORT_TEMPLATE)
 
 
@@ -45,7 +47,8 @@ def test_fixture_report_shows_counts_and_every_finding() -> None:
     assert '<div class="n" data-count="measure">2</div>' in html
     assert html.count('<tr data-category="') == 7
     assert "Page &#39;Trends&#39; added with 1 visual" in html
-    assert "pbi-report-validator</a>\n  9.9.9 &middot; schema 1.1" in html
+    footer = f"pbi-report-validator</a>\n  9.9.9 &middot; schema {SCHEMA_VERSION}"
+    assert footer in html
 
 
 def test_output_is_deterministic() -> None:
@@ -64,6 +67,7 @@ def test_values_and_names_are_escaped() -> None:
     finding = Finding(
         category=Category.VISUAL,
         change=ChangeKind.ADDED,
+        severity=Severity.INFO,
         path="p/<b>",
         message="<script>alert(1)</script>",
         new="a & b",
@@ -262,24 +266,50 @@ def test_parse_issue_is_shown_on_its_visual(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("path", "expected"),
+    ("path", "visual", "expected"),
     [
-        ("overview/slicer_year", "overview/slicer_year"),
-        ("details/table_product_sales/filters/f", "details/table_product_sales"),
+        ("overview/slicer_year", None, "overview/slicer_year"),
+        ("details/table_product_sales/filters/f", None, "details/table_product_sales"),
         (
             "new/Sales.Report/definition/pages/overview/visuals/card_margin/visual.json",
             "overview/card_margin",
+            "overview/card_margin",
         ),
-        ("overview/filters/page_filter", None),
-        ("model/Sales/Total Sales", None),
-        ("trends", None),
+        ("overview/filters/page_filter", None, None),
+        ("model/Sales/Total Sales", None, None),
+        ("trends", None, None),
     ],
 )
-def test_visual_key(path: str, expected: str | None) -> None:
+def test_visual_key(path: str, visual: str | None, expected: str | None) -> None:
     keys = {
         "overview/slicer_year",
         "details/table_product_sales",
         "overview/card_margin",
     }
+    finding = Finding(
+        category=Category.PARSE_ISSUE if visual else Category.VISUAL,
+        change=ChangeKind.ERROR,
+        severity=Severity.INFO,
+        path=path,
+        message="m",
+        visual_path=visual,
+    )
 
-    assert visual_key(path, keys) == expected
+    assert visual_key(finding, keys) == expected
+
+
+def test_severity_counts_and_column() -> None:
+    html = fixture_html()
+
+    assert 'data-severity-count="critical">3</div>' in html
+    assert 'data-severity-count="warning">2</div>' in html
+    assert 'data-severity-count="info">2</div>' in html
+    assert html.count('<td class="severity severity-') == 7
+
+
+def test_visual_details_show_severity() -> None:
+    html = fixture_html()
+    details = html[html.index('id="details-title"') : html.index('id="findings-title"')]
+
+    assert '<span class="severity severity-critical">critical</span>' in details
+    assert '<span class="severity severity-warning">warning</span>' in details

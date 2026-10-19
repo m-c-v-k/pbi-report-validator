@@ -1,11 +1,9 @@
-from pathlib import Path
-
 from pbi_report_validator.domain.models import FieldKind, FieldRef, Position, Projection
 from pbi_report_validator.domain.raw import RawJsonFile, RawPage, RawReport
 from pbi_report_validator.integrations.files import load_project
 from pbi_report_validator.parsers.pbir import parse_report, parse_visual
+from tests.factories import FIXTURES
 
-FIXTURES = Path(__file__).parent.parent / "fixtures"
 TOTAL_SALES = FieldRef(table="Sales", name="Total Sales", kind=FieldKind.MEASURE)
 
 
@@ -141,13 +139,12 @@ def test_broken_page_becomes_issue() -> None:
 
 
 def test_unknown_visual_type_is_kept() -> None:
-    visual = parse_visual(
+    visual, _ = parse_visual(
         {
             "name": "v",
             "position": {"x": 0, "y": 0, "width": 10, "height": 10},
             "visual": {"visualType": "myCustomVisual1234"},
         },
-        [],
     )
 
     assert visual.visual_type == "myCustomVisual1234"
@@ -155,13 +152,12 @@ def test_unknown_visual_type_is_kept() -> None:
 
 
 def test_visual_group_gets_group_type() -> None:
-    visual = parse_visual(
+    visual, _ = parse_visual(
         {
             "name": "g",
             "position": {"x": 0, "y": 0, "width": 10, "height": 10},
             "visualGroup": {"displayName": "Group"},
         },
-        [],
     )
 
     assert visual.visual_type == "group"
@@ -226,13 +222,13 @@ def test_title_unquotes_escaped_quotes() -> None:
         "visual": title_body("'Bob''s sales'"),
     }
 
-    assert parse_visual(content, []).title == "Bob's sales"
+    assert parse_visual(content)[0].title == "Bob's sales"
 
 
 def test_malformed_title_gives_none() -> None:
     body = {"visualType": "card", "visualContainerObjects": {"title": "oops"}}
 
-    visual = parse_visual({"name": "v", "position": POSITION, "visual": body}, [])
+    visual, _ = parse_visual({"name": "v", "position": POSITION, "visual": body})
 
     assert visual.title is None
 
@@ -247,9 +243,7 @@ def test_unparseable_projections_are_reported() -> None:
             }
         },
     }
-    problems: list[str] = []
-
-    visual = parse_visual({"name": "v", "position": POSITION, "visual": body}, problems)
+    visual, problems = parse_visual({"name": "v", "position": POSITION, "visual": body})
 
     assert visual.projections == ()
     assert problems == ["unrecognised field in role Values was skipped"] * 2
@@ -258,15 +252,13 @@ def test_unparseable_projections_are_reported() -> None:
 def test_non_dict_query_state_gives_no_projections() -> None:
     body = {"visualType": "table", "query": {"queryState": []}}
 
-    visual = parse_visual({"name": "v", "position": POSITION, "visual": body}, [])
+    visual, _ = parse_visual({"name": "v", "position": POSITION, "visual": body})
 
     assert visual.projections == ()
 
 
 def test_visual_without_body_is_unknown() -> None:
-    assert (
-        parse_visual({"name": "v", "position": POSITION}, []).visual_type == "unknown"
-    )
+    assert parse_visual({"name": "v", "position": POSITION})[0].visual_type == "unknown"
 
 
 def test_incomplete_position_is_an_issue() -> None:
@@ -297,3 +289,46 @@ def test_skipped_field_becomes_issue_but_visual_is_kept() -> None:
 
     assert [v.name for v in report.pages[0].visuals] == ["v"]
     assert [i.path for i in report.issues] == ["p/visuals/v/visual.json"]
+
+
+def test_visual_parse_issues_name_their_visual() -> None:
+    broken = RawJsonFile(path="pages/p/visuals/bad_one/visual.json", error="boom")
+    incomplete = RawJsonFile(
+        path="pages/p/visuals/no_pos/visual.json", content={"name": "no_pos"}
+    )
+    page = RawPage(name="p", page=page_json("p"), visuals=(broken, incomplete))
+
+    report = parse_report(report_with_pages(page))
+
+    assert [(i.visual_path, i.path) for i in report.issues] == [
+        ("p/bad_one", broken.path),
+        ("p/no_pos", incomplete.path),
+    ]
+
+
+def test_page_level_issues_have_no_visual() -> None:
+    page = RawPage(name="p", page=RawJsonFile(path="pages/p/page.json", error="x"))
+
+    report = parse_report(report_with_pages(page))
+
+    assert report.issues[0].visual_path is None
+
+
+def test_unparseable_page_issues_name_their_page() -> None:
+    unreadable = RawPage(
+        name="bad", page=RawJsonFile(path="pages/bad/page.json", error="x")
+    )
+    invalid = RawPage(
+        name="neg",
+        page=RawJsonFile(
+            path="pages/neg/page.json", content={"name": "neg", "width": -1}
+        ),
+    )
+
+    report = parse_report(report_with_pages(unreadable, invalid))
+
+    assert report.pages == ()
+    assert [(i.page, i.path) for i in report.issues] == [
+        ("bad", "pages/bad/page.json"),
+        ("neg", "pages/neg/page.json"),
+    ]

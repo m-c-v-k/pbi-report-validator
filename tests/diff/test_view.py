@@ -6,32 +6,20 @@ from pbi_report_validator.diff.view import build_page_views
 from pbi_report_validator.domain.models import (
     ItemStatus,
     Page,
-    Position,
     Visual,
 )
 from pbi_report_validator.matching.matcher import match_reports
 from pbi_report_validator.services.validate import validate
-
-FIXTURES = Path(__file__).parent.parent / "fixtures"
+from tests import factories
+from tests.factories import FIXTURES
 
 
 def visual(name: str, x: float = 0) -> Visual:
-    return Visual(
-        name=name,
-        visual_type="card",
-        position=Position(x=x, y=0, width=100, height=100),
-    )
+    return factories.visual(name, x=x)
 
 
 def page(name: str, ordinal: int, *visuals: Visual) -> Page:
-    return Page(
-        name=name,
-        display_name=name.title(),
-        ordinal=ordinal,
-        width=1000,
-        height=1000,
-        visuals=visuals,
-    )
+    return factories.page(name, *visuals, ordinal=ordinal)
 
 
 def statuses(
@@ -149,3 +137,18 @@ def test_page_level_change_marks_only_the_page() -> None:
     ]
 
     assert statuses(old, new) == [("a", "modified", [("v", "unchanged")])]
+
+
+def test_unparseable_page_is_modified_not_removed(tmp_path: Path) -> None:
+    new = tmp_path / "new"
+    shutil.copytree(FIXTURES / "sales_v1", new)
+    (new / "Sales.Report/definition/pages/details/page.json").write_text("{")
+
+    result = validate(FIXTURES / "sales_v1", new)
+
+    assert [(f.category, f.path) for f in result.findings] == [
+        ("parse_issue", "new/Sales.Report/definition/pages/details/page.json")
+    ]
+    details = next(p for p in result.pages if p.name == "details")
+    assert details.status == ItemStatus.MODIFIED
+    assert {v.status for v in details.visuals} == {ItemStatus.MODIFIED}

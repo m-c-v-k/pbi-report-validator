@@ -1,10 +1,24 @@
-from pbi_report_validator.domain.models import Category, ChangeKind, DiffResult, Finding
-from pbi_report_validator.reporting.terminal import format_summary
+from pbi_report_validator.domain.models import (
+    Category,
+    ChangeKind,
+    DiffResult,
+    Finding,
+    Severity,
+)
+from pbi_report_validator.reporting.terminal import (
+    format_data_failure,
+    format_failure,
+    format_summary,
+)
 
 
 def finding(path: str) -> Finding:
     return Finding(
-        category=Category.VISUAL, change=ChangeKind.ADDED, path=path, message="added"
+        category=Category.VISUAL,
+        change=ChangeKind.ADDED,
+        severity=Severity.INFO,
+        path=path,
+        message="added",
     )
 
 
@@ -19,11 +33,11 @@ def test_summary_truncates_long_lists() -> None:
 
     assert text.splitlines() == [
         "Compared a -> b",
-        "3 findings:",
+        "3 findings (0 critical, 0 warning, 3 info):",
         "  visual       3",
         "",
-        "  [added] p/v0: added",
-        "  [added] p/v1: added",
+        "  info     [added] p/v0: added",
+        "  info     [added] p/v1: added",
         "  ... and 1 more (use --json for the full list)",
     ]
 
@@ -32,3 +46,16 @@ def test_summary_without_findings() -> None:
     result = DiffResult(old_source="a", new_source="b")
 
     assert format_summary(result) == "Compared a -> b\nNo differences found."
+
+
+def test_failure_message() -> None:
+    assert format_failure(1, Severity.CRITICAL) == (
+        "Failed: 1 finding at critical or above (--fail-on critical)"
+    )
+
+
+def test_format_data_failure() -> None:
+    assert format_data_failure(1) == (
+        "Failed: data of 1 visual not fully validated (--fail-on-data-error)"
+    )
+    assert format_data_failure(2).startswith("Failed: data of 2 visuals")

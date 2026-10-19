@@ -7,23 +7,21 @@ by dropping whole findings from the end and saying how many were left out.
 """
 
 import re
+from collections import Counter
 
 from pbi_report_validator.domain.models import Category, DiffResult, Finding
+from pbi_report_validator.reporting.labels import (
+    CATEGORY_LABELS,
+    UNMASKED_WARNING,
+    data_overview,
+    severity_overview,
+)
 
 GITHUB_COMMENT_LIMIT = 65_536
 SAFETY_MARGIN = 1_000
 INLINE_VALUE_LIMIT = 80
 TITLE = "## Power BI report diff"
 SEE_JSON = "see the JSON output for the full list."
-CATEGORY_TITLES = {
-    Category.PAGE: "Pages",
-    Category.VISUAL: "Visuals",
-    Category.FIELD: "Fields",
-    Category.FILTER: "Filters",
-    Category.SLICER: "Slicers",
-    Category.MEASURE: "Measures",
-    Category.PARSE_ISSUE: "Parse issues",
-}
 MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]|<>#~])")
 
 
@@ -48,7 +46,7 @@ def to_markdown(result: DiffResult, limit: int = GITHUB_COMMENT_LIMIT) -> str:
     for finding in _grouped(result.findings):
         block = _finding(finding)
         if finding.category != current:
-            block = f"\n### {CATEGORY_TITLES[finding.category]}\n\n{block}"
+            block = f"\n### {CATEGORY_LABELS[finding.category]}\n\n{block}"
         if len(block) > budget:
             break
         sections.append(block)
@@ -62,10 +60,11 @@ def to_markdown(result: DiffResult, limit: int = GITHUB_COMMENT_LIMIT) -> str:
 
 
 def _header(result: DiffResult) -> str:
-    counts = {c: 0 for c in Category}
-    for finding in result.findings:
-        counts[finding.category] += 1
-    lines = [
+    counts = Counter(f.category for f in result.findings)
+    lines: list[str] = []
+    if result.data_values_shown:
+        lines += ["> [!WARNING]", f"> **Unmasked data.** {UNMASKED_WARNING}", ""]
+    lines += [
         TITLE,
         "",
         f"`{_code(result.old_source)}` → `{_code(result.new_source)}`"
@@ -73,8 +72,15 @@ def _header(result: DiffResult) -> str:
         "",
     ]
     if result.findings:
+        lines += [f"Severity: {severity_overview(result)}", ""]
+    overview = data_overview(result)
+    if overview:
+        lines += [overview, ""]
+    if result.findings:
         lines += ["| Category | Findings |", "|---|---:|"]
-        lines += [f"| {CATEGORY_TITLES[c]} | {n} |" for c, n in counts.items() if n]
+        lines += [
+            f"| {CATEGORY_LABELS[c]} | {counts[c]} |" for c in Category if counts[c]
+        ]
     return "\n".join(lines) + "\n"
 
 
@@ -86,7 +92,9 @@ def _grouped(findings: tuple[Finding, ...]) -> list[Finding]:
 def _finding(finding: Finding) -> str:
     path = _code(finding.path)
     message = escape(" ".join(finding.message.split()))
-    line = f"- **{finding.change.value}** `{path}`: {message}"
+    line = (
+        f"- {finding.severity.value} · **{finding.change.value}** `{path}`: {message}"
+    )
     if finding.old is None and finding.new is None:
         return line + "\n"
     if _is_short(finding.old) and _is_short(finding.new):

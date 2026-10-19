@@ -2,11 +2,12 @@
 
 [![CI](https://github.com/m-c-v-k/pbi-report-validator/actions/workflows/ci.yml/badge.svg)](https://github.com/m-c-v-k/pbi-report-validator/actions/workflows/ci.yml)
 [![Demo](https://img.shields.io/badge/demo-live%20report-2457c5)](https://m-c-v-k.github.io/pbi-report-validator/)
+[![Coverage](https://img.shields.io/endpoint?url=https://m-c-v-k.github.io/pbi-report-validator/coverage-badge.json)](https://m-c-v-k.github.io/pbi-report-validator/coverage/)
 
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
 
-**Status:** v0.1.0 – structural diff with JSON, Markdown and HTML reports. See the [live demo report](https://m-c-v-k.github.io/pbi-report-validator/) and the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
+**Status:** v0.2.0 – structural diff and data validation (`--data`, values masked by default), JSON, Markdown and HTML reports, and a GitHub Action with PR comments and `--fail-on`. See the [live demo report](https://m-c-v-k.github.io/pbi-report-validator/) and the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
 
 ## Why
 
@@ -27,13 +28,13 @@ Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 for you).
 Install the latest release as a command-line tool:
 
 ```bash
-uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.1.0
+uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.2.0
 ```
 
 Or run it once without installing:
 
 ```bash
-uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.1.0 pbi-validate --help
+uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.2.0 pbi-validate --help
 ```
 
 Each [GitHub release](https://github.com/m-c-v-k/pbi-report-validator/releases)
@@ -71,31 +72,49 @@ or the `.Report` folder itself. The terminal always shows a summary; add any of:
 |---|---|
 | `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
 | `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
-| `--json PATH` | Every finding with old and new values, plus every page and visual with its status (`schema_version` 1.1) |
+| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.4) |
 
 Running it on the sample reports in this repository gives:
 
 ```text
 Compared tests/fixtures/sales_v1 -> tests/fixtures/sales_v2
-7 findings:
+7 findings (3 critical, 2 warning, 2 info):
   page         1
   visual       2
   filter       1
   slicer       1
   measure      2
 
-  [moved] details/chart_sales_by_region: clusteredBarChart 'Sales by region' (chart_sales_by_region) moved
-  [removed] details/table_product_sales/filters/visual_filter_category: Filter visual_filter_category removed
-  [renamed] model/Sales/Margin %: Measure Sales[Margin %] renamed to Sales[Gross Margin %]
-  [modified] model/Sales/Total Sales: Expression of measure Sales[Total Sales] changed
-  [retyped] overview/chart_sales_by_month: clusteredColumnChart 'Sales by month' (chart_sales_by_month) changed type to lineChart
-  [modified] overview/slicer_year: Slicer selection changed
-  [added] trends: Page 'Trends' added with 1 visual
+  info     [moved] details/chart_sales_by_region: clusteredBarChart 'Sales by region' (chart_sales_by_region) moved
+  critical [removed] details/table_product_sales/filters/visual_filter_category: Filter visual_filter_category removed
+  warning  [renamed] model/Sales/Margin %: Measure Sales[Margin %] renamed to Sales[Gross Margin %]
+  critical [modified] model/Sales/Total Sales: Expression of measure Sales[Total Sales] changed
+  warning  [retyped] overview/chart_sales_by_month: clusteredColumnChart 'Sales by month' (chart_sales_by_month) changed type to lineChart
+  critical [modified] overview/slicer_year: Slicer selection changed
+  info     [added] trends: Page 'Trends' added with 1 visual
 ```
 
-Exit codes: `0` when the comparison ran (whether or not there are
-differences), `1` when a project cannot be loaded or an output file cannot be
-written. No credentials or environment variables are needed.
+No credentials or environment variables are needed.
+
+To fail a CI job on important changes, add `--fail-on` with a severity
+(`info`, `warning` or `critical`; the default `none` never fails). Output
+files are still written, and the run ends with, for example:
+
+```text
+Failed: 3 findings at critical or above (--fail-on critical)
+```
+
+With `--data`, a visual whose data could not be compared (for example a
+failed query) is a `warning`, so `--fail-on critical` does not catch it. Add
+`--fail-on-data-error` to also fail when the data of any visual was not
+fully validated.
+
+| Exit code | Meaning |
+|---|---|
+| `0` | The comparison ran (with or without differences), and neither `--fail-on` nor `--fail-on-data-error` was triggered |
+| `1` | A project could not be loaded, an output file could not be written, or data validation could not run |
+| `2` | Invalid options |
+| `3` | At least one finding at or above the `--fail-on` severity, or (with `--fail-on-data-error`) data that was not fully validated |
 
 ### What it compares
 
@@ -108,22 +127,159 @@ written. No credentials or environment variables are needed.
 - Files that cannot be parsed are reported as findings instead of stopping
   the run
 
+Every finding has a severity:
+
+| Severity | Findings |
+|---|---|
+| `critical` | Data differences, removed pages and visuals, added/removed/changed filters and slicer selections, changed measure expressions |
+| `warning` | Changed visual type, changed fields, renamed or removed measures, parse issues, visuals whose data could not be validated |
+| `info` | Added pages, visuals and measures, moved or reordered pages and visuals, renamed pages, changed titles |
+
 ### Limitations
 
 - Only the PBIR report format; the legacy `report.json` and `.pbix` files are
   not supported (save as `.pbip` with PBIR enabled)
-- No data comparison yet: it shows what changed in the definition, not
-  whether the numbers differ
+- Data validation (`--data`) is new and not yet verified against a live
+  workspace; see its own limitations below
 - A visual moved to a different page shows as removed on one page and added
   on the other
 
-Coming next: data validation against published semantic models (re-run each
-visual as a DAX query and compare the numbers) and a GitHub Action that
-comments on pull requests that change a report.
+### Data validation (optional, `--data`)
+
+The structural diff tells you what changed in the report definition. With
+`--data` the tool also checks whether the **numbers** are the same: each
+visual is turned into a DAX query (with its report, page and visual filters
+and the slicer selections on its page), run against the old and the new
+**published** semantic model, and the results are compared row by row.
+
+```bash
+pbi-validate diff ./old ./new --data \
+  --old-dataset <dataset id> --new-dataset <dataset id> --html report.html
+```
+
+- Numbers are equal when they differ by at most `--abs-tol` (default 0) or
+  `--rel-tol` times the larger value (default 1e-9); text must match exactly.
+- Findings show rows that exist in only one version and values that differ.
+  The HTML drill-down shows a per-visual summary; the JSON has a `data`
+  summary per visual (schema 1.2).
+- **Row-level data is masked by default.** Rows are named by position
+  (`row 3`) and values show as `(masked)`, so reports, job summaries and
+  pull request comments never contain the keys or numbers of your data.
+  Counts and the largest difference per visual are still shown.
+- `--show-data-values` shows the row keys and old/new values instead. Every
+  output then carries a warning (stderr, a banner in the Markdown and HTML,
+  `data_values_shown: true` in the JSON, schema 1.4). Only use it where
+  everyone who can read the output may see the data.
+- Visuals whose query cannot be built faithfully (custom visuals, hierarchy
+  levels, filters on measures, ...) or fails are reported as
+  "not validated" with the reason. Slicers are skipped: they only filter.
+
+**Setup (one time).** Data validation signs in as a Microsoft Entra
+service principal and uses the Power BI REST API `executeQueries` endpoint,
+so it runs in CI without Windows-only drivers:
+
+1. Register an app in Microsoft Entra ID and create a client secret.
+2. In the Power BI admin portal, enable *Allow service principals to use
+   Power BI APIs* and *Dataset Execute Queries REST API* (for the app or a
+   security group that contains it).
+3. Add the app to the workspace(s) that hold both semantic models, with at
+   least Contributor rights (it needs read and build permission).
+4. Provide the credentials as environment variables (`.env.example` lists
+   them; never commit them):
+
+   ```bash
+   export PBI_TENANT_ID=...  PBI_CLIENT_ID=...  PBI_CLIENT_SECRET=...
+   ```
+
+The dataset id is the GUID in the semantic model's URL in the Power BI
+service (`.../datasets/<id>/...`).
+
+If sign-in fails or a dataset id is wrong, the run stops with exit code 1
+and no output files are written; fix the setup and run it again.
+
+Limitations: models with row-level security can't be queried by a service
+principal; slicer interactions edited in Power BI and slicers synced from
+other pages are not taken into account; the API allows about 120 queries a
+minute (40 on Pro/PPU), and each visual needs two.
+
+## GitHub Action
+
+Run the diff in any repository's workflow, with no Python setup. The
+Markdown summary appears on the job's summary page. The action is available
+from v0.2.0:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: m-c-v-k/pbi-report-validator@v0.2.0
+  with:
+    old: reports/v1        # paths relative to the workspace
+    new: reports/v2
+    html: out/report.html  # optional; also json and markdown
+- uses: actions/upload-artifact@v4
+  with:
+    name: report-diff
+    path: out/report.html
+```
+
+For data validation, add `data: true`, `old-dataset` and `new-dataset`, and
+pass the credentials as environment variables (never as inputs). Values stay
+masked unless you set `show-data-values: true`; the job summary and any pull
+request comment then contain row-level data, which is public on a public
+repository.
+
+```yaml
+  env:
+    PBI_TENANT_ID: ${{ secrets.PBI_TENANT_ID }}
+    PBI_CLIENT_ID: ${{ secrets.PBI_CLIENT_ID }}
+    PBI_CLIENT_SECRET: ${{ secrets.PBI_CLIENT_SECRET }}
+```
+
+To show the summary on the pull request, set `comment: true` and give the
+job `pull-requests: write`. The action posts one comment per compared pair
+of reports and updates it on later pushes (two steps with the same `old` and
+`new` share one comment, so the last one wins); very long summaries are cut,
+with a link to the run. Without write permission (for example on a pull
+request from a fork) the comment is skipped with a warning:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+# ...
+    with:
+      old: reports/v1
+      new: reports/v2
+      comment: true
+```
+
+To fail the step, set `fail-on` (`info`, `warning` or `critical`) and, with
+`data: true`, `fail-on-data-error: true`; they work as the CLI options of the
+same name. Outputs are still set when the step fails.
+
+Outputs: `json`, `html` and `markdown` (paths), `findings`, and the counts
+`critical`, `warning` and `info`. All inputs are listed in
+[`action.yml`](action.yml).
+
+The action needs a Linux runner with Docker (such as `ubuntu-latest`) and
+cannot run inside a job `container:`. Input and output paths must be
+relative to the workspace or lie inside it or `$RUNNER_TEMP`.
+
+**Versions.** Pin a full version tag such as `@v0.2.0`; it runs the
+published image of that version. Before 1.0, minor versions can change the
+output, so there is no moving `@v0` tag. Dependabot (`package-ecosystem:
+github-actions`) can keep the tag up to date. Organisations that require it
+can pin a commit SHA instead; the action then builds the image from that
+commit, which takes about a minute longer.
 
 ## Data handling
 
 - Runs locally or in your own CI; nothing is sent anywhere by default.
+- Only files inside the project folder are read: a `definition.pbir` that
+  points to a semantic model outside it is rejected with an error.
+- With `--data`, queries go only to the Power BI API of your own tenant.
+  Query results stay in memory and are never logged or sent anywhere else.
+  The output files contain only masked rows unless you pass
+  `--show-data-values` (action input `show-data-values: true`).
 - The optional AI layer only receives metadata (field names, filter
   definitions), never row-level data, unless you explicitly opt in.
 
@@ -138,6 +294,11 @@ uv run pytest                  # tests
 uv run ruff check . && uv run ruff format --check .
 uv run mypy src
 ```
+
+Every CI run shows the test results and a coverage table in its summary
+and attaches the HTML coverage report. The coverage report of the latest
+release is on the [demo site](https://m-c-v-k.github.io/pbi-report-validator/coverage/);
+CI fails if coverage drops below 95%.
 
 Built with Python, uv, Typer, Pydantic and Jinja2. See [CLAUDE.md](CLAUDE.md) for
 architecture and contribution rules, and [docs/PROJECT.md](docs/PROJECT.md) for

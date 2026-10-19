@@ -1,0 +1,59 @@
+"""Labels and summary text shared by the terminal, Markdown and HTML reports."""
+
+from collections import Counter
+
+from pbi_report_validator.domain.models import (
+    Category,
+    DataStatus,
+    DiffResult,
+    ItemStatus,
+)
+
+CATEGORY_LABELS = {
+    Category.PAGE: "Pages",
+    Category.VISUAL: "Visuals",
+    Category.FIELD: "Fields",
+    Category.FILTER: "Filters",
+    Category.SLICER: "Slicers",
+    Category.MEASURE: "Measures",
+    Category.PARSE_ISSUE: "Parse issues",
+    Category.DATA: "Data",
+}
+STATUS_LABELS = {
+    ItemStatus.ADDED: "Added",
+    ItemStatus.REMOVED: "Removed",
+    ItemStatus.MODIFIED: "Modified",
+    ItemStatus.UNCHANGED: "Unchanged",
+}
+# A text mark next to the colour, so status is not conveyed by colour alone.
+STATUS_MARKS = {
+    ItemStatus.ADDED: "+",
+    ItemStatus.REMOVED: "-",
+    ItemStatus.MODIFIED: "~",
+    ItemStatus.UNCHANGED: "",
+}
+
+# Shown in every report when row-level data was not masked (--show-data-values).
+UNMASKED_WARNING = (
+    "This report contains unmasked row-level data: the keys and values of the "
+    "compared rows. Do not publish it, attach it to a pull request or share it "
+    "outside the people allowed to see the datasets."
+)
+
+
+def severity_overview(result: DiffResult) -> str:
+    """Findings per severity, most severe first: ``1 critical, 0 warning, 2 info``."""
+    counts = result.severity_counts
+    return f"{counts.critical} critical, {counts.warning} warning, {counts.info} info"
+
+
+def data_overview(result: DiffResult) -> str | None:
+    """One line about data validation, or ``None`` if it did not run."""
+    if not result.data:
+        return None
+    counts = Counter(summary.status for summary in result.data)
+    return (
+        f"Data: {len(result.data)} visuals compared, "
+        f"{counts[DataStatus.SAME]} same, {counts[DataStatus.DIFFERENT]} different, "
+        f"{counts[DataStatus.NOT_VALIDATED]} not validated"
+    )

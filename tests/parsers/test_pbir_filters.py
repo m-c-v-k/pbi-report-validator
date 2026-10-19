@@ -1,11 +1,9 @@
-from pathlib import Path
 from typing import Any
 
 import pytest
 
 from pbi_report_validator.domain.models import FieldKind, FieldRef, FilterLevel
 from pbi_report_validator.domain.raw import RawJsonFile, RawReport
-from pbi_report_validator.integrations.files import load_project
 from pbi_report_validator.parsers.pbir import parse_report
 from pbi_report_validator.parsers.pbir_filters import (
     UnsupportedConditionError,
@@ -13,8 +11,8 @@ from pbi_report_validator.parsers.pbir_filters import (
     parse_slicer_state,
     render_condition,
 )
+from tests.factories import fixture_report
 
-FIXTURES = Path(__file__).parent.parent / "fixtures"
 YEAR = FieldRef(table="Date", name="Year", kind=FieldKind.COLUMN)
 
 
@@ -37,7 +35,7 @@ def query(*conditions: dict[str, Any]) -> dict[str, Any]:
 
 
 def test_sales_v1_filters_at_every_level() -> None:
-    report = parse_report(load_project(FIXTURES / "sales_v1").report)
+    report = fixture_report("sales_v1")
 
     assert report.issues == ()
     assert [(f.name, f.level, f.condition) for f in report.filters] == [
@@ -62,7 +60,7 @@ def test_sales_v1_filters_at_every_level() -> None:
 
 
 def test_sales_v2_removed_filter_and_changed_slicer() -> None:
-    report = parse_report(load_project(FIXTURES / "sales_v2").report)
+    report = fixture_report("sales_v2")
 
     overview, details = report.pages[0], report.pages[1]
     table = next(v for v in details.visuals if v.name == "table_product_sales")
@@ -73,11 +71,11 @@ def test_sales_v2_removed_filter_and_changed_slicer() -> None:
 
 
 def test_non_slicer_visuals_have_no_slicer_state() -> None:
-    assert parse_slicer_state({"visualType": "card"}, None, []) is None
+    assert parse_slicer_state({"visualType": "card"}, None) == (None, [])
 
 
 def test_slicer_without_selection_has_no_condition() -> None:
-    state = parse_slicer_state({"visualType": "slicer"}, YEAR, [])
+    state, _ = parse_slicer_state({"visualType": "slicer"}, YEAR)
 
     assert state is not None
     assert (state.field, state.condition) == (YEAR, None)
@@ -148,6 +146,14 @@ def test_no_where_gives_no_condition(value: Any) -> None:
         {"In": {"Expressions": [col("zz", "A")], "Values": [[lit("1")]]}},
         {"In": {"Expressions": [col("s", "A")], "Values": [[{"Parameter": {}}]]}},
         {"And": {"Left": None, "Right": None}},
+        {"In": {"Expressions": [col("s", "A")], "Values": [[{"Literal": "1"}]]}},
+        {
+            "Comparison": {
+                "ComparisonKind": 0,
+                "Left": col("s", "A"),
+                "Right": {"Literal": None},
+            }
+        },
     ],
 )
 def test_unsupported_conditions_raise(condition: dict[str, Any]) -> None:
@@ -164,9 +170,7 @@ def test_unsupported_filter_is_kept_without_condition() -> None:
             ]
         }
     }
-    problems: list[str] = []
-
-    filters = parse_filters(container, FilterLevel.PAGE, problems)
+    filters, problems = parse_filters(container, FilterLevel.PAGE)
 
     assert [(f.name, f.filter_type, f.condition) for f in filters] == [
         ("adv", "Advanced", None)
@@ -178,7 +182,7 @@ def test_unsupported_filter_is_kept_without_condition() -> None:
     "container", [None, {}, {"filterConfig": []}, {"filterConfig": {"filters": {}}}]
 )
 def test_missing_filter_config_gives_no_filters(container: Any) -> None:
-    assert parse_filters(container, FilterLevel.REPORT, []) == ()
+    assert parse_filters(container, FilterLevel.REPORT) == ((), [])
 
 
 @pytest.mark.parametrize(
@@ -236,7 +240,7 @@ def test_slicer_with_no_projection_has_no_field() -> None:
         },
     }
 
-    state = parse_slicer_state(body, None, [])
+    state, _ = parse_slicer_state(body, None)
 
     assert state is not None
     assert (state.field, state.condition) == (None, "Sales[Year] in (1)")
@@ -263,4 +267,27 @@ def test_report_filter_problem_becomes_issue_with_path() -> None:
             "Sales.Report/definition/report.json",
             "filter f: unsupported condition (Between)",
         )
+    ]
+
+
+def test_malformed_literal_becomes_issue_not_crash() -> None:
+    right = {"Literal": "1"}
+    malformed = {
+        "Comparison": {"ComparisonKind": 0, "Left": col("s", "A"), "Right": right}
+    }
+    raw = RawReport(
+        path="Sales.Report",
+        report=RawJsonFile(
+            path="Sales.Report/definition/report.json",
+            content={
+                "filterConfig": {"filters": [{"name": "f", "filter": query(malformed)}]}
+            },
+        ),
+    )
+
+    report = parse_report(raw)
+
+    assert report.filters[0].condition is None
+    assert [i.message for i in report.issues] == [
+        "filter f: unsupported condition (non-literal value)"
     ]
