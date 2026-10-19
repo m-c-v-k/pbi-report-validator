@@ -29,11 +29,16 @@ room=$((GITHUB_COMMENT_LIMIT - ${#marker} - ${#footer} - 2))
 summary="${summary:0:room}"
 body="$marker"$'\n'"$summary"$'\n'"$footer"
 
+# Only update a comment this token wrote, since anyone can post the marker.
+# The default GITHUB_TOKEN cannot read /user; its comments are by the bot.
+author="$(gh api user --jq .login 2>/dev/null)" || author="github-actions[bot]"
+
 comments="repos/$GITHUB_REPOSITORY/issues/$pr_number/comments"
-listing="$(gh api --paginate "$comments" --jq '.[] | {id, body}')" \
+listing="$(gh api --paginate "$comments" --jq '.[] | {id, body, login: .user.login}')" \
   || warn "could not read the comments of #$pr_number."
-existing="$(jq -rn --arg marker "$marker" \
-  'first(inputs | select(.body | startswith($marker)) | .id) // empty' <<<"$listing")"
+existing="$(jq -rn --arg marker "$marker" --arg author "$author" \
+  'first(inputs | select(.login == $author and (.body | startswith($marker))) | .id)
+    // empty' <<<"$listing")"
 
 payload="$(jq -n --arg body "$body" '{body: $body}')"
 if [[ -n "$existing" ]]; then
