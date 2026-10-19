@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 
 from pbi_report_validator.cli.main import app
 from pbi_report_validator.dax.builder import result_column
-from pbi_report_validator.diff.data import compare_results, not_fully_validated
+from pbi_report_validator.diff.results import compare_results, not_fully_validated
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -27,7 +27,7 @@ from pbi_report_validator.integrations.templates import read_template
 from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
 from pbi_report_validator.reporting.markdown import to_markdown
 from pbi_report_validator.reporting.terminal import format_summary
-from pbi_report_validator.services.data import (
+from pbi_report_validator.services.data_validation import (
     InvalidDataOptionsError,
     _comparable_queries,
     _pair_values,

@@ -18,7 +18,7 @@ from pbi_report_validator.reporting.terminal import (
     format_summary,
     format_unmasked_warning,
 )
-from pbi_report_validator.services.data import (
+from pbi_report_validator.services.data_validation import (
     InvalidDataOptionsError,
     create_runner,
     data_settings,
@@ -93,7 +93,7 @@ def diff(
         Path | None,
         typer.Option("--html", help="Write a self-contained HTML report to this file."),
     ] = None,
-    data: Annotated[
+    compare_data: Annotated[
         bool,
         typer.Option(
             "--data",
@@ -144,13 +144,13 @@ def diff(
 ) -> None:
     """Compare two report versions: structure, and with --data also the numbers."""
     _configure_logging(verbose)
-    if fail_on_data_error and not data:
+    if fail_on_data_error and not compare_data:
         _fail("--fail-on-data-error needs --data", EXIT_USAGE)
-    if show_data_values and not data:
+    if show_data_values and not compare_data:
         _fail("--show-data-values needs --data", EXIT_USAGE)
     settings = (
         _settings_or_exit(old_dataset, new_dataset, abs_tol, rel_tol, show_data_values)
-        if data
+        if compare_data
         else None
     )
     outputs = Outputs(json=json_path, markdown=markdown_path, html=html_path)

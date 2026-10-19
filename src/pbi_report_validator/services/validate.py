@@ -4,8 +4,8 @@ import logging
 from pathlib import Path
 
 from pbi_report_validator.diff.content import diff_content
-from pbi_report_validator.diff.data import not_fully_validated
 from pbi_report_validator.diff.measures import diff_measures
+from pbi_report_validator.diff.results import not_fully_validated
 from pbi_report_validator.diff.severity import at_least, make_finding
 from pbi_report_validator.diff.structural import (
     diff_pages_and_visuals,
@@ -36,7 +36,7 @@ from pbi_report_validator.reporting.terminal import (
     format_data_failure,
     format_failure,
 )
-from pbi_report_validator.services.data import (
+from pbi_report_validator.services.data_validation import (
     InvalidDataOptionsError,
     QueryRunner,
     validate_data,
@@ -169,7 +169,7 @@ def _issue_findings(
             ChangeKind.ERROR,
             path=f"{side}/{issue.path}",
             message=f"Could not fully parse the {side} version: {issue.message}",
-            visual=issue.visual,
+            visual_path=issue.visual_path,
         )
         for issue in issues
     ]

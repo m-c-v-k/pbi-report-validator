@@ -55,4 +55,4 @@ def test_sales_v2_to_v3_reports_field_and_parse_issue() -> None:
             None,
         ),
     ]
-    assert result.findings[1].visual == "overview/card_total_sales"
+    assert result.findings[1].visual_path == "overview/card_total_sales"

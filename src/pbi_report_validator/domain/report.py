@@ -179,13 +179,13 @@ class ParseIssue(DomainModel):
     """Something in the input that could not be parsed.
 
     Parse issues are reported as findings instead of aborting the run.
-    ``visual`` is the ``page/visual`` the issue belongs to, if any;
+    ``visual_path`` is the ``page/visual`` the issue belongs to, if any;
     ``page`` is set when the whole page could not be parsed.
     """
 
     path: str
     message: str
-    visual: str | None = None
+    visual_path: str | None = None
     page: str | None = None
 
 

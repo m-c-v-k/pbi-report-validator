@@ -300,7 +300,7 @@ def test_visual_parse_issues_name_their_visual() -> None:
 
     report = parse_report(report_with_pages(page))
 
-    assert [(i.visual, i.path) for i in report.issues] == [
+    assert [(i.visual_path, i.path) for i in report.issues] == [
         ("p/bad_one", broken.path),
         ("p/no_pos", incomplete.path),
     ]
@@ -311,7 +311,7 @@ def test_page_level_issues_have_no_visual() -> None:
 
     report = parse_report(report_with_pages(page))
 
-    assert report.issues[0].visual is None
+    assert report.issues[0].visual_path is None
 
 
 def test_unparseable_page_issues_name_their_page() -> None:

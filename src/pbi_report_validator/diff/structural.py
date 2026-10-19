@@ -67,7 +67,7 @@ def without_unparseable(
 
 def _broken(issues: Sequence[ParseIssue]) -> set[str]:
     """Paths (``page`` or ``page/visual``) that failed to parse."""
-    return {key for i in issues for key in (i.page, i.visual) if key}
+    return {key for i in issues for key in (i.page, i.visual_path) if key}
 
 
 def _page_added(page: Page) -> Finding:
@@ -75,7 +75,7 @@ def _page_added(page: Page) -> Finding:
         Category.PAGE,
         ChangeKind.ADDED,
         path=page.name,
-        message=f"Page '{page.display_name}' added with {_count(page)}",
+        message=f"Page '{page.display_name}' added with {_visual_count_text(page)}",
         new=page.display_name,
     )
 
@@ -85,7 +85,7 @@ def _page_removed(page: Page) -> Finding:
         Category.PAGE,
         ChangeKind.REMOVED,
         path=page.name,
-        message=f"Page '{page.display_name}' removed with {_count(page)}",
+        message=f"Page '{page.display_name}' removed with {_visual_count_text(page)}",
         old=page.display_name,
     )
 
@@ -258,6 +258,6 @@ def _describe(visual: Visual) -> str:
     return f"{visual.visual_type}{title} ({visual.name})"
 
 
-def _count(page: Page) -> str:
+def _visual_count_text(page: Page) -> str:
     count = len(page.visuals)
     return f"{count} visual" if count == 1 else f"{count} visuals"

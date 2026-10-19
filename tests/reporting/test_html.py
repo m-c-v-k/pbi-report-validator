@@ -292,7 +292,7 @@ def test_visual_key(path: str, visual: str | None, expected: str | None) -> None
         severity=Severity.INFO,
         path=path,
         message="m",
-        visual=visual,
+        visual_path=visual,
     )
 
     assert visual_key(finding, keys) == expected
