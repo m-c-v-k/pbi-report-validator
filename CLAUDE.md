@@ -145,22 +145,38 @@ integrations/ ALL I/O: filesystem, Power BI REST API, Anthropic API, env config.
 │   └── PROJECT.md                  # Vision, scope, milestones (input for planning)
 ├── src/pbi_report_validator/
 │   ├── cli/main.py                 # Entry point, Typer commands (`pbi-validate`)
-│   ├── services/validate.py        # Orchestrates a full validation run
-│   ├── domain/models.py            # Report, Page, Visual, Filter, Slicer, Diff models
+│   ├── services/validate.py        # Orchestrates a full validation run, fail-on rules
+│   ├── services/data_validation.py # --data: build, run and compare each visual's query
+│   ├── domain/models.py            # Re-exports every model from the modules below
+│   ├── domain/report.py            # Report, Page, Visual, Filter, conditions, ParseIssue
+│   ├── domain/semantic.py          # Semantic model: tables, columns, measures
+│   ├── domain/data_validation.py   # Queries, results, tolerances, data settings
+│   ├── domain/diff.py              # Matches, findings, page views, DiffResult (JSON root)
+│   ├── domain/raw.py               # Raw file contents handed from integrations to parsers
+│   ├── domain/helpers.py           # Pure helpers: page/visual paths, Table[Name] keys
 │   ├── parsers/pbir.py             # PBIR report definition → domain
+│   ├── parsers/pbir_filters.py     # Filter cards and slicer selections → conditions
+│   ├── parsers/pbir_fields.py      # PBIR field expressions → FieldRef
 │   ├── parsers/tmdl.py             # Semantic model (TMDL) → domain
+│   ├── parsers/quoting.py          # PBIR/TMDL single-quote handling
 │   ├── matching/matcher.py         # Old ↔ new pairing
-│   ├── diff/structural.py          # Structural and filter diffs
-│   ├── diff/data.py                # Result-set comparison with tolerances
+│   ├── diff/structural.py          # Pages and visuals: added, removed, moved, retyped
+│   ├── diff/content.py             # Fields, filters and slicer selections
+│   ├── diff/measures.py            # Measure changes and renames
+│   ├── diff/results.py             # Query result comparison with tolerances and masking
+│   ├── diff/severity.py            # Default severity per finding; make_finding()
+│   ├── diff/view.py                # Page and visual views for the reports
 │   ├── dax/builder.py              # Visual → DAX query
-│   ├── reporting/                  # json_out.py, markdown.py, html.py, templates/
-│   └── integrations/               # files.py, powerbi.py, anthropic_client.py, config.py
+│   ├── reporting/                  # json_out, markdown, html, terminal, labels, templates/
+│   └── integrations/               # files.py, powerbi.py, config.py, templates.py
+│                                   # (anthropic_client.py arrives with the AI layer)
 ├── tests/
-│   ├── fixtures/                   # sales_v1/, sales_v2/ sample PBIP reports
+│   ├── fixtures/                   # sales_v1/ → sales_v2/ → sales_v3/ sample PBIP reports
+│   ├── snapshots/                  # Expected JSON/Markdown/DAX output for the fixtures
 │   └── ...                         # mirrors src/ structure
 ├── Dockerfile
-├── action.yml                      # GitHub Action
-└── .github/workflows/              # CI, Pages demo, Claude agent workflows
+├── action.yml, action/             # GitHub Action and its run/comment scripts
+└── .github/                        # Workflows (CI, Docker, Pages, release, Claude), Dependabot
 ```
 
 ## Setup
