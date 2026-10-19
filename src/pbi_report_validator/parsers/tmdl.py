@@ -14,6 +14,7 @@ they are kept as part of the DAX.
 import re
 from dataclasses import dataclass, field
 
+from pbi_report_validator.domain.helpers import field_key
 from pbi_report_validator.domain.models import (
     Column,
     Measure,
@@ -129,7 +130,7 @@ def _read_measure(
         issues.append(
             ParseIssue(
                 path=f"{path}:{start.number}",
-                message=f"measure {table.name}[{name}] has no expression",
+                message=f"measure {field_key(table.name, name)} has no expression",
             )
         )
         return index

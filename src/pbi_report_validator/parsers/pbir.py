@@ -11,6 +11,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from pbi_report_validator.domain.helpers import visual_path
 from pbi_report_validator.domain.models import (
     FilterLevel,
     Page,
@@ -106,7 +107,7 @@ def _parse_visual_or_issue(
     raw: RawJsonFile, page_name: str, issues: list[ParseIssue]
 ) -> Visual | None:
     # The visual's folder name is its id; it is known even if the file is broken.
-    key = f"{page_name}/{PurePosixPath(raw.path).parent.name}"
+    key = visual_path(page_name, PurePosixPath(raw.path).parent.name)
     content = _content_or_issue(raw, issues, visual=key)
     if content is None:
         return None
