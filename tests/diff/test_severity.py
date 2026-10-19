@@ -7,6 +7,7 @@ from pbi_report_validator.diff.severity import (
     SEVERITY_RANK,
     at_least,
     default_severity,
+    make_finding,
 )
 from pbi_report_validator.domain.models import Category, ChangeKind, Finding, Severity
 from pbi_report_validator.services.validate import validate
@@ -50,6 +51,25 @@ EXPECTED = [
 @pytest.mark.parametrize(("category", "change", "severity"), EXPECTED)
 def test_default_severity(category: C, change: K, severity: S) -> None:
     assert default_severity(category, change) is severity
+
+
+@pytest.mark.parametrize(("category", "change", "severity"), EXPECTED)
+def test_make_finding_uses_default_severity(
+    category: C, change: K, severity: S
+) -> None:
+    finding = make_finding(category, change, path="p", message="m", old="a")
+
+    assert (finding.category, finding.change, finding.severity) == (
+        category,
+        change,
+        severity,
+    )
+    assert (finding.path, finding.message, finding.old, finding.new) == (
+        "p",
+        "m",
+        "a",
+        None,
+    )
 
 
 def test_every_combination_has_a_severity() -> None:

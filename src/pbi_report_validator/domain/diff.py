@@ -95,7 +95,7 @@ class Finding(DomainModel):
 
     ``path`` locates the object, e.g. ``details/table_product_sales/filters/
     visual_filter_category`` or ``model/Sales/Total Sales``. ``severity`` is
-    required; ``diff.severity.default_severity`` gives the usual level.
+    required; ``diff.severity.make_finding`` sets the usual level.
     """
 
     category: Category

@@ -13,14 +13,13 @@ from typing import Protocol
 
 from pbi_report_validator.dax.builder import build_query
 from pbi_report_validator.diff.data import compare_results, not_validated
-from pbi_report_validator.diff.severity import default_severity
+from pbi_report_validator.diff.severity import make_finding
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
     DataComparison,
     DaxQuery,
     DomainModel,
-    Finding,
     QueryResult,
     Report,
     ReportMatch,
@@ -174,10 +173,9 @@ def _with_unpaired(
     if not parts:
         return comparison
     note = "not compared: " + "; ".join(parts)
-    finding = Finding(
-        category=Category.DATA,
-        change=ChangeKind.ERROR,
-        severity=default_severity(Category.DATA, ChangeKind.ERROR),
+    finding = make_finding(
+        Category.DATA,
+        ChangeKind.ERROR,
         path=f"{path}/data",
         message=f"Data partly validated, {note}",
     )

@@ -9,7 +9,7 @@ reported again for every visual or filter that uses it.
 import re
 from collections.abc import Mapping
 
-from pbi_report_validator.diff.severity import default_severity
+from pbi_report_validator.diff.severity import make_finding
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -82,10 +82,9 @@ def _diff_slicer(
         change, message = ChangeKind.ADDED, "Slicer selection added"
     else:
         change, message = ChangeKind.REMOVED, "Slicer selection removed"
-    return Finding(
-        category=Category.SLICER,
-        change=change,
-        severity=default_severity(Category.SLICER, change),
+    return make_finding(
+        Category.SLICER,
+        change,
         path=path,
         message=message,
         old=old_condition,
@@ -113,10 +112,9 @@ def _diff_fields(
         else:
             change, message = ChangeKind.MODIFIED, f"Field {key} moved to another role"
         findings.append(
-            Finding(
-                category=Category.FIELD,
-                change=change,
-                severity=default_severity(Category.FIELD, change),
+            make_finding(
+                Category.FIELD,
+                change,
                 path=f"{path}/fields/{key}",
                 message=message,
                 old=before,
@@ -160,10 +158,9 @@ def _diff_filters(
         else:
             continue
         findings.append(
-            Finding(
-                category=Category.FILTER,
-                change=change,
-                severity=default_severity(Category.FILTER, change),
+            make_finding(
+                Category.FILTER,
+                change,
                 path=path,
                 message=message,
                 old=old_by_name.get(name),
