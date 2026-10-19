@@ -9,7 +9,7 @@ structured form keeps the two in agreement.
 """
 
 import re
-from typing import Any, Literal, cast
+from typing import Any, Literal, assert_never, cast
 
 from pbi_report_validator.domain.models import (
     AllCondition,
@@ -136,10 +136,12 @@ def render(condition: Condition) -> str:
     if isinstance(condition, BinaryCondition):
         left, right = render(condition.left), render(condition.right)
         return f"({left}) {condition.kind} ({right})"
-    return " and ".join(
-        f"({render(item)})" if isinstance(item, BinaryCondition) else render(item)
-        for item in condition.items
-    )
+    if isinstance(condition, AllCondition):
+        return " and ".join(
+            f"({render(item)})" if isinstance(item, BinaryCondition) else render(item)
+            for item in condition.items
+        )
+    assert_never(condition)
 
 
 def render_literal(literal: LiteralValue) -> str:
