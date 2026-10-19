@@ -3,7 +3,11 @@
 from collections import Counter
 
 from pbi_report_validator.domain.models import Category, DiffResult, Severity
-from pbi_report_validator.reporting.labels import data_overview, severity_overview
+from pbi_report_validator.reporting.labels import (
+    UNMASKED_WARNING,
+    data_overview,
+    severity_overview,
+)
 
 DEFAULT_LIMIT = 20
 
@@ -58,3 +62,9 @@ def format_data_failure(count: int) -> str:
     """Why ``--fail-on-data-error`` failed the run."""
     noun = "visual" if count == 1 else "visuals"
     return f"Failed: data of {count} {noun} not fully validated (--fail-on-data-error)"
+
+
+def format_unmasked_warning() -> str:
+    """A block that stands out in the terminal, for ``--show-data-values``."""
+    rule = "!" * 72
+    return "\n".join([rule, "WARNING: UNMASKED DATA", UNMASKED_WARNING, rule])

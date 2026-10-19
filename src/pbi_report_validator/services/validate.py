@@ -6,7 +6,7 @@ from pathlib import Path
 from pbi_report_validator.diff.content import diff_content
 from pbi_report_validator.diff.data import not_fully_validated
 from pbi_report_validator.diff.measures import diff_measures
-from pbi_report_validator.diff.severity import at_least, with_severity
+from pbi_report_validator.diff.severity import at_least, make_finding
 from pbi_report_validator.diff.structural import (
     diff_pages_and_visuals,
     without_unparseable,
@@ -85,7 +85,6 @@ def validate(
             data.settings,
         )
         findings += [f for c in comparisons for f in c.findings]
-    findings = with_severity(findings)
     logger.info("Found %d findings", len(findings))
     return DiffResult(
         old_source=old_path.as_posix(),
@@ -93,6 +92,7 @@ def validate(
         findings=tuple(findings),
         pages=build_page_views(match, findings),
         data=tuple(sorted((c.summary for c in comparisons), key=lambda s: s.path)),
+        data_values_shown=data is not None and data.settings.show_values,
     )
 
 
@@ -159,9 +159,9 @@ def _issue_findings(
 ) -> list[Finding]:
     issues: list[ParseIssue] = [*report.issues, *(model.issues if model else ())]
     return [
-        Finding(
-            category=Category.PARSE_ISSUE,
-            change=ChangeKind.ERROR,
+        make_finding(
+            Category.PARSE_ISSUE,
+            ChangeKind.ERROR,
             path=f"{side}/{issue.path}",
             message=f"Could not fully parse the {side} version: {issue.message}",
             visual=issue.visual,

@@ -72,7 +72,7 @@ or the `.Report` folder itself. The terminal always shows a summary; add any of:
 |---|---|
 | `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
 | `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
-| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.3) |
+| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.4) |
 
 Running it on the sample reports in this repository gives:
 
@@ -159,9 +159,17 @@ pbi-validate diff ./old ./new --data \
 
 - Numbers are equal when they differ by at most `--abs-tol` (default 0) or
   `--rel-tol` times the larger value (default 1e-9); text must match exactly.
-- Findings show rows that exist in only one version and values that differ,
-  with old, new and the difference. The HTML drill-down shows a per-visual
-  summary; the JSON has a `data` summary per visual (schema 1.2).
+- Findings show rows that exist in only one version and values that differ.
+  The HTML drill-down shows a per-visual summary; the JSON has a `data`
+  summary per visual (schema 1.2).
+- **Row-level data is masked by default.** Rows are named by position
+  (`row 3`) and values show as `(masked)`, so reports, job summaries and
+  pull request comments never contain the keys or numbers of your data.
+  Counts and the largest difference per visual are still shown.
+- `--show-data-values` shows the row keys and old/new values instead. Every
+  output then carries a warning (stderr, a banner in the Markdown and HTML,
+  `data_values_shown: true` in the JSON, schema 1.4). Only use it where
+  everyone who can read the output may see the data.
 - Visuals whose query cannot be built faithfully (custom visuals, hierarchy
   levels, filters on measures, ...) or fails are reported as
   "not validated" with the reason. Slicers are skipped: they only filter.
@@ -214,7 +222,10 @@ from v0.2.0:
 ```
 
 For data validation, add `data: true`, `old-dataset` and `new-dataset`, and
-pass the credentials as environment variables (never as inputs):
+pass the credentials as environment variables (never as inputs). Values stay
+masked unless you set `show-data-values: true`; the job summary and any pull
+request comment then contain row-level data, which is public on a public
+repository.
 
 ```yaml
   env:
@@ -266,8 +277,9 @@ commit, which takes about a minute longer.
 - Only files inside the project folder are read: a `definition.pbir` that
   points to a semantic model outside it is rejected with an error.
 - With `--data`, queries go only to the Power BI API of your own tenant.
-  Query results stay in memory and in the output files you ask for; they
-  are never logged or sent anywhere else.
+  Query results stay in memory and are never logged or sent anywhere else.
+  The output files contain only masked rows unless you pass
+  `--show-data-values` (action input `show-data-values: true`).
 - The optional AI layer only receives metadata (field names, filter
   definitions), never row-level data, unless you explicitly opt in.
 

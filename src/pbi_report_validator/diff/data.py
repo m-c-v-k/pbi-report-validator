@@ -3,6 +3,8 @@
 Rows are aligned on the group-by columns (an outer join in pandas), then
 each value is compared: text exactly, numbers within a ``Tolerance``.
 Findings are capped per visual; the ``DataSummary`` keeps the full counts.
+Row keys and values are masked unless asked for, since they are row-level
+data that can end up in public job summaries and pull request comments.
 Pure functions only: the query results come in as domain models.
 """
 
@@ -10,6 +12,7 @@ from collections.abc import Iterable, Sequence
 
 import pandas as pd
 
+from pbi_report_validator.diff.severity import make_finding
 from pbi_report_validator.domain.models import (
     Category,
     CellValue,
@@ -24,6 +27,7 @@ from pbi_report_validator.domain.models import (
 
 DEFAULT_MAX_FINDINGS = 20
 TOTAL_LABEL = "total"
+MASKED = "(masked)"
 SIDE = "_merge"
 
 ColumnPairs = Sequence[tuple[str, str]]
@@ -41,6 +45,8 @@ def compare_results(
     values: ColumnPairs,
     tolerance: Tolerance | None = None,
     max_findings: int = DEFAULT_MAX_FINDINGS,
+    *,
+    show_values: bool = False,
 ) -> DataComparison:
     """Compare two query results for the visual at ``path`` (``page/visual``).
 
@@ -53,6 +59,9 @@ def compare_results(
         values: ``(old column, new column)`` pairs to compare.
         tolerance: Allowed difference for numbers.
         max_findings: Maximum findings returned for this visual.
+        show_values: Put row keys and values in the findings. When false,
+            rows are named ``row N`` (their position in the sorted rows) and
+            values are ``(masked)``.
 
     Returns:
         The summary and the (capped) findings. Results that cannot be aligned
@@ -65,7 +74,9 @@ def compare_results(
     except ComparisonError as exc:
         return not_validated(path, str(exc))
     merged = _merge(old_frame, new_frame, len(keys))
-    findings, differing, deltas = _compare_rows(path, merged, keys, values, tolerance)
+    findings, differing, deltas = _compare_rows(
+        path, merged, keys, values, tolerance, show_values
+    )
     summary = DataSummary(
         path=path,
         status=DataStatus.DIFFERENT if findings else DataStatus.SAME,
@@ -86,18 +97,26 @@ def _compare_rows(
     keys: ColumnPairs,
     values: ColumnPairs,
     tolerance: Tolerance,
+    show_values: bool,
 ) -> tuple[list[Finding], int, list[float]]:
     """Findings, number of differing matched rows and all numeric deltas."""
     names = [old_name for old_name, _ in keys]
     findings: list[Finding] = []
     differing = 0
     deltas: list[float] = []
-    for _, row in merged.iterrows():
-        label = _label(names, [row[f"k{i}"] for i in range(len(keys))])
+    for position, (_, row) in enumerate(merged.iterrows(), start=1):
+        key_values = [row[f"k{i}"] for i in range(len(keys))]
+        label = (
+            _label(names, key_values) if show_values else _masked_label(names, position)
+        )
         if row[SIDE] != "both":
-            findings.append(_row_finding(path, label, row[SIDE] == "right_only"))
+            subject = f"Row {label}" if show_values else label.capitalize()
+            only_new = row[SIDE] == "right_only"
+            findings.append(_row_finding(path, label, subject, only_new))
             continue
-        row_findings, row_deltas = _compare_row(path, label, row, values, tolerance)
+        row_findings, row_deltas = _compare_row(
+            path, label, row, values, tolerance, show_values
+        )
         findings += row_findings
         deltas += row_deltas
         differing += bool(row_findings)
@@ -105,7 +124,12 @@ def _compare_rows(
 
 
 def _compare_row(
-    path: str, label: str, row: pd.Series, values: ColumnPairs, tolerance: Tolerance
+    path: str,
+    label: str,
+    row: pd.Series,
+    values: ColumnPairs,
+    tolerance: Tolerance,
+    show_values: bool,
 ) -> tuple[list[Finding], list[float]]:
     """Value findings and numeric deltas for one row present in both versions."""
     findings: list[Finding] = []
@@ -116,7 +140,10 @@ def _compare_row(
         if delta is not None:
             deltas.append(delta)
         if not equal:
-            findings.append(_value_finding(path, label, value_name, before, after))
+            shown = (
+                (display(before), display(after)) if show_values else (MASKED, MASKED)
+            )
+            findings.append(_value_finding(path, label, value_name, *shown))
     return findings, deltas
 
 
@@ -126,9 +153,9 @@ def _count(merged: pd.DataFrame, side: str) -> int:
 
 def not_validated(path: str, reason: str) -> DataComparison:
     """A visual whose data could not be compared, with the reason."""
-    finding = Finding(
-        category=Category.DATA,
-        change=ChangeKind.ERROR,
+    finding = make_finding(
+        Category.DATA,
+        ChangeKind.ERROR,
         path=f"{path}/data",
         message=f"Data not validated: {reason}",
     )
@@ -209,26 +236,27 @@ def _cell(value: object) -> CellValue:
     return str(value)
 
 
-def _row_finding(path: str, label: str, only_new: bool) -> Finding:
+def _row_finding(path: str, label: str, subject: str, only_new: bool) -> Finding:
     where = "new" if only_new else "old"
-    return Finding(
-        category=Category.DATA,
-        change=ChangeKind.ADDED if only_new else ChangeKind.REMOVED,
+    change = ChangeKind.ADDED if only_new else ChangeKind.REMOVED
+    return make_finding(
+        Category.DATA,
+        change,
         path=f"{path}/data/{label}",
-        message=f"Row {label} only in the {where} version",
+        message=f"{subject} only in the {where} version",
     )
 
 
 def _value_finding(
-    path: str, label: str, name: str, before: CellValue, after: CellValue
+    path: str, label: str, name: str, before: str, after: str
 ) -> Finding:
-    return Finding(
-        category=Category.DATA,
-        change=ChangeKind.MODIFIED,
+    return make_finding(
+        Category.DATA,
+        ChangeKind.MODIFIED,
         path=f"{path}/data/{label}/{name}",
         message=f"{name} differs for {label}",
-        old=display(before),
-        new=display(after),
+        old=before,
+        new=after,
     )
 
 
@@ -238,6 +266,11 @@ def _label(names: Sequence[str], values: Sequence[object]) -> str:
     return ", ".join(
         f"{n}={display(_cell(v))}" for n, v in zip(names, values, strict=True)
     )
+
+
+def _masked_label(names: Sequence[str], position: int) -> str:
+    """A row named by its position, so findings do not reveal key values."""
+    return f"row {position}" if names else TOTAL_LABEL
 
 
 def display(value: CellValue) -> str:

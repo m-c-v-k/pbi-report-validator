@@ -45,6 +45,10 @@ boolean() {
 boolean data data "$IN_DATA"
 boolean fail_on_data_error fail-on-data-error "$IN_FAIL_ON_DATA_ERROR"
 boolean comment comment "$IN_COMMENT"
+boolean show_data_values show-data-values "$IN_SHOW_DATA_VALUES"
+if [[ "$show_data_values" == true && "$data" != true ]]; then
+  fail_usage "Input show-data-values needs data: true"
+fi
 
 # A folder per step, so a second run in the same job never reads the first
 # run's results.
@@ -68,6 +72,10 @@ if [[ "$data" == true ]]; then
   add --new-dataset "$IN_NEW_DATASET"
   add --abs-tol "$IN_ABS_TOL"
   add --rel-tol "$IN_REL_TOL"
+  if [[ "$show_data_values" == true ]]; then
+    args+=(--show-data-values)
+    echo "::warning::show-data-values is on: the job summary, outputs and any pull request comment contain unmasked row-level data."
+  fi
 fi
 
 # Same paths inside the container as on the runner, and the runner's user,

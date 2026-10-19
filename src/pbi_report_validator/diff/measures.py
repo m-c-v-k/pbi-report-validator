@@ -12,6 +12,7 @@ added, and fields and filters that use it are reported as changed too.
 
 from pydantic import Field
 
+from pbi_report_validator.diff.severity import make_finding
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -102,9 +103,9 @@ def _path(table: str, name: str) -> str:
 
 
 def _renamed(table: str, old: Measure, new: Measure) -> Finding:
-    return Finding(
-        category=Category.MEASURE,
-        change=ChangeKind.RENAMED,
+    return make_finding(
+        Category.MEASURE,
+        ChangeKind.RENAMED,
         path=_path(table, old.name),
         message=f"Measure {table}[{old.name}] renamed to {table}[{new.name}]",
         old=old.name,
@@ -113,9 +114,9 @@ def _renamed(table: str, old: Measure, new: Measure) -> Finding:
 
 
 def _removed(table: str, measure: Measure) -> Finding:
-    return Finding(
-        category=Category.MEASURE,
-        change=ChangeKind.REMOVED,
+    return make_finding(
+        Category.MEASURE,
+        ChangeKind.REMOVED,
         path=_path(table, measure.name),
         message=f"Measure {table}[{measure.name}] removed",
         old=measure.expression,
@@ -123,9 +124,9 @@ def _removed(table: str, measure: Measure) -> Finding:
 
 
 def _added(table: str, measure: Measure) -> Finding:
-    return Finding(
-        category=Category.MEASURE,
-        change=ChangeKind.ADDED,
+    return make_finding(
+        Category.MEASURE,
+        ChangeKind.ADDED,
         path=_path(table, measure.name),
         message=f"Measure {table}[{measure.name}] added",
         new=measure.expression,
@@ -133,9 +134,9 @@ def _added(table: str, measure: Measure) -> Finding:
 
 
 def _modified(table: str, old: Measure, new: Measure) -> Finding:
-    return Finding(
-        category=Category.MEASURE,
-        change=ChangeKind.MODIFIED,
+    return make_finding(
+        Category.MEASURE,
+        ChangeKind.MODIFIED,
         path=_path(table, old.name),
         message=f"Expression of measure {table}[{old.name}] changed",
         old=old.expression,
