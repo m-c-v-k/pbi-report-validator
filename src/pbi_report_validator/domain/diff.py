@@ -160,6 +160,19 @@ class PageView(DomainModel):
     visuals: tuple[VisualView, ...] = ()
 
 
+class RowComparison(DomainModel):
+    """The outcome of comparing the aligned rows of one visual.
+
+    ``rows_differing`` counts rows present in both versions with at least
+    one differing value; ``deltas`` are all numeric differences, including
+    those within the tolerance.
+    """
+
+    findings: tuple[Finding, ...] = ()
+    rows_differing: int = Field(default=0, ge=0)
+    deltas: tuple[float, ...] = ()
+
+
 class DataComparison(DomainModel):
     """Summary and findings from comparing one visual's data."""
 

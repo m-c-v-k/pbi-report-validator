@@ -1,7 +1,14 @@
 """Compare what a visual returns in the old and new version.
 
-Rows are aligned on the group-by columns (an outer join in pandas), then
-each value is compared: text exactly, numbers within a ``Tolerance``.
+Rows are aligned on the group-by columns, then each value is compared:
+text exactly, numbers within a ``Tolerance``.
+
+Alignment: each result becomes a frame whose columns are renamed to
+``key0, key1, ...`` and ``value0, value1, ...`` (so old and new line up even
+when a measure was renamed). The two frames are outer-joined on the key
+columns; pandas then suffixes the value columns with ``_old``/``_new`` and
+records in ``SIDE`` whether a row was in both versions or only one. A visual
+without group-by columns has one row, joined on a constant ``NO_KEY`` column.
 Findings are capped per visual; the ``DataSummary`` keeps the full counts.
 Row keys and values are masked unless asked for, since they are row-level
 data that can end up in public job summaries and pull request comments.
@@ -22,13 +29,21 @@ from pbi_report_validator.domain.models import (
     DataSummary,
     Finding,
     QueryResult,
+    RowComparison,
     Tolerance,
 )
 
 DEFAULT_MAX_FINDINGS = 20
 TOTAL_LABEL = "total"
 MASKED = "(masked)"
+# Columns added by the outer join; the SIDE values are pandas' own names.
 SIDE = "_merge"
+BOTH = "both"
+OLD_ONLY = "left_only"
+NEW_ONLY = "right_only"
+NO_KEY = "_row"
+OLD_SUFFIX = "_old"
+NEW_SUFFIX = "_new"
 
 ColumnPairs = Sequence[tuple[str, str]]
 
@@ -74,21 +89,19 @@ def compare_results(
     except ComparisonError as exc:
         return not_validated(path, str(exc))
     merged = _merge(old_frame, new_frame, len(keys))
-    findings, differing, deltas = _compare_rows(
-        path, merged, keys, values, tolerance, show_values
-    )
+    rows = _compare_rows(path, merged, keys, values, tolerance, show_values)
     summary = DataSummary(
         path=path,
-        status=DataStatus.DIFFERENT if findings else DataStatus.SAME,
+        status=DataStatus.DIFFERENT if rows.findings else DataStatus.SAME,
         rows_old=len(old_frame),
         rows_new=len(new_frame),
-        rows_matched=_count(merged, "both"),
-        rows_differing=differing,
-        rows_only_old=_count(merged, "left_only"),
-        rows_only_new=_count(merged, "right_only"),
-        max_abs_delta=max(deltas) if deltas else None,
+        rows_matched=_count(merged, BOTH),
+        rows_differing=rows.rows_differing,
+        rows_only_old=_count(merged, OLD_ONLY),
+        rows_only_new=_count(merged, NEW_ONLY),
+        max_abs_delta=max(rows.deltas) if rows.deltas else None,
     )
-    return DataComparison(summary=summary, findings=tuple(findings[:max_findings]))
+    return DataComparison(summary=summary, findings=rows.findings[:max_findings])
 
 
 def _compare_rows(
@@ -98,20 +111,20 @@ def _compare_rows(
     values: ColumnPairs,
     tolerance: Tolerance,
     show_values: bool,
-) -> tuple[list[Finding], int, list[float]]:
+) -> RowComparison:
     """Findings, number of differing matched rows and all numeric deltas."""
     names = [old_name for old_name, _ in keys]
     findings: list[Finding] = []
     differing = 0
     deltas: list[float] = []
     for position, (_, row) in enumerate(merged.iterrows(), start=1):
-        key_values = [row[f"k{i}"] for i in range(len(keys))]
+        key_values = [row[_key_column(i)] for i in range(len(keys))]
         label = (
             _label(names, key_values) if show_values else _masked_label(names, position)
         )
-        if row[SIDE] != "both":
+        if row[SIDE] != BOTH:
             subject = f"Row {label}" if show_values else label.capitalize()
-            only_new = row[SIDE] == "right_only"
+            only_new = row[SIDE] == NEW_ONLY
             findings.append(_row_finding(path, label, subject, only_new))
             continue
         row_findings, row_deltas = _compare_row(
@@ -120,7 +133,9 @@ def _compare_rows(
         findings += row_findings
         deltas += row_deltas
         differing += bool(row_findings)
-    return findings, differing, deltas
+    return RowComparison(
+        findings=tuple(findings), rows_differing=differing, deltas=tuple(deltas)
+    )
 
 
 def _compare_row(
@@ -135,7 +150,9 @@ def _compare_row(
     findings: list[Finding] = []
     deltas: list[float] = []
     for index, (value_name, _) in enumerate(values):
-        before, after = _cell(row[f"v{index}_old"]), _cell(row[f"v{index}_new"])
+        column = _value_column(index)
+        before = _cell(row[column + OLD_SUFFIX])
+        after = _cell(row[column + NEW_SUFFIX])
         equal, delta = _equal(before, after, tolerance)
         if delta is not None:
             deltas.append(delta)
@@ -175,10 +192,10 @@ def not_fully_validated(findings: Iterable[Finding]) -> list[Finding]:
 def _frame(
     result: QueryResult, keys: ColumnPairs, values: ColumnPairs, side: int, label: str
 ) -> pd.DataFrame:
-    """Result as a frame with canonical column names ``k0.., v0..``."""
+    """Result as a frame with canonical columns ``key0.., value0..``."""
     wanted = [pair[side] for pair in [*keys, *values]]
-    canonical = [f"k{i}" for i in range(len(keys))] + [
-        f"v{i}" for i in range(len(values))
+    canonical = [_key_column(i) for i in range(len(keys))] + [
+        _value_column(i) for i in range(len(values))
     ]
     # The API returns no column names for a result without rows, so columns
     # can only be checked when there are some.
@@ -196,12 +213,25 @@ def _frame(
     return frame
 
 
+def _key_column(index: int) -> str:
+    return f"key{index}"
+
+
+def _value_column(index: int) -> str:
+    return f"value{index}"
+
+
 def _merge(old: pd.DataFrame, new: pd.DataFrame, key_count: int) -> pd.DataFrame:
-    on = [f"k{i}" for i in range(key_count)] or ["_row"]
+    """Outer-join the two frames on their keys, sorted by key.
+
+    The result has the ``SIDE`` column and each value column twice, with
+    ``OLD_SUFFIX`` and ``NEW_SUFFIX``.
+    """
+    on = [_key_column(i) for i in range(key_count)] or [NO_KEY]
     if not key_count:
-        old, new = old.assign(_row=0), new.assign(_row=0)
+        old, new = old.assign(**{NO_KEY: 0}), new.assign(**{NO_KEY: 0})
     merged = old.merge(
-        new, on=on, how="outer", suffixes=("_old", "_new"), indicator=SIDE
+        new, on=on, how="outer", suffixes=(OLD_SUFFIX, NEW_SUFFIX), indicator=SIDE
     )
     merged[SIDE] = merged[SIDE].astype(str)
     order = merged[on].map(_sort_key).apply(tuple, axis=1)
