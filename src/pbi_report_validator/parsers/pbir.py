@@ -26,6 +26,7 @@ from pbi_report_validator.parsers.pbir_filters import (
     parse_filters,
     parse_slicer_state,
 )
+from pbi_report_validator.parsers.quoting import unquote
 
 DEFAULT_PAGE_WIDTH = 1280.0
 DEFAULT_PAGE_HEIGHT = 720.0
@@ -109,20 +110,20 @@ def _parse_visual_or_issue(
     content = _content_or_issue(raw, issues, visual=key)
     if content is None:
         return None
+    visual, problems = _try_parse_visual(content)
+    issues.extend(ParseIssue(path=raw.path, message=m, visual=key) for m in problems)
+    return visual
+
+
+def _try_parse_visual(content: dict[str, Any]) -> tuple[Visual | None, list[str]]:
+    """The visual and its problems, or ``None`` and why it could not be parsed."""
     problems: list[str] = []
     try:
-        visual = parse_visual(content, problems)
+        return parse_visual(content, problems), problems
     except VisualParseError as exc:
-        problems = [str(exc)]
+        return None, [str(exc)]
     except ValidationError as exc:
-        problems = [_first_error(exc)]
-    else:
-        issues.extend(
-            ParseIssue(path=raw.path, message=m, visual=key) for m in problems
-        )
-        return visual
-    issues.extend(ParseIssue(path=raw.path, message=m, visual=key) for m in problems)
-    return None
+        return None, [_first_error(exc)]
 
 
 def parse_visual(content: dict[str, Any], problems: list[str]) -> Visual:
@@ -181,7 +182,7 @@ def _title(body: dict[str, Any]) -> str | None:
         literal = value["expr"]["Literal"]["Value"]
     except (KeyError, IndexError, TypeError):
         return None
-    return _unquote_literal(literal) if isinstance(literal, str) else None
+    return unquote(literal) if isinstance(literal, str) else None
 
 
 def _projections(body: dict[str, Any], problems: list[str]) -> tuple[Projection, ...]:
@@ -214,13 +215,6 @@ def _content_or_issue(
         )
         return None
     return raw.content
-
-
-def _unquote_literal(value: str) -> str:
-    """Strip PBIR string literal quotes: ``'Total sales'`` -> ``Total sales``."""
-    if len(value) >= 2 and value.startswith("'") and value.endswith("'"):
-        return value[1:-1].replace("''", "'")
-    return value
 
 
 def _first_error(exc: ValidationError) -> str:
