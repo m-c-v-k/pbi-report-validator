@@ -102,10 +102,15 @@ footer a { color: var(--accent); }
 .detail-body ul { margin: 0; padding-left: 18px; }
 .detail-body li { margin: 6px 0; }
 td a, .detail-body a { color: var(--accent); }
+.unmasked { border: 3px solid var(--removed); border-radius: 8px; padding: 12px 16px; margin: 0 0 16px; }
+.unmasked strong { color: var(--removed); }
 </style>
 </head>
 <body>
 <main>
+{% if result.data_values_shown %}
+<div class="unmasked" role="alert"><strong>Warning: unmasked data.</strong> {{ unmasked_warning }}</div>
+{% endif %}
 <header>
   <h1>Power BI report diff</h1>
   <p class="sources"><code>{{ result.old_source }}</code> &rarr; <code>{{ result.new_source }}</code></p>

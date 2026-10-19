@@ -25,6 +25,7 @@ row shows as missing rather than as blank in a data comparison.
 import re
 from collections.abc import Sequence
 from datetime import datetime
+from typing import assert_never
 
 from pbi_report_validator.domain.models import (
     AllCondition,
@@ -190,7 +191,9 @@ def _predicate(condition: Condition) -> str:
         return (
             f"({_predicate(condition.left)}) {operator} ({_predicate(condition.right)})"
         )
-    return " && ".join(f"({_predicate(item)})" for item in condition.items)
+    if isinstance(condition, AllCondition):
+        return " && ".join(f"({_predicate(item)})" for item in condition.items)
+    assert_never(condition)
 
 
 def _fields(condition: Condition) -> list[FieldRef]:
@@ -202,7 +205,9 @@ def _fields(condition: Condition) -> list[FieldRef]:
         return _fields(condition.operand)
     if isinstance(condition, BinaryCondition):
         return [*_fields(condition.left), *_fields(condition.right)]
-    return [f for item in condition.items for f in _fields(item)]
+    if isinstance(condition, AllCondition):
+        return [f for item in condition.items for f in _fields(item)]
+    assert_never(condition)
 
 
 def _row(values: Sequence[LiteralValue], width: int) -> str:

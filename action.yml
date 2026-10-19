@@ -50,6 +50,9 @@ inputs:
   rel-tol:
     description: Allowed relative difference (with data).
     default: ""
+  show-data-values:
+    description: With data, show row keys and values instead of masking them. The job summary and pull request comment then contain row-level data.
+    default: "false"
 
 outputs:
   json:
@@ -117,4 +120,5 @@ runs:
         IN_NEW_DATASET: ${{ inputs.new-dataset }}
         IN_ABS_TOL: ${{ inputs.abs-tol }}
         IN_REL_TOL: ${{ inputs.rel-tol }}
+        IN_SHOW_DATA_VALUES: ${{ inputs.show-data-values }}
       run: bash "$GITHUB_ACTION_PATH/action/run.sh"

@@ -38,12 +38,27 @@ def default_severity(category: Category, change: ChangeKind) -> Severity:
     return CHANGE_SEVERITY.get((category, change), CATEGORY_SEVERITY[category])
 
 
-def with_severity(findings: Iterable[Finding]) -> list[Finding]:
-    """Copies of the findings with their default severity set."""
-    return [
-        f.model_copy(update={"severity": default_severity(f.category, f.change)})
-        for f in findings
-    ]
+def make_finding(
+    category: Category,
+    change: ChangeKind,
+    *,
+    path: str,
+    message: str,
+    old: str | None = None,
+    new: str | None = None,
+    visual: str | None = None,
+) -> Finding:
+    """A finding with the default severity of its category and change."""
+    return Finding(
+        category=category,
+        change=change,
+        severity=default_severity(category, change),
+        path=path,
+        message=message,
+        old=old,
+        new=new,
+        visual=visual,
+    )
 
 
 def at_least(findings: Iterable[Finding], threshold: Severity) -> list[Finding]:

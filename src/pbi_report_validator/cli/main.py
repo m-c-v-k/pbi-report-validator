@@ -14,7 +14,10 @@ from pbi_report_validator.integrations.config import MissingCredentialsError
 from pbi_report_validator.integrations.files import OutputWriteError, ProjectLoadError
 from pbi_report_validator.integrations.powerbi import PowerBIError
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
-from pbi_report_validator.reporting.terminal import format_summary
+from pbi_report_validator.reporting.terminal import (
+    format_summary,
+    format_unmasked_warning,
+)
 from pbi_report_validator.services.data import (
     DataRun,
     InvalidDataOptionsError,
@@ -128,6 +131,14 @@ def diff(
             "not be fully validated.",
         ),
     ] = False,
+    show_data_values: Annotated[
+        bool,
+        typer.Option(
+            "--show-data-values",
+            help="With --data, show row keys and values in the findings instead of "
+            "masking them. The reports then contain row-level data.",
+        ),
+    ] = False,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show progress logging.")
     ] = False,
@@ -140,9 +151,14 @@ def diff(
     if fail_on_data_error and not data:
         typer.echo("Error: --fail-on-data-error needs --data", err=True)
         raise typer.Exit(EXIT_USAGE)
+    if show_data_values and not data:
+        typer.echo("Error: --show-data-values needs --data", err=True)
+        raise typer.Exit(EXIT_USAGE)
     try:
         settings = (
-            data_settings(old_dataset, new_dataset, abs_tol, rel_tol) if data else None
+            data_settings(old_dataset, new_dataset, abs_tol, rel_tol, show_data_values)
+            if data
+            else None
         )
     except InvalidDataOptionsError as exc:
         typer.echo(f"Error: {exc}", err=True)
@@ -170,6 +186,8 @@ def diff(
     for label, path in outputs:
         if path is not None:
             typer.echo(f"\n{label} written to {path.as_posix()}")
+    if result.data_values_shown:
+        typer.echo(f"\n{format_unmasked_warning()}", err=True)
     threshold = None if fail_on is FailOn.NONE else Severity(fail_on.value)
     failures = failure_reasons(result, threshold, fail_on_data_error)
     for failure in failures:

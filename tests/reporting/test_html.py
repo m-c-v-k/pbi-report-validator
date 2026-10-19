@@ -13,6 +13,7 @@ from pbi_report_validator.domain.models import (
     ItemStatus,
     PageView,
     Position,
+    Severity,
     VisualView,
 )
 from pbi_report_validator.integrations.templates import (
@@ -66,6 +67,7 @@ def test_values_and_names_are_escaped() -> None:
     finding = Finding(
         category=Category.VISUAL,
         change=ChangeKind.ADDED,
+        severity=Severity.INFO,
         path="p/<b>",
         message="<script>alert(1)</script>",
         new="a & b",
@@ -287,6 +289,7 @@ def test_visual_key(path: str, visual: str | None, expected: str | None) -> None
     finding = Finding(
         category=Category.PARSE_ISSUE if visual else Category.VISUAL,
         change=ChangeKind.ERROR,
+        severity=Severity.INFO,
         path=path,
         message="m",
         visual=visual,
