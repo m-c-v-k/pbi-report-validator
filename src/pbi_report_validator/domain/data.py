@@ -75,8 +75,8 @@ class Tolerance(DomainModel):
     exactly.
     """
 
-    absolute: float = Field(default=0.0, ge=0)
-    relative: float = Field(default=1e-9, ge=0)
+    absolute: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    relative: float = Field(default=1e-9, ge=0, allow_inf_nan=False)
 
 
 class DataSettings(DomainModel):
