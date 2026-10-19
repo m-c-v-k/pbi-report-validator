@@ -147,6 +147,9 @@ def diff(
         level=logging.INFO if verbose else logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
     )
+    # httpx logs every request URL at INFO, and the URLs contain dataset ids.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     if fail_on_data_error and not data:
         typer.echo("Error: --fail-on-data-error needs --data", err=True)
         raise typer.Exit(EXIT_USAGE)

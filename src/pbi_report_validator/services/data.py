@@ -10,6 +10,8 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
+from pydantic import ValidationError
+
 from pbi_report_validator.dax.builder import build_query, result_column
 from pbi_report_validator.diff.data import compare_results, not_validated
 from pbi_report_validator.diff.severity import make_finding
@@ -37,6 +39,11 @@ from pbi_report_validator.integrations.powerbi import (
 
 logger = logging.getLogger(__name__)
 
+ENGINE_MESSAGE_MASKED = (
+    "the engine's message is masked (it can quote data values); "
+    "rerun with --show-data-values to see it"
+)
+
 
 class QueryRunner(Protocol):
     """Runs a DAX query against a dataset (the Power BI client in production)."""
@@ -60,14 +67,21 @@ def data_settings(
     """Settings from the CLI options.
 
     Raises:
-        InvalidDataOptionsError: A dataset id is missing.
+        InvalidDataOptionsError: A dataset id is missing, or a tolerance is
+            negative or not a finite number.
     """
     if not old_dataset or not new_dataset:
         raise InvalidDataOptionsError("--data needs --old-dataset and --new-dataset")
+    try:
+        tolerance = Tolerance(absolute=absolute, relative=relative)
+    except ValidationError as exc:
+        raise InvalidDataOptionsError(
+            "--abs-tol and --rel-tol must be finite numbers of at least 0"
+        ) from exc
     return DataSettings(
         old_dataset=old_dataset,
         new_dataset=new_dataset,
-        tolerance=Tolerance(absolute=absolute, relative=relative),
+        tolerance=tolerance,
         show_values=show_values,
     )
 
@@ -133,7 +147,7 @@ def _compare(
         old_result = runner.execute_query(settings.old_dataset, old_dax.dax)
         new_result = runner.execute_query(settings.new_dataset, new_dax.dax)
     except (QueryError, RateLimitError, ServiceError) as exc:
-        return not_validated(path, f"query failed: {exc}")
+        return not_validated(path, _failure_reason(exc, settings.show_values))
     keys = [(result_column(c), result_column(c)) for c in old_dax.group_by]
     values = _pair_values(old_dax.values, new_dax.values, value_renames)
     comparison = compare_results(
@@ -146,6 +160,13 @@ def _compare(
         show_values=settings.show_values,
     )
     return _with_unpaired(comparison, path, values.only_old, values.only_new)
+
+
+def _failure_reason(exc: Exception, show_values: bool) -> str:
+    """Why a query failed; the engine's message may quote data values."""
+    if isinstance(exc, QueryError) and not show_values:
+        return f"query failed: {ENGINE_MESSAGE_MASKED}"
+    return f"query failed: {exc}"
 
 
 def _comparable_queries(

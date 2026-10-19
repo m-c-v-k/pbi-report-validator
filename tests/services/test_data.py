@@ -1,3 +1,4 @@
+import logging
 import re
 
 import pytest
@@ -498,3 +499,56 @@ def test_pair_values_follows_renames_and_lists_unpaired() -> None:
 
     assert pairs.columns == (("[Margin %]", "[Gross Margin %]"), ("[Sales]", "[Sales]"))
     assert (pairs.only_old, pairs.only_new) == (("Old only",), ("New only",))
+
+
+# Typer's own min=0 check already rejects -inf; nan and inf reach Tolerance.
+@pytest.mark.parametrize(
+    ("value", "message"), [("nan", "finite"), ("inf", "finite"), ("-inf", "x>=0")]
+)
+def test_non_finite_tolerance_is_a_usage_error(
+    repo_root: None, value: str, message: str
+) -> None:
+    with pytest.raises(InvalidDataOptionsError):
+        data_settings(OLD_DS, NEW_DS, float(value), 1e-9)
+
+    result = cli.invoke(
+        app,
+        [
+            "diff",
+            "tests/fixtures/sales_v1",
+            "tests/fixtures/sales_v2",
+            "--data",
+            "--old-dataset",
+            OLD_DS,
+            "--new-dataset",
+            NEW_DS,
+            "--abs-tol",
+            value,
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert message in result.stderr
+
+
+@pytest.mark.parametrize("show_values", [False, True])
+def test_engine_message_of_a_failed_query_is_masked(show_values: bool) -> None:
+    settings = SETTINGS.model_copy(update={"show_values": show_values})
+
+    result = validate(
+        FIXTURES / "sales_v1",
+        FIXTURES / "sales_v2",
+        settings,
+        FakeRunner(fail_on="'Sales'[Region]"),
+    )
+
+    reason = next(s.reason for s in result.data if s.reason)
+    assert ("Column not found" in reason) is show_values
+
+
+def test_verbose_logging_keeps_httpx_quiet(repo_root: None) -> None:
+    cli.invoke(
+        app, ["diff", "tests/fixtures/sales_v1", "tests/fixtures/sales_v2", "-v"]
+    )
+
+    assert logging.getLogger("httpx").getEffectiveLevel() == logging.WARNING

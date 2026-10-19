@@ -322,3 +322,22 @@ def test_msal_setup_failure_is_typed(
 
     with pytest.raises(error, match=message):
         MsalTokenProvider(CONFIG)
+
+
+def test_ids_are_redacted_from_sign_in_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    description = (
+        "AADSTS700016: Application with identifier "
+        "'0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0' was not found in the directory "
+        "'11111111-2222-3333-4444-555555555555'."
+    )
+    fake = FakeMsalApp(
+        {"error": "unauthorized_client", "error_description": description}
+    )
+    monkeypatch.setattr(powerbi.msal, "ConfidentialClientApplication", fake)
+
+    with pytest.raises(AuthenticationError) as caught:
+        MsalTokenProvider(CONFIG).get_token()
+
+    message = str(caught.value)
+    assert "AADSTS700016" in message and "'<id>'" in message
+    assert "0f1e2d3c" not in message and "11111111" not in message

@@ -26,7 +26,7 @@ DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_MAX_RETRIES = 3
 MAX_RETRY_AFTER_SECONDS = 60.0
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
-DATASET_ID = re.compile(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}")
+GUID = re.compile(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}")
 
 
 class PowerBIError(Exception):
@@ -89,7 +89,9 @@ class MsalTokenProvider:
         except OSError as exc:
             raise ServiceError(f"could not reach Microsoft Entra ID: {exc}") from exc
         except ValueError as exc:
-            raise AuthenticationError(f"could not sign in to Power BI: {exc}") from exc
+            raise AuthenticationError(
+                f"could not sign in to Power BI: {_redact(exc)}"
+            ) from exc
 
     def get_token(self) -> str:
         """Return a token.
@@ -107,7 +109,7 @@ class MsalTokenProvider:
         if isinstance(token, str):
             return token
         reason = result.get("error_description") or result.get("error") or "unknown"
-        raise AuthenticationError(f"could not sign in to Power BI: {reason}")
+        raise AuthenticationError(f"could not sign in to Power BI: {_redact(reason)}")
 
 
 class PowerBIClient:
@@ -147,7 +149,7 @@ class PowerBIClient:
             RateLimitError: Still rate limited after all retries.
             ServiceError: Server errors, timeouts or unreadable responses.
         """
-        if not DATASET_ID.fullmatch(dataset_id):
+        if not GUID.fullmatch(dataset_id):
             raise InvalidDatasetIdError(
                 f"dataset id must be a GUID, got {dataset_id!r}"
             )
@@ -201,6 +203,11 @@ def create_client(config: PowerBIConfig) -> PowerBIClient:
     """
     http = httpx.Client(base_url=API_BASE_URL, timeout=DEFAULT_TIMEOUT_SECONDS)
     return PowerBIClient(http, MsalTokenProvider(config))
+
+
+def _redact(error: object) -> str:
+    """An Entra ID error message without tenant, app or trace ids."""
+    return GUID.sub("<id>", str(error))
 
 
 def _raise_for_status(response: httpx.Response) -> None:
