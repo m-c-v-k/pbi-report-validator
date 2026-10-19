@@ -36,3 +36,11 @@ expected-change lists can refer to them directly.
 A copy of `sales_v1` with seven deliberate changes, listed with old and new
 values in [`EXPECTED_CHANGES.md`](EXPECTED_CHANGES.md). Keep that file in sync
 whenever either fixture changes.
+
+## `sales_v3/` – field and parse issue
+
+A copy of `sales_v2` with two deliberate changes, so the `field` and
+`parse_issue` categories also have a fixture pair (`sales_v2` → `sales_v3`):
+`Sales[Region]` is added to `table_product_sales`, and
+`overview/card_total_sales/visual.json` is invalid JSON on purpose. Details in
+[`EXPECTED_CHANGES.md`](EXPECTED_CHANGES.md).
