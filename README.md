@@ -7,7 +7,7 @@
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
 
-**Status:** v0.1.0 – structural diff with JSON, Markdown and HTML reports. See the [live demo report](https://m-c-v-k.github.io/pbi-report-validator/) and the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
+**Status:** v0.2.0 – structural diff and data validation (`--data`, values masked by default), JSON, Markdown and HTML reports, and a GitHub Action with PR comments and `--fail-on`. See the [live demo report](https://m-c-v-k.github.io/pbi-report-validator/) and the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
 
 ## Why
 
@@ -28,13 +28,13 @@ Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 for you).
 Install the latest release as a command-line tool:
 
 ```bash
-uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.1.0
+uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.2.0
 ```
 
 Or run it once without installing:
 
 ```bash
-uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.1.0 pbi-validate --help
+uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.2.0 pbi-validate --help
 ```
 
 Each [GitHub release](https://github.com/m-c-v-k/pbi-report-validator/releases)
