@@ -26,6 +26,7 @@ from pbi_report_validator.domain.models import (
     SlicerState,
 )
 from pbi_report_validator.parsers.pbir_fields import parse_field
+from pbi_report_validator.parsers.quoting import is_quoted, unquote
 
 Operator = Literal["=", ">", ">=", "<", "<="]
 COMPARISON_OPERATORS: dict[int, Operator] = {0: "=", 1: ">", 2: ">=", 3: "<", 4: "<="}
@@ -157,8 +158,8 @@ def parse_literal(raw: str) -> LiteralValue:
     number = NUMBER_LITERAL.match(raw)
     if number:
         return LiteralValue(kind=LiteralKind.NUMBER, value=number.group(1))
-    if len(raw) >= 2 and raw.startswith("'") and raw.endswith("'"):
-        return LiteralValue(kind=LiteralKind.TEXT, value=raw[1:-1].replace("''", "'"))
+    if is_quoted(raw):
+        return LiteralValue(kind=LiteralKind.TEXT, value=unquote(raw))
     if raw in ("true", "false"):
         return LiteralValue(kind=LiteralKind.BOOLEAN, value=raw)
     if raw == "null":
