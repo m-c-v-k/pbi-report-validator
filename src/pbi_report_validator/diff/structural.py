@@ -8,6 +8,7 @@ between versions; messages use display names where they help a reader.
 from collections.abc import Sequence
 
 from pbi_report_validator.diff.severity import make_finding
+from pbi_report_validator.domain.helpers import visual_path
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -154,7 +155,7 @@ def _visual_added(page: str, visual: Visual) -> Finding:
     return make_finding(
         Category.VISUAL,
         ChangeKind.ADDED,
-        path=f"{page}/{visual.name}",
+        path=visual_path(page, visual.name),
         message=f"{_describe(visual)} added",
         new=visual.visual_type,
     )
@@ -164,14 +165,14 @@ def _visual_removed(page: str, visual: Visual) -> Finding:
     return make_finding(
         Category.VISUAL,
         ChangeKind.REMOVED,
-        path=f"{page}/{visual.name}",
+        path=visual_path(page, visual.name),
         message=f"{_describe(visual)} removed",
         old=visual.visual_type,
     )
 
 
 def _visual_changes(page: str, match: VisualMatch) -> list[Finding]:
-    path = f"{page}/{match.old.name}"
+    path = visual_path(page, match.old.name)
     candidates = (
         _new_id(path, match),
         _retyped(path, match.old, match.new),

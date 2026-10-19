@@ -27,6 +27,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import assert_never
 
+from pbi_report_validator.domain.helpers import field_key
 from pbi_report_validator.domain.models import (
     AllCondition,
     BinaryCondition,
@@ -238,6 +239,19 @@ def column(field: FieldRef) -> str:
     """A fully qualified column reference, e.g. ``'Sales'[Amount]``."""
     table = field.table.replace("'", "''")
     return f"'{table}'[{_escape_bracket(field.name)}]"
+
+
+def result_column(reference: str) -> str:
+    """The column name ``executeQueries`` returns for a ``column()`` reference.
+
+    For example ``'Date'[Month]`` -> ``Date[Month]``: the table loses its
+    DAX quoting.
+    """
+    table, _, name = reference.partition("[")
+    return field_key(
+        table.removeprefix("'").removesuffix("'").replace("''", "'"),
+        name.removesuffix("]"),
+    )
 
 
 def text(value: str) -> str:

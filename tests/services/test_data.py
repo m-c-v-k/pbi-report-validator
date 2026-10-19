@@ -4,6 +4,7 @@ import pytest
 from typer.testing import CliRunner
 
 from pbi_report_validator.cli.main import app
+from pbi_report_validator.dax.builder import result_column
 from pbi_report_validator.diff.data import compare_results, not_fully_validated
 from pbi_report_validator.domain.models import (
     Category,
@@ -32,7 +33,6 @@ from pbi_report_validator.services.data import (
     _pair_values,
     _with_unpaired,
     data_settings,
-    result_column,
 )
 from pbi_report_validator.services.validate import validate
 from tests.factories import FIXTURES, REPO_ROOT

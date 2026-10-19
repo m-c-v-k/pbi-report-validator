@@ -11,9 +11,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from pbi_report_validator.dax.builder import build_query
+from pbi_report_validator.dax.builder import build_query, result_column
 from pbi_report_validator.diff.data import compare_results, not_validated
 from pbi_report_validator.diff.severity import make_finding
+from pbi_report_validator.domain.helpers import field_name, visual_path
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -127,7 +128,7 @@ def validate_data(
         for visual_match in page_match.visuals:
             if visual_match.old.slicer or visual_match.new.slicer:
                 continue
-            path = f"{page_match.old.name}/{visual_match.old.name}"
+            path = visual_path(page_match.old.name, visual_match.old.name)
             old_query = build_query(visual_match.old, page_match.old, old.filters)
             new_query = build_query(visual_match.new, page_match.new, new.filters)
             comparisons.append(
@@ -222,16 +223,6 @@ def _with_unpaired(
     return DataComparison(summary=summary, findings=(*comparison.findings, finding))
 
 
-def result_column(reference: str) -> str:
-    """The API's name for a group-by column: ``'Date'[Month]`` -> ``Date[Month]``."""
-    table, _, column = reference.partition("[")
-    name = table.removeprefix("'").removesuffix("'").replace("''", "'")
-    return f"{name}[{column}"
-
-
 def _value_renames(renames: Mapping[str, str]) -> dict[str, str]:
     """Measure renames by name: ``Sales[Margin %]`` -> ``Margin %``."""
-    return {
-        old.partition("[")[2].removesuffix("]"): new.partition("[")[2].removesuffix("]")
-        for old, new in renames.items()
-    }
+    return {field_name(old): field_name(new) for old, new in renames.items()}
