@@ -4,8 +4,8 @@ import logging
 from pathlib import Path
 
 from pbi_report_validator.diff.content import diff_content
-from pbi_report_validator.diff.data import not_fully_validated
 from pbi_report_validator.diff.measures import diff_measures
+from pbi_report_validator.diff.results import not_fully_validated
 from pbi_report_validator.diff.severity import at_least, make_finding
 from pbi_report_validator.diff.structural import (
     diff_pages_and_visuals,
@@ -15,6 +15,7 @@ from pbi_report_validator.diff.view import build_page_views
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
+    DataSettings,
     DiffResult,
     Finding,
     ParseIssue,
@@ -35,7 +36,11 @@ from pbi_report_validator.reporting.terminal import (
     format_data_failure,
     format_failure,
 )
-from pbi_report_validator.services.data import DataRun, validate_data
+from pbi_report_validator.services.data_validation import (
+    InvalidDataOptionsError,
+    QueryRunner,
+    validate_data,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,15 +48,17 @@ logger = logging.getLogger(__name__)
 def validate(
     old_path: Path,
     new_path: Path,
-    data: DataRun | None = None,
+    settings: DataSettings | None = None,
+    runner: QueryRunner | None = None,
 ) -> DiffResult:
     """Compare two PBIP projects structurally and, optionally, their data.
 
     Args:
         old_path: The old project folder (or its ``.Report`` folder).
         new_path: The new project folder (or its ``.Report`` folder).
-        data: Datasets, tolerance and query runner for data validation;
-            ``None`` skips it.
+        settings: Datasets and tolerance for data validation; ``None``
+            skips it.
+        runner: Runs the DAX queries; needed together with ``settings``.
 
     Returns:
         All findings, including parse issues of either version.
@@ -59,7 +66,10 @@ def validate(
     Raises:
         ProjectLoadError: A project could not be loaded at all.
         PowerBIError: Data validation could not sign in or find a dataset.
+        InvalidDataOptionsError: Only one of ``settings`` and ``runner``.
     """
+    if (settings is None) != (runner is None):
+        raise InvalidDataOptionsError("data validation needs settings and a runner")
     old_report, old_model = _parse(load_project(old_path))
     new_report, new_model = _parse(load_project(new_path))
     match = match_reports(old_report.pages, new_report.pages)
@@ -75,14 +85,9 @@ def validate(
         *_issue_findings("new", new_report, new_model),
     ]
     comparisons = []
-    if data is not None:
+    if settings is not None and runner is not None:
         comparisons = validate_data(
-            old_report,
-            new_report,
-            match,
-            measures.renames,
-            data.runner,
-            data.settings,
+            old_report, new_report, match, measures.renames, runner, settings
         )
         findings += [f for c in comparisons for f in c.findings]
     logger.info("Found %d findings", len(findings))
@@ -92,7 +97,7 @@ def validate(
         findings=tuple(findings),
         pages=build_page_views(match, findings),
         data=tuple(sorted((c.summary for c in comparisons), key=lambda s: s.path)),
-        data_values_shown=data is not None and data.settings.show_values,
+        data_values_shown=settings is not None and settings.show_values,
     )
 
 
@@ -164,7 +169,7 @@ def _issue_findings(
             ChangeKind.ERROR,
             path=f"{side}/{issue.path}",
             message=f"Could not fully parse the {side} version: {issue.message}",
-            visual=issue.visual,
+            visual_path=issue.visual_path,
         )
         for issue in issues
     ]

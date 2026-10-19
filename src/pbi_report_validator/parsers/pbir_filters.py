@@ -41,50 +41,54 @@ class UnsupportedConditionError(ValueError):
 
 
 def parse_filters(
-    container: Any, level: FilterLevel, problems: list[str]
-) -> tuple[Filter, ...]:
+    container: Any, level: FilterLevel
+) -> tuple[tuple[Filter, ...], list[str]]:
     """Parse the ``filterConfig`` of a report, page or visual.
 
     Args:
         container: The JSON object that may hold ``filterConfig``.
         level: Where the filters are defined.
-        problems: Receives a message for each filter that could not be fully
-            parsed. Such filters are still returned, with ``condition=None``.
 
     Returns:
-        The filters in file order.
+        The filters in file order, and a message for each filter that could
+        not be fully parsed. Such filters are still returned, with
+        ``condition=None``.
     """
     config = container.get("filterConfig") if isinstance(container, dict) else None
     entries = config.get("filters", []) if isinstance(config, dict) else []
-    filters = []
+    filters: list[Filter] = []
+    problems: list[str] = []
     for entry in entries if isinstance(entries, list) else []:
         if isinstance(entry, dict):
-            filters.append(_parse_filter(entry, level, problems))
-    return tuple(filters)
+            parsed, problem = _parse_filter(entry, level)
+            filters.append(parsed)
+            problems += [problem] if problem else []
+    return tuple(filters), problems
 
 
 def parse_slicer_state(
-    body: dict[str, Any], field_hint: FieldRef | None, problems: list[str]
-) -> SlicerState | None:
+    body: dict[str, Any], field_hint: FieldRef | None
+) -> tuple[SlicerState | None, list[str]]:
     """Parse the selection stored in a slicer's ``objects.general`` filter.
 
     Args:
         body: The ``visual`` object of a slicer.
         field_hint: The slicer's field, used when the selection itself names
             no field.
-        problems: Receives a message if the selection could not be parsed.
 
     Returns:
-        The slicer state, or ``None`` if the visual is not a slicer.
+        The slicer state (``None`` if the visual is not a slicer), and a
+        message if the selection could not be parsed.
     """
     if body.get("visualType") != "slicer":
-        return None
-    expression = _parse_or_problem(_slicer_query(body), "slicer selection", problems)
-    return SlicerState(
+        return None, []
+    expression, problem = _parse_or_problem(_slicer_query(body), "slicer selection")
+    state = SlicerState(
         field=field_hint,
         condition=render(expression) if expression else None,
         expression=expression,
     )
+    return state, [problem] if problem else []
 
 
 def render_condition(query: Any) -> str | None:
@@ -181,11 +185,11 @@ def _render_in(condition: InCondition) -> str:
 
 
 def _parse_filter(
-    entry: dict[str, Any], level: FilterLevel, problems: list[str]
-) -> Filter:
+    entry: dict[str, Any], level: FilterLevel
+) -> tuple[Filter, str | None]:
     name = str(entry.get("name", ""))
-    expression = _parse_or_problem(entry.get("filter"), f"filter {name}", problems)
-    return Filter(
+    expression, problem = _parse_or_problem(entry.get("filter"), f"filter {name}")
+    parsed = Filter(
         name=name,
         level=level,
         field=parse_field(entry.get("field")),
@@ -193,14 +197,15 @@ def _parse_filter(
         condition=render(expression) if expression else None,
         expression=expression,
     )
+    return parsed, problem
 
 
-def _parse_or_problem(query: Any, label: str, problems: list[str]) -> Condition | None:
+def _parse_or_problem(query: Any, label: str) -> tuple[Condition | None, str | None]:
+    """The condition, or ``None`` and why it is not supported."""
     try:
-        return parse_condition(query)
+        return parse_condition(query), None
     except UnsupportedConditionError as exc:
-        problems.append(f"{label}: unsupported condition ({exc})")
-        return None
+        return None, f"{label}: unsupported condition ({exc})"
 
 
 def _slicer_query(body: dict[str, Any]) -> Any:

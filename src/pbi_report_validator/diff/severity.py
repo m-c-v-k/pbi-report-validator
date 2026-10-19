@@ -29,8 +29,8 @@ CHANGE_SEVERITY: Final = {
     (Category.MEASURE, ChangeKind.MODIFIED): Severity.CRITICAL,
     (Category.DATA, ChangeKind.ERROR): Severity.WARNING,
 }
-# Order of the severities, from least to most; used for thresholds.
-SEVERITY_RANK: Final = {Severity.INFO: 0, Severity.WARNING: 1, Severity.CRITICAL: 2}
+# Rank of each severity for thresholds, from the enum's least-to-most order.
+SEVERITY_RANK: Final = {severity: rank for rank, severity in enumerate(Severity)}
 
 
 def default_severity(category: Category, change: ChangeKind) -> Severity:
@@ -46,7 +46,7 @@ def make_finding(
     message: str,
     old: str | None = None,
     new: str | None = None,
-    visual: str | None = None,
+    visual_path: str | None = None,
 ) -> Finding:
     """A finding with the default severity of its category and change."""
     return Finding(
@@ -57,7 +57,7 @@ def make_finding(
         message=message,
         old=old,
         new=new,
-        visual=visual,
+        visual_path=visual_path,
     )
 
 

@@ -195,7 +195,7 @@ def test_unparseable_visuals_are_not_reported_added_or_removed() -> None:
         )
     )
     issue = ParseIssue(
-        path="pages/p/visuals/b/visual.json", message="boom", visual="p/b"
+        path="pages/p/visuals/b/visual.json", message="boom", visual_path="p/b"
     )
 
     assert without_unparseable(findings, [], [issue]) == []

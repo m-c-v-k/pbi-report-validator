@@ -10,6 +10,7 @@ import re
 from collections.abc import Mapping
 
 from pbi_report_validator.diff.severity import make_finding
+from pbi_report_validator.domain.helpers import visual_path
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -47,7 +48,7 @@ def diff_content(
         )
         for visual_match in page_match.visuals:
             findings += _diff_visual(
-                f"{page}/{visual_match.old.name}", visual_match, renames
+                visual_path(page, visual_match.old.name), visual_match, renames
             )
     return findings
 

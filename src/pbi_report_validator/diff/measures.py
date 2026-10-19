@@ -10,26 +10,18 @@ the same change cannot be recognised. It is reported as removed plus
 added, and fields and filters that use it are reported as changed too.
 """
 
-from pydantic import Field
-
 from pbi_report_validator.diff.severity import make_finding
+from pbi_report_validator.domain.helpers import field_key, unique_by
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
-    DomainModel,
     Finding,
     Measure,
+    MeasureDiff,
     SemanticModel,
 )
 
 MODEL_PATH = "model"
-
-
-class MeasureDiff(DomainModel):
-    """Measure findings plus the renames found, keyed by old field key."""
-
-    findings: tuple[Finding, ...] = ()
-    renames: dict[str, str] = Field(default_factory=dict)
 
 
 def diff_measures(old: SemanticModel | None, new: SemanticModel | None) -> MeasureDiff:
@@ -77,7 +69,7 @@ def _diff_table(
         for name in sorted(old_by_name.keys() & new_by_name.keys())
         if old_by_name[name].expression != new_by_name[name].expression
     ]
-    renames = {f"{table}[{o.name}]": f"{table}[{n.name}]" for o, n in pairs}
+    renames = {field_key(table, o.name): field_key(table, n.name) for o, n in pairs}
     return findings, renames
 
 
@@ -85,17 +77,14 @@ def _renamed_pairs(
     removed: list[Measure], added: list[Measure]
 ) -> list[tuple[Measure, Measure]]:
     """Pair removed and added measures whose expression is unique and equal."""
-    removed_by_expr = _unique_by_expression(removed)
-    added_by_expr = _unique_by_expression(added)
+    removed_by_expr = unique_by(removed, _expression)
+    added_by_expr = unique_by(added, _expression)
     shared = sorted(removed_by_expr.keys() & added_by_expr.keys())
     return [(removed_by_expr[e], added_by_expr[e]) for e in shared]
 
 
-def _unique_by_expression(measures: list[Measure]) -> dict[str, Measure]:
-    counts: dict[str, int] = {}
-    for m in measures:
-        counts[m.expression] = counts.get(m.expression, 0) + 1
-    return {m.expression: m for m in measures if counts[m.expression] == 1}
+def _expression(measure: Measure) -> str:
+    return measure.expression
 
 
 def _path(table: str, name: str) -> str:

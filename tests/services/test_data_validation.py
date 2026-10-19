@@ -1,13 +1,16 @@
+import logging
 import re
 
 import pytest
 from typer.testing import CliRunner
 
 from pbi_report_validator.cli.main import app
-from pbi_report_validator.diff.data import compare_results, not_fully_validated
+from pbi_report_validator.dax.builder import result_column
+from pbi_report_validator.diff.results import compare_results, not_fully_validated
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
+    DataSettings,
     DataStatus,
     DaxQuery,
     QueryResult,
@@ -24,15 +27,12 @@ from pbi_report_validator.integrations.templates import read_template
 from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
 from pbi_report_validator.reporting.markdown import to_markdown
 from pbi_report_validator.reporting.terminal import format_summary
-from pbi_report_validator.services.data import (
-    DataRun,
-    DataSettings,
+from pbi_report_validator.services.data_validation import (
     InvalidDataOptionsError,
     _comparable_queries,
     _pair_values,
     _with_unpaired,
     data_settings,
-    result_column,
 )
 from pbi_report_validator.services.validate import validate
 from tests.factories import FIXTURES, REPO_ROOT
@@ -84,9 +84,7 @@ class FakeRunner:
 
 
 def run(runner: FakeRunner) -> tuple[list[tuple[str, DataStatus]], list[str]]:
-    result = validate(
-        FIXTURES / "sales_v1", FIXTURES / "sales_v2", DataRun(SETTINGS, runner)
-    )
+    result = validate(FIXTURES / "sales_v1", FIXTURES / "sales_v2", SETTINGS, runner)
     data = [f.path for f in result.findings if f.category == Category.DATA]
     return [(s.path, s.status) for s in result.data], data
 
@@ -132,7 +130,7 @@ def test_without_data_settings_nothing_is_queried() -> None:
 
 def test_reports_show_data_results() -> None:
     result = validate(
-        FIXTURES / "sales_v1", FIXTURES / "sales_v2", DataRun(SETTINGS, FakeRunner())
+        FIXTURES / "sales_v1", FIXTURES / "sales_v2", SETTINGS, FakeRunner()
     )
     overview = "Data: 5 visuals compared, 4 same, 1 different, 0 not validated"
 
@@ -325,9 +323,7 @@ def test_cli_invalid_dataset_id_exits_with_error(
 
 def test_data_findings_get_a_severity() -> None:
     runner = FakeRunner(fail_on="'Sales'[Region]")
-    result = validate(
-        FIXTURES / "sales_v1", FIXTURES / "sales_v2", DataRun(SETTINGS, runner)
-    )
+    result = validate(FIXTURES / "sales_v1", FIXTURES / "sales_v2", SETTINGS, runner)
 
     severities = {
         (f.change, f.severity) for f in result.findings if f.category == Category.DATA
@@ -409,9 +405,7 @@ def test_fail_on_data_error_needs_data(repo_root: None) -> None:
 
 def test_not_fully_validated_selects_data_errors() -> None:
     runner = FakeRunner(fail_on="'Sales'[Region]")
-    result = validate(
-        FIXTURES / "sales_v1", FIXTURES / "sales_v2", DataRun(SETTINGS, runner)
-    )
+    result = validate(FIXTURES / "sales_v1", FIXTURES / "sales_v2", SETTINGS, runner)
 
     unchecked = not_fully_validated(result.findings)
 
@@ -427,7 +421,7 @@ def test_show_values_puts_values_in_reports_with_a_warning() -> None:
     settings = SETTINGS.model_copy(update={"show_values": True})
 
     result = validate(
-        FIXTURES / "sales_v1", FIXTURES / "sales_v2", DataRun(settings, FakeRunner())
+        FIXTURES / "sales_v1", FIXTURES / "sales_v2", settings, FakeRunner()
     )
 
     finding = next(f for f in result.findings if f.category == Category.DATA)
@@ -503,5 +497,58 @@ def test_pair_values_follows_renames_and_lists_unpaired() -> None:
         {"Margin %": "Gross Margin %"},
     )
 
-    assert pairs.columns == [("[Margin %]", "[Gross Margin %]"), ("[Sales]", "[Sales]")]
-    assert (pairs.only_old, pairs.only_new) == (["Old only"], ["New only"])
+    assert pairs.columns == (("[Margin %]", "[Gross Margin %]"), ("[Sales]", "[Sales]"))
+    assert (pairs.only_old, pairs.only_new) == (("Old only",), ("New only",))
+
+
+# Typer's own min=0 check already rejects -inf; nan and inf reach Tolerance.
+@pytest.mark.parametrize(
+    ("value", "message"), [("nan", "finite"), ("inf", "finite"), ("-inf", "x>=0")]
+)
+def test_non_finite_tolerance_is_a_usage_error(
+    repo_root: None, value: str, message: str
+) -> None:
+    with pytest.raises(InvalidDataOptionsError):
+        data_settings(OLD_DS, NEW_DS, float(value), 1e-9)
+
+    result = cli.invoke(
+        app,
+        [
+            "diff",
+            "tests/fixtures/sales_v1",
+            "tests/fixtures/sales_v2",
+            "--data",
+            "--old-dataset",
+            OLD_DS,
+            "--new-dataset",
+            NEW_DS,
+            "--abs-tol",
+            value,
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert message in result.stderr
+
+
+@pytest.mark.parametrize("show_values", [False, True])
+def test_engine_message_of_a_failed_query_is_masked(show_values: bool) -> None:
+    settings = SETTINGS.model_copy(update={"show_values": show_values})
+
+    result = validate(
+        FIXTURES / "sales_v1",
+        FIXTURES / "sales_v2",
+        settings,
+        FakeRunner(fail_on="'Sales'[Region]"),
+    )
+
+    reason = next(s.reason for s in result.data if s.reason)
+    assert ("Column not found" in reason) is show_values
+
+
+def test_verbose_logging_keeps_httpx_quiet(repo_root: None) -> None:
+    cli.invoke(
+        app, ["diff", "tests/fixtures/sales_v1", "tests/fixtures/sales_v2", "-v"]
+    )
+
+    assert logging.getLogger("httpx").getEffectiveLevel() == logging.WARNING

@@ -8,23 +8,26 @@ are never sent anywhere else.
 
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from typing import Protocol
 
-from pbi_report_validator.dax.builder import build_query
-from pbi_report_validator.diff.data import compare_results, not_validated
+from pydantic import ValidationError
+
+from pbi_report_validator.dax.builder import build_query, result_column
+from pbi_report_validator.diff.results import compare_results, not_validated
 from pbi_report_validator.diff.severity import make_finding
+from pbi_report_validator.domain.helpers import field_name, visual_path
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
     DataComparison,
+    DataSettings,
     DaxQuery,
-    DomainModel,
     QueryResult,
     Report,
     ReportMatch,
     Tolerance,
     UnsupportedQuery,
+    ValuePairing,
 )
 from pbi_report_validator.integrations.config import load_powerbi_config
 from pbi_report_validator.integrations.powerbi import (
@@ -35,6 +38,11 @@ from pbi_report_validator.integrations.powerbi import (
 )
 
 logger = logging.getLogger(__name__)
+
+ENGINE_MESSAGE_MASKED = (
+    "the engine's message is masked (it can quote data values); "
+    "rerun with --show-data-values to see it"
+)
 
 
 class QueryRunner(Protocol):
@@ -49,27 +57,6 @@ class InvalidDataOptionsError(ValueError):
     """The data validation options are incomplete or inconsistent."""
 
 
-class DataSettings(DomainModel):
-    """What ``--data`` compares against.
-
-    ``show_values`` puts row keys and values in the findings; by default
-    they are masked.
-    """
-
-    old_dataset: str
-    new_dataset: str
-    tolerance: Tolerance = Tolerance()
-    show_values: bool = False
-
-
-@dataclass(frozen=True)
-class DataRun:
-    """Data validation settings plus the runner that executes the queries."""
-
-    settings: DataSettings
-    runner: QueryRunner
-
-
 def data_settings(
     old_dataset: str | None,
     new_dataset: str | None,
@@ -80,14 +67,21 @@ def data_settings(
     """Settings from the CLI options.
 
     Raises:
-        InvalidDataOptionsError: A dataset id is missing.
+        InvalidDataOptionsError: A dataset id is missing, or a tolerance is
+            negative or not a finite number.
     """
     if not old_dataset or not new_dataset:
         raise InvalidDataOptionsError("--data needs --old-dataset and --new-dataset")
+    try:
+        tolerance = Tolerance(absolute=absolute, relative=relative)
+    except ValidationError as exc:
+        raise InvalidDataOptionsError(
+            "--abs-tol and --rel-tol must be finite numbers of at least 0"
+        ) from exc
     return DataSettings(
         old_dataset=old_dataset,
         new_dataset=new_dataset,
-        tolerance=Tolerance(absolute=absolute, relative=relative),
+        tolerance=tolerance,
         show_values=show_values,
     )
 
@@ -127,7 +121,7 @@ def validate_data(
         for visual_match in page_match.visuals:
             if visual_match.old.slicer or visual_match.new.slicer:
                 continue
-            path = f"{page_match.old.name}/{visual_match.old.name}"
+            path = visual_path(page_match.old.name, visual_match.old.name)
             old_query = build_query(visual_match.old, page_match.old, old.filters)
             new_query = build_query(visual_match.new, page_match.new, new.filters)
             comparisons.append(
@@ -153,7 +147,7 @@ def _compare(
         old_result = runner.execute_query(settings.old_dataset, old_dax.dax)
         new_result = runner.execute_query(settings.new_dataset, new_dax.dax)
     except (QueryError, RateLimitError, ServiceError) as exc:
-        return not_validated(path, f"query failed: {exc}")
+        return not_validated(path, _failure_reason(exc, settings.show_values))
     keys = [(result_column(c), result_column(c)) for c in old_dax.group_by]
     values = _pair_values(old_dax.values, new_dax.values, value_renames)
     comparison = compare_results(
@@ -166,6 +160,13 @@ def _compare(
         show_values=settings.show_values,
     )
     return _with_unpaired(comparison, path, values.only_old, values.only_new)
+
+
+def _failure_reason(exc: Exception, show_values: bool) -> str:
+    """Why a query failed; the engine's message may quote data values."""
+    if isinstance(exc, QueryError) and not show_values:
+        return f"query failed: {ENGINE_MESSAGE_MASKED}"
+    return f"query failed: {exc}"
 
 
 def _comparable_queries(
@@ -182,29 +183,23 @@ def _comparable_queries(
     return old, new
 
 
-@dataclass(frozen=True)
-class _ValuePairs:
-    """Value columns to compare, and the values found in one version only."""
-
-    columns: list[tuple[str, str]]
-    only_old: list[str]
-    only_new: list[str]
-
-
 def _pair_values(
     old: Sequence[str], new: Sequence[str], value_renames: Mapping[str, str]
-) -> _ValuePairs:
+) -> ValuePairing:
     """Pair old and new value names, following measure renames."""
     renamed = {name: value_renames.get(name, name) for name in old}
-    return _ValuePairs(
-        columns=[(f"[{o}]", f"[{n}]") for o, n in renamed.items() if n in new],
-        only_old=[o for o, n in renamed.items() if n not in new],
-        only_new=[n for n in new if n not in renamed.values()],
+    return ValuePairing(
+        columns=tuple((f"[{o}]", f"[{n}]") for o, n in renamed.items() if n in new),
+        only_old=tuple(o for o, n in renamed.items() if n not in new),
+        only_new=tuple(n for n in new if n not in renamed.values()),
     )
 
 
 def _with_unpaired(
-    comparison: DataComparison, path: str, only_old: list[str], only_new: list[str]
+    comparison: DataComparison,
+    path: str,
+    only_old: Sequence[str],
+    only_new: Sequence[str],
 ) -> DataComparison:
     """Note values that exist in only one version, so they are not hidden."""
     parts = [f"[{n}] is only in the old visual" for n in only_old]
@@ -222,16 +217,6 @@ def _with_unpaired(
     return DataComparison(summary=summary, findings=(*comparison.findings, finding))
 
 
-def result_column(reference: str) -> str:
-    """The API's name for a group-by column: ``'Date'[Month]`` -> ``Date[Month]``."""
-    table, _, column = reference.partition("[")
-    name = table.removeprefix("'").removesuffix("'").replace("''", "'")
-    return f"{name}[{column}"
-
-
 def _value_renames(renames: Mapping[str, str]) -> dict[str, str]:
     """Measure renames by name: ``Sales[Margin %]`` -> ``Margin %``."""
-    return {
-        old.partition("[")[2].removesuffix("]"): new.partition("[")[2].removesuffix("]")
-        for old, new in renames.items()
-    }
+    return {field_name(old): field_name(new) for old, new in renames.items()}

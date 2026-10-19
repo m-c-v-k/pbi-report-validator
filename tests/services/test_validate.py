@@ -6,10 +6,12 @@ import pytest
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
+    DataSettings,
     DiffResult,
     Finding,
     Severity,
 )
+from pbi_report_validator.services.data_validation import InvalidDataOptionsError
 from pbi_report_validator.services.validate import failure_reasons, validate
 from tests.factories import FIXTURES
 
@@ -32,7 +34,7 @@ def test_parse_issues_become_findings(tmp_path: Path) -> None:
         )
     ]
     assert not any(f.category == Category.VISUAL for f in result.findings)
-    assert [f.visual for f in issues] == ["overview/card_margin"]
+    assert [f.visual_path for f in issues] == ["overview/card_margin"]
 
 
 def test_measures_are_skipped_without_semantic_model(tmp_path: Path) -> None:
@@ -123,3 +125,10 @@ def test_failure_reasons(
     result = result_with(WARNING, DATA_ERROR)
 
     assert failure_reasons(result, fail_on, fail_on_data_error) == expected
+
+
+def test_data_settings_without_runner_is_rejected() -> None:
+    settings = DataSettings(old_dataset="a", new_dataset="b")
+
+    with pytest.raises(InvalidDataOptionsError):
+        validate(FIXTURES / "sales_v1", FIXTURES / "sales_v2", settings)

@@ -3,11 +3,18 @@ import sys
 
 import pytest
 
-from pbi_report_validator.domain import base, data, diff, models, report, semantic
+from pbi_report_validator.domain import (
+    base,
+    data_validation,
+    diff,
+    models,
+    report,
+    semantic,
+)
 
 
 def test_models_reexports_every_class_of_the_split_modules() -> None:
-    split = (base, data, diff, report, semantic)
+    split = (base, data_validation, diff, report, semantic)
     defined = {
         name
         for module in split
@@ -17,10 +24,10 @@ def test_models_reexports_every_class_of_the_split_modules() -> None:
 
     assert defined <= set(models.__all__)
     assert all(hasattr(models, name) for name in models.__all__)
-    assert len(models.__all__) == 46
+    assert len(models.__all__) == 50
 
 
-@pytest.mark.parametrize("module", ["report", "semantic", "data", "diff"])
+@pytest.mark.parametrize("module", ["report", "semantic", "data_validation", "diff"])
 def test_each_module_works_when_imported_on_its_own(module: str) -> None:
     code = (
         f"from pbi_report_validator.domain import {module} as m\n"

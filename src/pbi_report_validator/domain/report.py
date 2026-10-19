@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from pbi_report_validator.domain.base import DomainModel
+from pbi_report_validator.domain.helpers import field_key
 
 
 class FieldKind(StrEnum):
@@ -29,7 +30,7 @@ class FieldRef(DomainModel):
     @property
     def key(self) -> str:
         """DAX-style identifier, e.g. ``Sales[Total Sales]``."""
-        return f"{self.table}[{self.name}]"
+        return field_key(self.table, self.name)
 
 
 class Projection(DomainModel):
@@ -178,13 +179,13 @@ class ParseIssue(DomainModel):
     """Something in the input that could not be parsed.
 
     Parse issues are reported as findings instead of aborting the run.
-    ``visual`` is the ``page/visual`` the issue belongs to, if any;
+    ``visual_path`` is the ``page/visual`` the issue belongs to, if any;
     ``page`` is set when the whole page could not be parsed.
     """
 
     path: str
     message: str
-    visual: str | None = None
+    visual_path: str | None = None
     page: str | None = None
 
 

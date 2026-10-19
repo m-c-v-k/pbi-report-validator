@@ -195,3 +195,24 @@ def test_report_keeps_parse_issues() -> None:
     report = Report(issues=(issue,))
 
     assert Report.model_validate_json(report.model_dump_json()).issues == (issue,)
+
+
+def test_severity_counts_do_not_depend_on_field_order() -> None:
+    finding = Finding(
+        category=Category.FILTER,
+        change=ChangeKind.MODIFIED,
+        severity=Severity.CRITICAL,
+        path="report/filters/f",
+        message="m",
+    )
+    result = DiffResult.model_validate(
+        {
+            "severity_counts": {"warning": 5},
+            "old_source": "old",
+            "new_source": "new",
+            "findings": [finding.model_dump()],
+        }
+    )
+
+    assert result.severity_counts == SeverityCounts(critical=1)
+    assert DiffResult.model_validate_json(result.model_dump_json()) == result

@@ -8,6 +8,7 @@ between versions; messages use display names where they help a reader.
 from collections.abc import Sequence
 
 from pbi_report_validator.diff.severity import make_finding
+from pbi_report_validator.domain.helpers import visual_path
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -66,7 +67,7 @@ def without_unparseable(
 
 def _broken(issues: Sequence[ParseIssue]) -> set[str]:
     """Paths (``page`` or ``page/visual``) that failed to parse."""
-    return {key for i in issues for key in (i.page, i.visual) if key}
+    return {key for i in issues for key in (i.page, i.visual_path) if key}
 
 
 def _page_added(page: Page) -> Finding:
@@ -74,7 +75,7 @@ def _page_added(page: Page) -> Finding:
         Category.PAGE,
         ChangeKind.ADDED,
         path=page.name,
-        message=f"Page '{page.display_name}' added with {_count(page)}",
+        message=f"Page '{page.display_name}' added with {_visual_count_text(page)}",
         new=page.display_name,
     )
 
@@ -84,7 +85,7 @@ def _page_removed(page: Page) -> Finding:
         Category.PAGE,
         ChangeKind.REMOVED,
         path=page.name,
-        message=f"Page '{page.display_name}' removed with {_count(page)}",
+        message=f"Page '{page.display_name}' removed with {_visual_count_text(page)}",
         old=page.display_name,
     )
 
@@ -154,7 +155,7 @@ def _visual_added(page: str, visual: Visual) -> Finding:
     return make_finding(
         Category.VISUAL,
         ChangeKind.ADDED,
-        path=f"{page}/{visual.name}",
+        path=visual_path(page, visual.name),
         message=f"{_describe(visual)} added",
         new=visual.visual_type,
     )
@@ -164,14 +165,14 @@ def _visual_removed(page: str, visual: Visual) -> Finding:
     return make_finding(
         Category.VISUAL,
         ChangeKind.REMOVED,
-        path=f"{page}/{visual.name}",
+        path=visual_path(page, visual.name),
         message=f"{_describe(visual)} removed",
         old=visual.visual_type,
     )
 
 
 def _visual_changes(page: str, match: VisualMatch) -> list[Finding]:
-    path = f"{page}/{match.old.name}"
+    path = visual_path(page, match.old.name)
     candidates = (
         _new_id(path, match),
         _retyped(path, match.old, match.new),
@@ -257,6 +258,6 @@ def _describe(visual: Visual) -> str:
     return f"{visual.visual_type}{title} ({visual.name})"
 
 
-def _count(page: Page) -> str:
+def _visual_count_text(page: Page) -> str:
     count = len(page.visuals)
     return f"{count} visual" if count == 1 else f"{count} visuals"

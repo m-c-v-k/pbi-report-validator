@@ -10,6 +10,7 @@ from collections.abc import Sequence
 
 from jinja2 import Environment, StrictUndefined
 
+from pbi_report_validator.domain.helpers import visual_path, visual_path_of
 from pbi_report_validator.domain.models import Category, DiffResult, Finding
 from pbi_report_validator.reporting.labels import (
     CATEGORY_LABELS,
@@ -42,7 +43,7 @@ def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
         keep_trailing_newline=True,
     )
     counts = Counter(f.category for f in result.findings)
-    keys = {f"{p.name}/{v.name}" for p in result.pages for v in p.visuals}
+    keys = {visual_path(p.name, v.name) for p in result.pages for v in p.visuals}
     return environment.from_string(template_source).render(
         data_overview=data_overview(result),
         data_by_path={s.path: s for s in result.data},
@@ -83,5 +84,5 @@ def visual_key(finding: Finding, keys: set[str]) -> str | None:
     Parse issues name their visual; other findings point into it with a path
     that starts with ``page/visual``.
     """
-    candidate = finding.visual or "/".join(finding.path.split("/")[:2])
+    candidate = finding.visual_path or visual_path_of(finding.path)
     return candidate if candidate in keys else None

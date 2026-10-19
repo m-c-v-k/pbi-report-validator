@@ -11,6 +11,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from pbi_report_validator.domain.helpers import visual_path
 from pbi_report_validator.domain.models import (
     FilterLevel,
     Page,
@@ -49,13 +50,12 @@ def parse_report(raw: RawReport) -> Report:
         page's ``ordinal`` is its position in ``pages.json``, counting pages
         that failed to parse, so it stays stable when one page breaks.
     """
-    issues: list[ParseIssue] = []
-    problems: list[str] = []
-    filters = parse_filters(raw.report.content, FilterLevel.REPORT, problems)
-    issues.extend(ParseIssue(path=raw.report.path, message=m) for m in problems)
+    filters, problems = parse_filters(raw.report.content, FilterLevel.REPORT)
+    issues = [ParseIssue(path=raw.report.path, message=m) for m in problems]
     pages: list[Page] = []
     for ordinal, raw_page in enumerate(_ordered_pages(raw)):
-        page = _parse_page(raw_page, ordinal, issues)
+        page, page_issues = _parse_page(raw_page, ordinal)
+        issues += page_issues
         if page is not None:
             pages.append(page)
     return Report(filters=filters, pages=tuple(pages), issues=tuple(issues))
@@ -71,22 +71,24 @@ def _ordered_pages(raw: RawReport) -> list[RawPage]:
     )
 
 
-def _parse_page(raw: RawPage, ordinal: int, issues: list[ParseIssue]) -> Page | None:
+def _parse_page(raw: RawPage, ordinal: int) -> tuple[Page | None, list[ParseIssue]]:
+    """The page (``None`` if it cannot be parsed) and the issues found in it."""
     # The page's folder name is its id; it is known even if the file is broken.
-    content = _content_or_issue(raw.page, issues, page=raw.name)
-    if content is None:
-        return None
+    if raw.page.error is not None:
+        return None, [_unreadable(raw.page, page=raw.name)]
+    content = raw.page.content
     page_name = str(content.get("name", raw.name))
+    issues: list[ParseIssue] = []
     visuals = []
     for raw_visual in raw.visuals:
-        visual = _parse_visual_or_issue(raw_visual, page_name, issues)
+        visual, visual_issues = _parse_visual_or_issue(raw_visual, page_name)
+        issues += visual_issues
         if visual is not None:
             visuals.append(visual)
-    problems: list[str] = []
-    filters = parse_filters(content, FilterLevel.PAGE, problems)
-    issues.extend(ParseIssue(path=raw.page.path, message=m) for m in problems)
+    filters, problems = parse_filters(content, FilterLevel.PAGE)
+    issues += [ParseIssue(path=raw.page.path, message=m) for m in problems]
     try:
-        return Page(
+        page = Page(
             name=page_name,
             display_name=str(content.get("displayName", raw.name)),
             ordinal=ordinal,
@@ -96,42 +98,44 @@ def _parse_page(raw: RawPage, ordinal: int, issues: list[ParseIssue]) -> Page | 
             visuals=tuple(visuals),
         )
     except ValidationError as exc:
-        issues.append(
-            ParseIssue(path=raw.page.path, message=_first_error(exc), page=page_name)
+        error = ParseIssue(
+            path=raw.page.path, message=_first_error(exc), page=page_name
         )
-        return None
+        return None, [*issues, error]
+    return page, issues
 
 
 def _parse_visual_or_issue(
-    raw: RawJsonFile, page_name: str, issues: list[ParseIssue]
-) -> Visual | None:
+    raw: RawJsonFile, page_name: str
+) -> tuple[Visual | None, list[ParseIssue]]:
+    """The visual (``None`` if it cannot be parsed) and its parse issues."""
     # The visual's folder name is its id; it is known even if the file is broken.
-    key = f"{page_name}/{PurePosixPath(raw.path).parent.name}"
-    content = _content_or_issue(raw, issues, visual=key)
-    if content is None:
-        return None
-    visual, problems = _try_parse_visual(content)
-    issues.extend(ParseIssue(path=raw.path, message=m, visual=key) for m in problems)
-    return visual
+    key = visual_path(page_name, PurePosixPath(raw.path).parent.name)
+    if raw.error is not None:
+        return None, [_unreadable(raw, visual_path=key)]
+    visual, problems = _try_parse_visual(raw.content)
+    return visual, [
+        ParseIssue(path=raw.path, message=m, visual_path=key) for m in problems
+    ]
 
 
 def _try_parse_visual(content: dict[str, Any]) -> tuple[Visual | None, list[str]]:
     """The visual and its problems, or ``None`` and why it could not be parsed."""
-    problems: list[str] = []
     try:
-        return parse_visual(content, problems), problems
+        return parse_visual(content)
     except VisualParseError as exc:
         return None, [str(exc)]
     except ValidationError as exc:
         return None, [_first_error(exc)]
 
 
-def parse_visual(content: dict[str, Any], problems: list[str]) -> Visual:
+def parse_visual(content: dict[str, Any]) -> tuple[Visual, list[str]]:
     """Parse one ``visual.json``.
 
-    Parts that cannot be read without invalidating the whole visual (for
-    example an unrecognised field) are skipped and described in
-    ``problems``.
+    Returns:
+        The visual, and a message for each part that was skipped because it
+        could not be read without invalidating the whole visual (for example
+        an unrecognised field).
 
     Raises:
         VisualParseError: Name or position (x, y, width, height) is missing.
@@ -144,26 +148,29 @@ def parse_visual(content: dict[str, Any], problems: list[str]) -> Visual:
     missing = [key for key in REQUIRED_POSITION_KEYS if key not in position]
     if missing:
         raise VisualParseError(f"visual position is missing {', '.join(missing)}")
-    filters = parse_filters(content, FilterLevel.VISUAL, problems)
+    filters, problems = parse_filters(content, FilterLevel.VISUAL)
     body = content.get("visual")
     if not isinstance(body, dict):
-        return Visual(
+        group = Visual(
             name=name,
             visual_type=GROUP_VISUAL_TYPE if "visualGroup" in content else "unknown",
             position=_position(position),
             filters=filters,
         )
-    projections = _projections(body, problems)
+        return group, problems
+    projections, field_problems = _projections(body)
     first_field = projections[0].field if projections else None
-    return Visual(
+    slicer, slicer_problems = parse_slicer_state(body, first_field)
+    visual = Visual(
         name=name,
         visual_type=str(body.get("visualType", "unknown")),
         position=_position(position),
         title=_title(body),
         projections=projections,
         filters=filters,
-        slicer=parse_slicer_state(body, first_field, problems),
+        slicer=slicer,
     )
+    return visual, [*problems, *field_problems, *slicer_problems]
 
 
 def _position(position: dict[str, Any]) -> Position:
@@ -185,12 +192,14 @@ def _title(body: dict[str, Any]) -> str | None:
     return unquote(literal) if isinstance(literal, str) else None
 
 
-def _projections(body: dict[str, Any], problems: list[str]) -> tuple[Projection, ...]:
+def _projections(body: dict[str, Any]) -> tuple[tuple[Projection, ...], list[str]]:
+    """The fields in each role, and a message for each field that was skipped."""
     query = body.get("query")
     query_state = query.get("queryState") if isinstance(query, dict) else None
     if not isinstance(query_state, dict):
-        return ()
+        return (), []
     projections = []
+    problems = []
     for role, state in query_state.items():
         items = state.get("projections", []) if isinstance(state, dict) else []
         for item in items:
@@ -199,22 +208,16 @@ def _projections(body: dict[str, Any], problems: list[str]) -> tuple[Projection,
                 problems.append(f"unrecognised field in role {role} was skipped")
             else:
                 projections.append(Projection(role=role, field=field))
-    return tuple(projections)
+    return tuple(projections), problems
 
 
-def _content_or_issue(
-    raw: RawJsonFile,
-    issues: list[ParseIssue],
-    visual: str | None = None,
-    page: str | None = None,
-) -> dict[str, Any] | None:
-    if raw.error is not None:
-        message = f"unreadable: {raw.error}"
-        issues.append(
-            ParseIssue(path=raw.path, message=message, visual=visual, page=page)
-        )
-        return None
-    return raw.content
+def _unreadable(
+    raw: RawJsonFile, visual_path: str | None = None, page: str | None = None
+) -> ParseIssue:
+    message = f"unreadable: {raw.error}"
+    return ParseIssue(
+        path=raw.path, message=message, visual_path=visual_path, page=page
+    )
 
 
 def _first_error(exc: ValidationError) -> str:

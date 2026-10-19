@@ -7,14 +7,16 @@ re-exports them all.
 """
 
 from pbi_report_validator.domain.base import DomainModel
-from pbi_report_validator.domain.data import (
+from pbi_report_validator.domain.data_validation import (
     CellValue,
+    DataSettings,
     DataStatus,
     DataSummary,
     DaxQuery,
     QueryResult,
     Tolerance,
     UnsupportedQuery,
+    ValuePairing,
 )
 from pbi_report_validator.domain.diff import (
     SCHEMA_VERSION,
@@ -25,9 +27,11 @@ from pbi_report_validator.domain.diff import (
     Finding,
     ItemStatus,
     MatchMethod,
+    MeasureDiff,
     PageMatch,
     PageView,
     ReportMatch,
+    RowComparison,
     Severity,
     SeverityCounts,
     VisualMatch,
@@ -72,6 +76,7 @@ __all__ = [
     "ComparisonCondition",
     "Condition",
     "DataComparison",
+    "DataSettings",
     "DataStatus",
     "DataSummary",
     "DaxQuery",
@@ -88,6 +93,7 @@ __all__ = [
     "LiteralValue",
     "MatchMethod",
     "Measure",
+    "MeasureDiff",
     "NotCondition",
     "Page",
     "PageMatch",
@@ -98,6 +104,7 @@ __all__ = [
     "QueryResult",
     "Report",
     "ReportMatch",
+    "RowComparison",
     "SemanticModel",
     "Severity",
     "SeverityCounts",
@@ -105,6 +112,7 @@ __all__ = [
     "Table",
     "Tolerance",
     "UnsupportedQuery",
+    "ValuePairing",
     "Visual",
     "VisualMatch",
     "VisualView",

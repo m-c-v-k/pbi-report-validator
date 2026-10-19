@@ -75,5 +75,30 @@ class Tolerance(DomainModel):
     exactly.
     """
 
-    absolute: float = Field(default=0.0, ge=0)
-    relative: float = Field(default=1e-9, ge=0)
+    absolute: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    relative: float = Field(default=1e-9, ge=0, allow_inf_nan=False)
+
+
+class DataSettings(DomainModel):
+    """What ``--data`` compares against.
+
+    ``show_values`` puts row keys and values in the findings; by default
+    they are masked.
+    """
+
+    old_dataset: str
+    new_dataset: str
+    tolerance: Tolerance = Tolerance()
+    show_values: bool = False
+
+
+class ValuePairing(DomainModel):
+    """Value columns to compare, and the values found in one version only.
+
+    ``columns`` holds ``(old column, new column)`` pairs, following measure
+    renames.
+    """
+
+    columns: tuple[tuple[str, str], ...] = ()
+    only_old: tuple[str, ...] = ()
+    only_new: tuple[str, ...] = ()

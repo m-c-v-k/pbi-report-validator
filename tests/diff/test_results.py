@@ -1,6 +1,6 @@
 import pytest
 
-from pbi_report_validator.diff.data import compare_results, display, not_validated
+from pbi_report_validator.diff.results import compare_results, display, not_validated
 from pbi_report_validator.domain.models import (
     Category,
     CellValue,
