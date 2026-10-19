@@ -26,6 +26,7 @@ from pbi_report_validator.parsers.pbir_filters import (
     parse_filters,
     parse_slicer_state,
 )
+from pbi_report_validator.parsers.quoting import unquote
 
 DEFAULT_PAGE_WIDTH = 1280.0
 DEFAULT_PAGE_HEIGHT = 720.0
@@ -181,7 +182,7 @@ def _title(body: dict[str, Any]) -> str | None:
         literal = value["expr"]["Literal"]["Value"]
     except (KeyError, IndexError, TypeError):
         return None
-    return _unquote_literal(literal) if isinstance(literal, str) else None
+    return unquote(literal) if isinstance(literal, str) else None
 
 
 def _projections(body: dict[str, Any], problems: list[str]) -> tuple[Projection, ...]:
@@ -214,13 +215,6 @@ def _content_or_issue(
         )
         return None
     return raw.content
-
-
-def _unquote_literal(value: str) -> str:
-    """Strip PBIR string literal quotes: ``'Total sales'`` -> ``Total sales``."""
-    if len(value) >= 2 and value.startswith("'") and value.endswith("'"):
-        return value[1:-1].replace("''", "'")
-    return value
 
 
 def _first_error(exc: ValidationError) -> str:

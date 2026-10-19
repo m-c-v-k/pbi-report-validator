@@ -9,7 +9,7 @@ structured form keeps the two in agreement.
 """
 
 import re
-from typing import Any, Literal, cast
+from typing import Any, Literal, assert_never, cast
 
 from pbi_report_validator.domain.models import (
     AllCondition,
@@ -26,6 +26,7 @@ from pbi_report_validator.domain.models import (
     SlicerState,
 )
 from pbi_report_validator.parsers.pbir_fields import parse_field
+from pbi_report_validator.parsers.quoting import is_quoted, unquote
 
 Operator = Literal["=", ">", ">=", "<", "<="]
 COMPARISON_OPERATORS: dict[int, Operator] = {0: "=", 1: ">", 2: ">=", 3: "<", 4: "<="}
@@ -135,10 +136,12 @@ def render(condition: Condition) -> str:
     if isinstance(condition, BinaryCondition):
         left, right = render(condition.left), render(condition.right)
         return f"({left}) {condition.kind} ({right})"
-    return " and ".join(
-        f"({render(item)})" if isinstance(item, BinaryCondition) else render(item)
-        for item in condition.items
-    )
+    if isinstance(condition, AllCondition):
+        return " and ".join(
+            f"({render(item)})" if isinstance(item, BinaryCondition) else render(item)
+            for item in condition.items
+        )
+    assert_never(condition)
 
 
 def render_literal(literal: LiteralValue) -> str:
@@ -157,8 +160,8 @@ def parse_literal(raw: str) -> LiteralValue:
     number = NUMBER_LITERAL.match(raw)
     if number:
         return LiteralValue(kind=LiteralKind.NUMBER, value=number.group(1))
-    if len(raw) >= 2 and raw.startswith("'") and raw.endswith("'"):
-        return LiteralValue(kind=LiteralKind.TEXT, value=raw[1:-1].replace("''", "'"))
+    if is_quoted(raw):
+        return LiteralValue(kind=LiteralKind.TEXT, value=unquote(raw))
     if raw in ("true", "false"):
         return LiteralValue(kind=LiteralKind.BOOLEAN, value=raw)
     if raw == "null":
