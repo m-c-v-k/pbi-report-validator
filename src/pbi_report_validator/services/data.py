@@ -8,7 +8,6 @@ are never sent anywhere else.
 
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from typing import Protocol
 
 from pbi_report_validator.dax.builder import build_query, result_column
@@ -19,13 +18,14 @@ from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
     DataComparison,
+    DataSettings,
     DaxQuery,
-    DomainModel,
     QueryResult,
     Report,
     ReportMatch,
     Tolerance,
     UnsupportedQuery,
+    ValuePairing,
 )
 from pbi_report_validator.integrations.config import load_powerbi_config
 from pbi_report_validator.integrations.powerbi import (
@@ -48,27 +48,6 @@ class QueryRunner(Protocol):
 
 class InvalidDataOptionsError(ValueError):
     """The data validation options are incomplete or inconsistent."""
-
-
-class DataSettings(DomainModel):
-    """What ``--data`` compares against.
-
-    ``show_values`` puts row keys and values in the findings; by default
-    they are masked.
-    """
-
-    old_dataset: str
-    new_dataset: str
-    tolerance: Tolerance = Tolerance()
-    show_values: bool = False
-
-
-@dataclass(frozen=True)
-class DataRun:
-    """Data validation settings plus the runner that executes the queries."""
-
-    settings: DataSettings
-    runner: QueryRunner
 
 
 def data_settings(
@@ -183,29 +162,23 @@ def _comparable_queries(
     return old, new
 
 
-@dataclass(frozen=True)
-class _ValuePairs:
-    """Value columns to compare, and the values found in one version only."""
-
-    columns: list[tuple[str, str]]
-    only_old: list[str]
-    only_new: list[str]
-
-
 def _pair_values(
     old: Sequence[str], new: Sequence[str], value_renames: Mapping[str, str]
-) -> _ValuePairs:
+) -> ValuePairing:
     """Pair old and new value names, following measure renames."""
     renamed = {name: value_renames.get(name, name) for name in old}
-    return _ValuePairs(
-        columns=[(f"[{o}]", f"[{n}]") for o, n in renamed.items() if n in new],
-        only_old=[o for o, n in renamed.items() if n not in new],
-        only_new=[n for n in new if n not in renamed.values()],
+    return ValuePairing(
+        columns=tuple((f"[{o}]", f"[{n}]") for o, n in renamed.items() if n in new),
+        only_old=tuple(o for o, n in renamed.items() if n not in new),
+        only_new=tuple(n for n in new if n not in renamed.values()),
     )
 
 
 def _with_unpaired(
-    comparison: DataComparison, path: str, only_old: list[str], only_new: list[str]
+    comparison: DataComparison,
+    path: str,
+    only_old: Sequence[str],
+    only_new: Sequence[str],
 ) -> DataComparison:
     """Note values that exist in only one version, so they are not hidden."""
     parts = [f"[{n}] is only in the old visual" for n in only_old]

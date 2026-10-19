@@ -167,6 +167,13 @@ class DataComparison(DomainModel):
     findings: tuple[Finding, ...] = ()
 
 
+class MeasureDiff(DomainModel):
+    """Measure findings plus the renames found, keyed by old field key."""
+
+    findings: tuple[Finding, ...] = ()
+    renames: dict[str, str] = Field(default_factory=dict)
+
+
 class SeverityCounts(DomainModel):
     """Number of findings per severity."""
 
