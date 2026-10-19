@@ -4,8 +4,9 @@ import logging
 from pathlib import Path
 
 from pbi_report_validator.diff.content import diff_content
+from pbi_report_validator.diff.data import not_fully_validated
 from pbi_report_validator.diff.measures import diff_measures
-from pbi_report_validator.diff.severity import with_severity
+from pbi_report_validator.diff.severity import at_least, with_severity
 from pbi_report_validator.diff.structural import (
     diff_pages_and_visuals,
     without_unparseable,
@@ -19,6 +20,7 @@ from pbi_report_validator.domain.models import (
     ParseIssue,
     Report,
     SemanticModel,
+    Severity,
 )
 from pbi_report_validator.domain.raw import RawProject
 from pbi_report_validator.integrations.files import load_project, write_text
@@ -29,6 +31,10 @@ from pbi_report_validator.parsers.tmdl import parse_semantic_model
 from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
 from pbi_report_validator.reporting.json_out import to_json
 from pbi_report_validator.reporting.markdown import to_markdown
+from pbi_report_validator.reporting.terminal import (
+    format_data_failure,
+    format_failure,
+)
 from pbi_report_validator.services.data import DataRun, validate_data
 
 logger = logging.getLogger(__name__)
@@ -89,6 +95,28 @@ def validate(
         data=tuple(sorted((c.summary for c in comparisons), key=lambda s: s.path)),
         data_values_shown=data is not None and data.settings.show_values,
     )
+
+
+def failure_reasons(
+    result: DiffResult, fail_on: Severity | None, fail_on_data_error: bool
+) -> list[str]:
+    """Why the run fails under ``--fail-on`` and ``--fail-on-data-error``.
+
+    Args:
+        result: The diff result.
+        fail_on: Fail on findings at or above this severity; ``None`` never.
+        fail_on_data_error: Fail when the data of a visual was not fully
+            validated.
+
+    Returns:
+        One message per rule that was triggered; empty when the run passes.
+    """
+    reasons = []
+    if fail_on is not None and (failing := at_least(result.findings, fail_on)):
+        reasons.append(format_failure(len(failing), fail_on))
+    if fail_on_data_error and (unchecked := not_fully_validated(result.findings)):
+        reasons.append(format_data_failure(len(unchecked)))
+    return reasons
 
 
 def write_json(result: DiffResult, path: Path) -> None:

@@ -9,16 +9,12 @@ from typing import Annotated
 
 import typer
 
-from pbi_report_validator.diff.data import not_fully_validated
-from pbi_report_validator.diff.severity import at_least
-from pbi_report_validator.domain.models import DiffResult, Severity
+from pbi_report_validator.domain.models import Severity
 from pbi_report_validator.integrations.config import MissingCredentialsError
 from pbi_report_validator.integrations.files import OutputWriteError, ProjectLoadError
 from pbi_report_validator.integrations.powerbi import PowerBIError
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
 from pbi_report_validator.reporting.terminal import (
-    format_data_failure,
-    format_failure,
     format_summary,
     format_unmasked_warning,
 )
@@ -29,6 +25,7 @@ from pbi_report_validator.services.data import (
     data_settings,
 )
 from pbi_report_validator.services.validate import (
+    failure_reasons,
     validate,
     write_html,
     write_json,
@@ -191,22 +188,9 @@ def diff(
             typer.echo(f"\n{label} written to {path.as_posix()}")
     if result.data_values_shown:
         typer.echo(f"\n{format_unmasked_warning()}", err=True)
-    failures = _failures(result, fail_on, fail_on_data_error)
+    threshold = None if fail_on is FailOn.NONE else Severity(fail_on.value)
+    failures = failure_reasons(result, threshold, fail_on_data_error)
     for failure in failures:
         typer.echo(f"\n{failure}", err=True)
     if failures:
         raise typer.Exit(EXIT_FINDINGS)
-
-
-def _failures(
-    result: DiffResult, fail_on: FailOn, fail_on_data_error: bool
-) -> list[str]:
-    """Why the run fails under ``--fail-on`` and ``--fail-on-data-error``."""
-    failures = []
-    if fail_on is not FailOn.NONE:
-        threshold = Severity(fail_on.value)
-        if failing := at_least(result.findings, threshold):
-            failures.append(format_failure(len(failing), threshold))
-    if fail_on_data_error and (unchecked := not_fully_validated(result.findings)):
-        failures.append(format_data_failure(len(unchecked)))
-    return failures

@@ -277,7 +277,8 @@ def _field(expression: Any, aliases: dict[str, str]) -> FieldRef:
 
 
 def _literal(node: Any) -> LiteralValue:
-    value = node.get("Literal", {}).get("Value") if isinstance(node, dict) else None
+    literal = node.get("Literal") if isinstance(node, dict) else None
+    value = literal.get("Value") if isinstance(literal, dict) else None
     if not isinstance(value, str):
         raise UnsupportedConditionError("non-literal value")
     return parse_literal(value)

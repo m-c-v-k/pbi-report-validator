@@ -7,6 +7,7 @@ by dropping whole findings from the end and saying how many were left out.
 """
 
 import re
+from collections import Counter
 
 from pbi_report_validator.domain.models import Category, DiffResult, Finding
 from pbi_report_validator.reporting.labels import (
@@ -59,9 +60,7 @@ def to_markdown(result: DiffResult, limit: int = GITHUB_COMMENT_LIMIT) -> str:
 
 
 def _header(result: DiffResult) -> str:
-    counts = {c: 0 for c in Category}
-    for finding in result.findings:
-        counts[finding.category] += 1
+    counts = Counter(f.category for f in result.findings)
     lines: list[str] = []
     if result.data_values_shown:
         lines += ["> [!WARNING]", f"> **Unmasked data.** {UNMASKED_WARNING}", ""]
@@ -79,7 +78,9 @@ def _header(result: DiffResult) -> str:
         lines += [overview, ""]
     if result.findings:
         lines += ["| Category | Findings |", "|---|---:|"]
-        lines += [f"| {CATEGORY_LABELS[c]} | {n} |" for c, n in counts.items() if n]
+        lines += [
+            f"| {CATEGORY_LABELS[c]} | {counts[c]} |" for c in Category if counts[c]
+        ]
     return "\n".join(lines) + "\n"
 
 

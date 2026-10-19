@@ -7,7 +7,7 @@ are never sent anywhere else.
 """
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -97,6 +97,8 @@ def create_runner(environ: Mapping[str, str]) -> QueryRunner:
 
     Raises:
         MissingCredentialsError: A variable is missing.
+        AuthenticationError: The tenant is unknown or invalid.
+        ServiceError: Entra ID could not be reached.
     """
     return create_client(load_powerbi_config(environ))
 
@@ -119,7 +121,7 @@ def validate_data(
         DatasetNotFoundError: A dataset id is wrong or not shared.
         InvalidDatasetIdError: A dataset id is not a GUID.
     """
-    names = _value_renames(renames)
+    value_renames = _value_renames(renames)
     comparisons = []
     for page_match in match.pages:
         for visual_match in page_match.visuals:
@@ -129,7 +131,7 @@ def validate_data(
             old_query = build_query(visual_match.old, page_match.old, old.filters)
             new_query = build_query(visual_match.new, page_match.new, new.filters)
             comparisons.append(
-                _compare(path, old_query, new_query, names, runner, settings)
+                _compare(path, old_query, new_query, value_renames, runner, settings)
             )
     logger.info("Compared the data of %d visuals", len(comparisons))
     return comparisons
@@ -139,42 +141,66 @@ def _compare(
     path: str,
     old_query: DaxQuery | UnsupportedQuery,
     new_query: DaxQuery | UnsupportedQuery,
-    names: Mapping[str, str],
+    value_renames: Mapping[str, str],
     runner: QueryRunner,
     settings: DataSettings,
 ) -> DataComparison:
-    if isinstance(old_query, UnsupportedQuery):
-        return not_validated(path, old_query.reason)
-    if isinstance(new_query, UnsupportedQuery):
-        return not_validated(path, new_query.reason)
-    if [result_column(c) for c in old_query.group_by] != [
-        result_column(c) for c in new_query.group_by
-    ]:
-        return not_validated(path, "the visual is grouped by different columns")
+    queries = _comparable_queries(old_query, new_query)
+    if isinstance(queries, str):
+        return not_validated(path, queries)
+    old_dax, new_dax = queries
     try:
-        old_result = runner.execute_query(settings.old_dataset, old_query.dax)
-        new_result = runner.execute_query(settings.new_dataset, new_query.dax)
+        old_result = runner.execute_query(settings.old_dataset, old_dax.dax)
+        new_result = runner.execute_query(settings.new_dataset, new_dax.dax)
     except (QueryError, RateLimitError, ServiceError) as exc:
         return not_validated(path, f"query failed: {exc}")
-    keys = [(result_column(c), result_column(c)) for c in old_query.group_by]
-    paired = {name: names.get(name, name) for name in old_query.values}
-    values = [
-        (f"[{old}]", f"[{new}]")
-        for old, new in paired.items()
-        if new in new_query.values
-    ]
+    keys = [(result_column(c), result_column(c)) for c in old_dax.group_by]
+    values = _pair_values(old_dax.values, new_dax.values, value_renames)
     comparison = compare_results(
         path,
         old_result,
         new_result,
         keys,
-        values,
+        values.columns,
         settings.tolerance,
         show_values=settings.show_values,
     )
-    only_old = [old for old, new in paired.items() if new not in new_query.values]
-    only_new = [n for n in new_query.values if n not in paired.values()]
-    return _with_unpaired(comparison, path, only_old, only_new)
+    return _with_unpaired(comparison, path, values.only_old, values.only_new)
+
+
+def _comparable_queries(
+    old: DaxQuery | UnsupportedQuery, new: DaxQuery | UnsupportedQuery
+) -> tuple[DaxQuery, DaxQuery] | str:
+    """Both queries if their results can be compared, otherwise the reason."""
+    if isinstance(old, UnsupportedQuery):
+        return old.reason
+    if isinstance(new, UnsupportedQuery):
+        return new.reason
+    old_columns = [result_column(c) for c in old.group_by]
+    if old_columns != [result_column(c) for c in new.group_by]:
+        return "the visual is grouped by different columns"
+    return old, new
+
+
+@dataclass(frozen=True)
+class _ValuePairs:
+    """Value columns to compare, and the values found in one version only."""
+
+    columns: list[tuple[str, str]]
+    only_old: list[str]
+    only_new: list[str]
+
+
+def _pair_values(
+    old: Sequence[str], new: Sequence[str], value_renames: Mapping[str, str]
+) -> _ValuePairs:
+    """Pair old and new value names, following measure renames."""
+    renamed = {name: value_renames.get(name, name) for name in old}
+    return _ValuePairs(
+        columns=[(f"[{o}]", f"[{n}]") for o, n in renamed.items() if n in new],
+        only_old=[o for o, n in renamed.items() if n not in new],
+        only_new=[n for n in new if n not in renamed.values()],
+    )
 
 
 def _with_unpaired(

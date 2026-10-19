@@ -120,6 +120,18 @@ def test_model_is_none_without_dataset_path(project_copy: Path) -> None:
     assert project.semantic_model is None
 
 
+@pytest.mark.parametrize("reference", ["null", '"x"', '{"byPath": null}'])
+def test_model_is_none_with_malformed_dataset_reference(
+    project_copy: Path, reference: str
+) -> None:
+    pbir = project_copy / "Sales.Report" / "definition.pbir"
+    pbir.write_text(f'{{"datasetReference": {reference}}}')
+
+    project = load_project(project_copy)
+
+    assert project.semantic_model is None
+
+
 def overview_visual(project_copy: Path, name: str) -> Path:
     pages = project_copy / "Sales.Report/definition/pages"
     return pages / "overview/visuals" / name / "visual.json"
