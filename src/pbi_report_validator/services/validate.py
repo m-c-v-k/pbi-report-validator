@@ -93,6 +93,7 @@ def validate(
         findings=tuple(findings),
         pages=build_page_views(match, findings),
         data=tuple(sorted((c.summary for c in comparisons), key=lambda s: s.path)),
+        data_values_shown=data is not None and data.settings.show_values,
     )
 
 

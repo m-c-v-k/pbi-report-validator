@@ -12,6 +12,7 @@ from collections import Counter
 from pbi_report_validator.domain.models import Category, DiffResult, Finding
 from pbi_report_validator.reporting.labels import (
     CATEGORY_LABELS,
+    UNMASKED_WARNING,
     data_overview,
     severity_overview,
 )
@@ -60,7 +61,10 @@ def to_markdown(result: DiffResult, limit: int = GITHUB_COMMENT_LIMIT) -> str:
 
 def _header(result: DiffResult) -> str:
     counts = Counter(f.category for f in result.findings)
-    lines = [
+    lines: list[str] = []
+    if result.data_values_shown:
+        lines += ["> [!WARNING]", f"> **Unmasked data.** {UNMASKED_WARNING}", ""]
+    lines += [
         TITLE,
         "",
         f"`{_code(result.old_source)}` → `{_code(result.new_source)}`"

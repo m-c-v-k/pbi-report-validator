@@ -43,7 +43,7 @@ def test_value_change_outside_tolerance_is_reported() -> None:
     old = result(("2025-01", 100.0), ("2025-02", 50.0))
     new = result(("2025-02", 50.0), ("2025-01", 120.0))
 
-    comparison = compare_results(PATH, old, new, KEYS, VALUES)
+    comparison = compare_results(PATH, old, new, KEYS, VALUES, show_values=True)
 
     assert [
         (f.category, f.change, f.path, f.old, f.new) for f in comparison.findings
@@ -82,7 +82,7 @@ def test_rows_only_in_one_version() -> None:
     old = result(("2025-01", 1), ("2025-03", 3))
     new = result(("2025-01", 1), ("2025-02", 2))
 
-    comparison = compare_results(PATH, old, new, KEYS, VALUES)
+    comparison = compare_results(PATH, old, new, KEYS, VALUES, show_values=True)
 
     assert [(f.change, f.path) for f in comparison.findings] == [
         (ChangeKind.ADDED, "overview/chart/data/Date[Month]=2025-02"),
@@ -99,7 +99,7 @@ def test_blanks_and_text_values() -> None:
     keys = [("Product[Category]", "Product[Category]")]
     values = [("[Label]", "[Label]"), ("[Value]", "[Value]")]
 
-    comparison = compare_results(PATH, old, new, keys, values)
+    comparison = compare_results(PATH, old, new, keys, values, show_values=True)
 
     assert [(f.path.rsplit("/", 1)[-1], f.old, f.new) for f in comparison.findings] == [
         ("[Label]", "low", "LOW"),
@@ -117,6 +117,7 @@ def test_card_without_keys_compares_the_single_row() -> None:
         result((12,), columns=columns),
         [],
         [("[Total]", "[Total]")],
+        show_values=True,
     )
 
     assert [(f.path, f.old, f.new) for f in comparison.findings] == [
@@ -168,7 +169,9 @@ def test_findings_are_capped_but_summary_counts_everything() -> None:
     old = result(*[(f"m{i:02}", i) for i in range(30)])
     new = result(*[(f"m{i:02}", i + 1) for i in range(30)])
 
-    comparison = compare_results(PATH, old, new, KEYS, VALUES, max_findings=5)
+    comparison = compare_results(
+        PATH, old, new, KEYS, VALUES, max_findings=5, show_values=True
+    )
 
     assert len(comparison.findings) == 5
     assert comparison.findings[0].path.endswith("Date[Month]=m00/[Total Sales]")
@@ -219,11 +222,68 @@ def test_numeric_keys_sort_naturally() -> None:
     new = result((9, 2), (10, 2), (2024, 2), columns=columns)
 
     comparison = compare_results(
-        PATH, old, new, [("Date[Year]", "Date[Year]")], [("[V]", "[V]")]
+        PATH,
+        old,
+        new,
+        [("Date[Year]", "Date[Year]")],
+        [("[V]", "[V]")],
+        show_values=True,
     )
 
     assert [f.path.split("=")[1].split("/")[0] for f in comparison.findings] == [
         "9",
         "10",
         "2024",
+    ]
+
+
+def test_row_keys_and_values_are_masked_by_default() -> None:
+    old = result(("2025-01", 100.0), ("2025-02", 50.0), ("2025-03", 1.0))
+    new = result(("2025-01", 100.0), ("2025-02", 70.0), ("2025-04", 1.0))
+
+    comparison = compare_results(PATH, old, new, KEYS, VALUES)
+
+    assert [
+        (f.change, f.path, f.message, f.old, f.new) for f in comparison.findings
+    ] == [
+        (
+            ChangeKind.MODIFIED,
+            "overview/chart/data/row 2/[Total Sales]",
+            "[Total Sales] differs for row 2",
+            "(masked)",
+            "(masked)",
+        ),
+        (
+            ChangeKind.REMOVED,
+            "overview/chart/data/row 3",
+            "Row 3 only in the old version",
+            None,
+            None,
+        ),
+        (
+            ChangeKind.ADDED,
+            "overview/chart/data/row 4",
+            "Row 4 only in the new version",
+            None,
+            None,
+        ),
+    ]
+    text = " ".join(f"{f.path} {f.message}" for f in comparison.findings)
+    assert "2025" not in text and "70" not in text
+    assert comparison.summary.max_abs_delta == 20.0
+
+
+def test_masked_card_is_still_called_total() -> None:
+    columns = ("[Total]",)
+
+    comparison = compare_results(
+        PATH,
+        result((10,), columns=columns),
+        result((12,), columns=columns),
+        [],
+        [("[Total]", "[Total]")],
+    )
+
+    assert [(f.path, f.old, f.new) for f in comparison.findings] == [
+        ("overview/chart/data/total/[Total]", "(masked)", "(masked)"),
     ]

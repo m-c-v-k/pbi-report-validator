@@ -101,9 +101,7 @@ def test_fixture_pair_compares_every_non_slicer_visual() -> None:
         ("overview/card_total_sales", DataStatus.SAME),
         ("overview/chart_sales_by_month", DataStatus.DIFFERENT),
     ]
-    assert data_findings == [
-        "overview/chart_sales_by_month/data/Date[Month]=2025-02/[Total Sales]"
-    ]
+    assert data_findings == ["overview/chart_sales_by_month/data/row 2/[Total Sales]"]
 
 
 def test_queries_go_to_the_right_dataset_and_use_new_measure_names() -> None:
@@ -148,9 +146,11 @@ def test_reports_show_data_results() -> None:
     finding = next(f for f in result.findings if f.category == Category.DATA)
     assert (finding.change, finding.old, finding.new) == (
         ChangeKind.MODIFIED,
-        "100",
-        "120",
+        "(masked)",
+        "(masked)",
     )
+    assert not result.data_values_shown
+    assert "nmasked data" not in markdown and "nmasked data" not in html
 
 
 cli = CliRunner()
@@ -421,6 +421,57 @@ def test_not_fully_validated_selects_data_errors() -> None:
     }
     not_validated = [s for s in result.data if s.status == DataStatus.NOT_VALIDATED]
     assert len(unchecked) >= len(not_validated)
+
+
+def test_show_values_puts_values_in_reports_with_a_warning() -> None:
+    settings = SETTINGS.model_copy(update={"show_values": True})
+
+    result = validate(
+        FIXTURES / "sales_v1", FIXTURES / "sales_v2", DataRun(settings, FakeRunner())
+    )
+
+    finding = next(f for f in result.findings if f.category == Category.DATA)
+    assert (finding.path, finding.old, finding.new) == (
+        "overview/chart_sales_by_month/data/Date[Month]=2025-02/[Total Sales]",
+        "100",
+        "120",
+    )
+    assert result.data_values_shown
+    assert to_markdown(result).startswith("> [!WARNING]")
+    assert 'role="alert"' in to_html(result, read_template(REPORT_TEMPLATE), "test")
+
+
+def test_cli_show_data_values_needs_data(repo_root: None) -> None:
+    result = cli.invoke(
+        app,
+        [
+            "diff",
+            "tests/fixtures/sales_v1",
+            "tests/fixtures/sales_v2",
+            "--show-data-values",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "--show-data-values needs --data" in result.stderr
+
+
+def test_cli_show_data_values_warns_on_stderr(
+    repo_root: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "pbi_report_validator.cli.main.create_runner", lambda env: FakeRunner()
+    )
+    args = ["diff", "tests/fixtures/sales_v1", "tests/fixtures/sales_v2", "--data"]
+    args += ["--old-dataset", OLD_DS, "--new-dataset", NEW_DS]
+
+    masked = cli.invoke(app, args)
+    shown = cli.invoke(app, [*args, "--show-data-values"])
+
+    assert "UNMASKED DATA" not in masked.stderr
+    assert "Date[Month]=2025-02" not in masked.stdout
+    assert "WARNING: UNMASKED DATA" in shown.stderr
+    assert "Date[Month]=2025-02" in shown.stdout
 
 
 BY_MONTH = DaxQuery(dax="q1", group_by=("'Date'[Month]",), values=("Sales",))

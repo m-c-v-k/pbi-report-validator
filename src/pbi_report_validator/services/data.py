@@ -50,11 +50,16 @@ class InvalidDataOptionsError(ValueError):
 
 
 class DataSettings(DomainModel):
-    """What ``--data`` compares against."""
+    """What ``--data`` compares against.
+
+    ``show_values`` puts row keys and values in the findings; by default
+    they are masked.
+    """
 
     old_dataset: str
     new_dataset: str
     tolerance: Tolerance = Tolerance()
+    show_values: bool = False
 
 
 @dataclass(frozen=True)
@@ -70,6 +75,7 @@ def data_settings(
     new_dataset: str | None,
     absolute: float = 0.0,
     relative: float = 1e-9,
+    show_values: bool = False,
 ) -> DataSettings:
     """Settings from the CLI options.
 
@@ -82,6 +88,7 @@ def data_settings(
         old_dataset=old_dataset,
         new_dataset=new_dataset,
         tolerance=Tolerance(absolute=absolute, relative=relative),
+        show_values=show_values,
     )
 
 
@@ -150,7 +157,13 @@ def _compare(
     keys = [(result_column(c), result_column(c)) for c in old_dax.group_by]
     values = _pair_values(old_dax.values, new_dax.values, value_renames)
     comparison = compare_results(
-        path, old_result, new_result, keys, values.columns, settings.tolerance
+        path,
+        old_result,
+        new_result,
+        keys,
+        values.columns,
+        settings.tolerance,
+        show_values=settings.show_values,
     )
     return _with_unpaired(comparison, path, values.only_old, values.only_new)
 
