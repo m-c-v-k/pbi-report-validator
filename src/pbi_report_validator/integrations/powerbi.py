@@ -252,11 +252,11 @@ def _message_from(error: Any) -> str:
     """Pull the most specific message out of a Power BI error object."""
     if not isinstance(error, dict):
         return "unknown error"
-    details = error.get("pbi.error", {}).get("details", [])
+    pbi_error = error.get("pbi.error")
+    details = pbi_error.get("details") if isinstance(pbi_error, dict) else None
     for detail in details if isinstance(details, list) else []:
-        value = (
-            detail.get("detail", {}).get("value") if isinstance(detail, dict) else None
-        )
+        body = detail.get("detail") if isinstance(detail, dict) else None
+        value = body.get("value") if isinstance(body, dict) else None
         if isinstance(value, str) and value:
             return value
     message = error.get("message") or error.get("code")

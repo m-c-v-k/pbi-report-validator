@@ -123,6 +123,18 @@ def test_bad_request_uses_detailed_engine_message() -> None:
 
 
 @pytest.mark.parametrize(
+    "error",
+    [
+        {"message": "boom", "pbi.error": "x"},
+        {"message": "boom", "pbi.error": {"details": [{"detail": "x"}]}},
+    ],
+)
+def test_malformed_error_details_fall_back_to_message(error: dict[str, Any]) -> None:
+    with pytest.raises(QueryError, match="boom"):
+        client(httpx.Response(400, json={"error": error})).execute_query(DATASET, DAX)
+
+
+@pytest.mark.parametrize(
     ("status", "error"),
     [
         (401, AuthenticationError),
