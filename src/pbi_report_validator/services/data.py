@@ -90,6 +90,8 @@ def create_runner(environ: Mapping[str, str]) -> QueryRunner:
 
     Raises:
         MissingCredentialsError: A variable is missing.
+        AuthenticationError: The tenant is unknown or invalid.
+        ServiceError: Entra ID could not be reached.
     """
     return create_client(load_powerbi_config(environ))
 

@@ -119,7 +119,8 @@ def _find_model_dir(report_dir: Path) -> Path | None:
     pbir = report_dir / "definition.pbir"
     if pbir.is_file():
         reference = _read_required_json(pbir, report_dir.parent)
-        by_path = reference.content.get("datasetReference", {}).get("byPath", {})
+        dataset = reference.content.get("datasetReference")
+        by_path = dataset.get("byPath") if isinstance(dataset, dict) else None
         if isinstance(by_path, dict) and isinstance(by_path.get("path"), str):
             model_path: str = by_path["path"]
             candidate = (report_dir / model_path).resolve()
