@@ -23,3 +23,21 @@ Notes for the diff engine:
 - #6: the new page's visual is reported as part of the added page.
 - Unchanged on purpose: report filter, page filter, `card_total_sales`, size
   of `chart_sales_by_region`, all titles.
+
+# Expected changes: `sales_v2` → `sales_v3`
+
+`sales_v3` is `sales_v2` with exactly the changes below and nothing else.
+It demonstrates the `field` and `parse_issue` categories, which the first
+pair does not produce. Paths as above.
+
+| # | Category | Object | Old (`sales_v2`) | New (`sales_v3`) | File(s) |
+|---|---|---|---|---|---|
+| 1 | Field added | `details` / `table_product_sales`, field `Sales[Region]` | *(none)* | `Sales[Region]` in `Values`, after `Product[Product]` | `pages/details/visuals/table_product_sales/visual.json` |
+| 2 | Parse issue | `overview` / `card_total_sales` | valid JSON | invalid JSON (closing `}` removed) | `pages/overview/visuals/card_total_sales/visual.json` |
+
+Notes for the diff engine:
+
+- #2 must be reported only as a parse issue. The card is missing from the
+  parsed new version, but must not also appear as a removed visual.
+- `card_total_sales/visual.json` in `sales_v3` is the only fixture file that
+  is invalid JSON; `tests/test_fixtures.py` excludes it from the validity check.
