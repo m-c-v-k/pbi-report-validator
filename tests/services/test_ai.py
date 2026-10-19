@@ -56,6 +56,10 @@ def test_unknown_environment_value_is_rejected() -> None:
         ai_settings(None, False, {"PBI_VALIDATE_AI": "maybe"})
 
 
+def test_explicit_off_ignores_an_invalid_environment_value() -> None:
+    assert ai_settings(AiMode.OFF, False, {"PBI_VALIDATE_AI": "maybe"}) == AiSettings()
+
+
 def test_allow_data_needs_api() -> None:
     with pytest.raises(InvalidAiOptionsError, match="needs --ai api"):
         ai_settings(None, True, KEY)
