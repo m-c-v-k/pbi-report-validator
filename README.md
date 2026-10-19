@@ -72,7 +72,7 @@ or the `.Report` folder itself. The terminal always shows a summary; add any of:
 |---|---|
 | `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
 | `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
-| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.4) |
+| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.5) |
 
 Running it on the sample reports in this repository gives:
 
@@ -113,7 +113,7 @@ fully validated.
 |---|---|
 | `0` | The comparison ran (with or without differences), and neither `--fail-on` nor `--fail-on-data-error` was triggered |
 | `1` | A project could not be loaded, an output file could not be written, or data validation could not run |
-| `2` | Invalid options |
+| `2` | Invalid options, including `--ai api` when AI is disabled or not set up |
 | `3` | At least one finding at or above the `--fail-on` severity, or (with `--fail-on-data-error`) data that was not fully validated |
 
 ### What it compares
@@ -202,6 +202,44 @@ principal; slicer interactions edited in Power BI and slicers synced from
 other pages are not taken into account; the API allows about 120 queries a
 minute (40 on Pro/PPU), and each visual needs two.
 
+### AI options (optional, `--ai`)
+
+The AI layer is **off by default**, and nothing in the tool needs it. It is
+the base for AI match suggestions and plain-language explanations, which
+arrive in later releases. For now, `--ai api` checks the setup and records
+in every output that AI was on.
+
+| `--ai` | What happens |
+|---|---|
+| `off` (default) | No AI. Nothing is imported, read or sent. |
+| `api` | Uses the Anthropic API with **your own key**. The key owner pays for use; this project never calls the API itself. |
+
+Setup for `api`:
+
+```bash
+uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator"
+export ANTHROPIC_API_KEY=...
+pbi-validate diff ./old ./new --ai api
+```
+
+- The model defaults to the latest Claude model (`claude-opus-5-5`). Set
+  `PBI_VALIDATE_AI_MODEL` to use another one.
+- **What is sent:** metadata only, such as page and visual names, field
+  references, filter definitions, measure expressions and counts from the
+  data comparison. Row keys and values from `--data` are never sent unless
+  you also pass `--allow-data-to-llm` (stderr then shows a warning).
+- **Labelling:** every report made with `--ai api` says so and names the
+  model (`ai_mode` and `ai_model` in the JSON). AI-written text is marked
+  `AI-generated`; the findings themselves always come from the
+  deterministic comparison.
+- **Errors:** `--ai api` without the extra or without `ANTHROPIC_API_KEY`
+  stops before the run with exit code 2 and a setup hint.
+- **Default and kill switch:** `PBI_VALIDATE_AI=off|api` sets the default
+  when `--ai` is not given. `PBI_VALIDATE_AI=disabled` blocks AI whatever
+  the flags say: `--ai api` then fails with exit code 2. Set it in a CI
+  template or a machine's environment to enforce "no AI".
+- The Docker image and the GitHub Action do not include the AI extra.
+
 ## GitHub Action
 
 Run the diff in any repository's workflow, with no Python setup. The
@@ -280,8 +318,10 @@ commit, which takes about a minute longer.
   Query results stay in memory and are never logged or sent anywhere else.
   The output files contain only masked rows unless you pass
   `--show-data-values` (action input `show-data-values: true`).
-- The optional AI layer only receives metadata (field names, filter
-  definitions), never row-level data, unless you explicitly opt in.
+- The optional AI layer (`--ai api`, off by default) sends only metadata
+  (names, field references, filter definitions, counts) to the Anthropic
+  API with your own key. Row-level data is sent only with
+  `--allow-data-to-llm`. `PBI_VALIDATE_AI=disabled` blocks AI entirely.
 
 ## Development
 

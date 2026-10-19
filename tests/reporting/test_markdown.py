@@ -1,6 +1,7 @@
 import pytest
 
 from pbi_report_validator.domain.models import (
+    AiMode,
     Category,
     ChangeKind,
     DiffResult,
@@ -114,3 +115,11 @@ def test_severity_overview_and_per_finding() -> None:
 
     assert "Severity: 0 critical, 0 warning, 1 info\n" in text
     assert "- info · **modified** `model/Sales/M`: changed" in text
+
+
+def test_ai_mode_is_stated_only_when_on() -> None:
+    off = DiffResult(old_source="o", new_source="n")
+    on = off.model_copy(update={"ai_mode": AiMode.API, "ai_model": "claude-x"})
+
+    assert "AI:" not in to_markdown(off)
+    assert "AI: api (claude-x)." in to_markdown(on)

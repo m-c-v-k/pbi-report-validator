@@ -5,6 +5,7 @@ from collections import Counter
 from pbi_report_validator.domain.models import Category, DiffResult, Severity
 from pbi_report_validator.reporting.labels import (
     UNMASKED_WARNING,
+    ai_overview,
     data_overview,
     severity_overview,
 )
@@ -23,9 +24,9 @@ def format_summary(result: DiffResult, limit: int = DEFAULT_LIMIT) -> str:
         Multi-line text without a trailing newline.
     """
     header = f"Compared {result.old_source} -> {result.new_source}"
-    overview = data_overview(result)
-    if overview:
-        header += "\n" + overview
+    for overview in (data_overview(result), ai_overview(result)):
+        if overview:
+            header += "\n" + overview
     if not result.findings:
         return f"{header}\nNo differences found."
     counts = Counter(f.category for f in result.findings)
@@ -68,3 +69,11 @@ def format_unmasked_warning() -> str:
     """A block that stands out in the terminal, for ``--show-data-values``."""
     rule = "!" * 72
     return "\n".join([rule, "WARNING: UNMASKED DATA", UNMASKED_WARNING, rule])
+
+
+def format_llm_data_warning() -> str:
+    """A warning for ``--allow-data-to-llm``."""
+    return (
+        "WARNING: --allow-data-to-llm is on: row-level values may be sent to the "
+        "Anthropic API with your key."
+    )

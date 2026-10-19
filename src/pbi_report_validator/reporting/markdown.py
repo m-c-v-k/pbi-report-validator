@@ -13,6 +13,7 @@ from pbi_report_validator.domain.models import Category, DiffResult, Finding
 from pbi_report_validator.reporting.labels import (
     CATEGORY_LABELS,
     UNMASKED_WARNING,
+    ai_overview,
     data_overview,
     severity_overview,
 )
@@ -73,9 +74,9 @@ def _header(result: DiffResult) -> str:
     ]
     if result.findings:
         lines += [f"Severity: {severity_overview(result)}", ""]
-    overview = data_overview(result)
-    if overview:
-        lines += [overview, ""]
+    for overview in (data_overview(result), ai_overview(result)):
+        if overview:
+            lines += [overview, ""]
     if result.findings:
         lines += ["| Category | Findings |", "|---|---:|"]
         lines += [

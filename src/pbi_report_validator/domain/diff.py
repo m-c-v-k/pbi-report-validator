@@ -6,6 +6,7 @@ from typing import Final, Literal
 
 from pydantic import Field, TypeAdapter, field_validator, model_validator
 
+from pbi_report_validator.domain.ai import AiMode
 from pbi_report_validator.domain.base import DomainModel
 from pbi_report_validator.domain.data_validation import DataSummary
 from pbi_report_validator.domain.report import (
@@ -14,7 +15,7 @@ from pbi_report_validator.domain.report import (
     Visual,
 )
 
-SCHEMA_VERSION: Final = "1.4"
+SCHEMA_VERSION: Final = "1.5"
 
 
 class MatchMethod(StrEnum):
@@ -67,6 +68,7 @@ class Category(StrEnum):
     MEASURE = "measure"
     PARSE_ISSUE = "parse_issue"
     DATA = "data"
+    AI = "ai"
 
 
 class ChangeKind(StrEnum):
@@ -201,11 +203,12 @@ class DiffResult(DomainModel):
     Schema history: 1.0 had sources and findings; 1.1 added ``pages``;
     1.2 added the ``data`` category and per-visual ``data`` summaries;
     1.3 added ``severity`` on findings and ``severity_counts``; 1.4 added
-    ``data_values_shown`` (row keys and values are masked unless it is true).
+    ``data_values_shown`` (row keys and values are masked unless it is true);
+    1.5 added the ``ai`` category, ``ai_mode`` and ``ai_model``.
     """
 
     # Keep the Literal in sync with SCHEMA_VERSION (enforced by a test).
-    schema_version: Literal["1.4"] = SCHEMA_VERSION
+    schema_version: Literal["1.5"] = SCHEMA_VERSION
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()
@@ -214,6 +217,8 @@ class DiffResult(DomainModel):
     pages: tuple[PageView, ...] = ()
     data: tuple[DataSummary, ...] = ()
     data_values_shown: bool = False
+    ai_mode: AiMode = AiMode.OFF
+    ai_model: str | None = None
 
     @field_validator("findings")
     @classmethod
