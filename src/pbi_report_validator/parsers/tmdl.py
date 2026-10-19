@@ -12,7 +12,7 @@ they are kept as part of the DAX.
 """
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from pbi_report_validator.domain.helpers import field_key
 from pbi_report_validator.domain.models import (
@@ -44,18 +44,6 @@ class _Line:
     raw: str
 
 
-@dataclass
-class _TableBuilder:
-    name: str
-    columns: list[Column] = field(default_factory=list)
-    measures: list[Measure] = field(default_factory=list)
-
-    def build(self) -> Table:
-        return Table(
-            name=self.name, columns=tuple(self.columns), measures=tuple(self.measures)
-        )
-
-
 def parse_semantic_model(raw: RawSemanticModel) -> SemanticModel:
     """Parse all ``.tmdl`` files of a semantic model.
 
@@ -85,82 +73,78 @@ def parse_tmdl(text: str, path: str) -> tuple[list[Table], list[ParseIssue]]:
     Returns:
         The tables found and any parse issues.
     """
-    lines = _split_lines(text)
     tables: list[Table] = []
     issues: list[ParseIssue] = []
-    current: _TableBuilder | None = None
-    index = 0
-    while index < len(lines):
-        line = lines[index]
-        match = OBJECT_LINE.match(line.text)
-        if line.depth == 0:
-            if current:
-                tables.append(current.build())
-            is_table = match is not None and match["kind"] == "table"
-            current = (
-                _TableBuilder(unquote(match["name"])) if match and is_table else None
-            )
-            index += 1
-        elif current and line.depth == 1 and match and match["kind"] == "measure":
-            index = _read_measure(lines, index, match, current, path, issues)
-        elif current and line.depth == 1 and match and match["kind"] == "column":
-            index = _read_column(lines, index, match, current)
-        else:
-            index += 1
-    if current:
-        tables.append(current.build())
+    for header, body in _blocks(_split_lines(text), depth=0):
+        match = OBJECT_LINE.match(header.text)
+        if match and match["kind"] == "table":
+            table, table_issues = _read_table(unquote(match["name"]), body, path)
+            tables.append(table)
+            issues += table_issues
     return tables, issues
 
 
+def _read_table(
+    name: str, lines: list[_Line], path: str
+) -> tuple[Table, list[ParseIssue]]:
+    """A table from the lines below its ``table`` line; other objects are skipped."""
+    columns: list[Column] = []
+    measures: list[Measure] = []
+    issues: list[ParseIssue] = []
+    for header, body in _blocks(lines, depth=1):
+        match = OBJECT_LINE.match(header.text)
+        if match and match["kind"] == "column":
+            columns.append(_read_column(match, header, body))
+        elif match and match["kind"] == "measure":
+            measure = _read_measure(match, header, body)
+            if measure is None:
+                key = field_key(name, unquote(match["name"]))
+                issues.append(
+                    ParseIssue(
+                        path=f"{path}:{header.number}",
+                        message=f"measure {key} has no expression",
+                    )
+                )
+            else:
+                measures.append(measure)
+    table = Table(name=name, columns=tuple(columns), measures=tuple(measures))
+    return table, issues
+
+
 def _read_measure(
-    lines: list[_Line],
-    index: int,
-    match: re.Match[str],
-    table: _TableBuilder,
-    path: str,
-    issues: list[ParseIssue],
-) -> int:
-    name = unquote(match["name"])
-    start = lines[index]
-    body, index = _collect_body(lines, index + 1, start.depth)
+    match: re.Match[str], header: _Line, body: list[_Line]
+) -> Measure | None:
+    """The measure, or ``None`` if it has no expression."""
     expression = (
-        _expression(match["expr"], body, start.depth) if match["assign"] else ""
+        _expression(match["expr"], body, header.depth) if match["assign"] else ""
     )
     if not expression:
-        issues.append(
-            ParseIssue(
-                path=f"{path}:{start.number}",
-                message=f"measure {field_key(table.name, name)} has no expression",
-            )
-        )
-        return index
-    table.measures.append(Measure(name=name, expression=expression))
-    return index
+        return None
+    return Measure(name=unquote(match["name"]), expression=expression)
 
 
-def _read_column(
-    lines: list[_Line], index: int, match: re.Match[str], table: _TableBuilder
-) -> int:
-    start = lines[index]
-    body, index = _collect_body(lines, index + 1, start.depth)
+def _read_column(match: re.Match[str], header: _Line, body: list[_Line]) -> Column:
     data_type = None
     for line in body:
         type_match = DATA_TYPE_LINE.match(line.text)
-        if line.depth == start.depth + 1 and type_match:
+        if line.depth == header.depth + 1 and type_match:
             data_type = type_match["value"]
-    table.columns.append(Column(name=unquote(match["name"]), data_type=data_type))
-    return index
+    return Column(name=unquote(match["name"]), data_type=data_type)
 
 
-def _collect_body(
-    lines: list[_Line], index: int, object_depth: int
-) -> tuple[list[_Line], int]:
-    """Return the lines indented below an object and the index after them."""
-    body: list[_Line] = []
-    while index < len(lines) and lines[index].depth > object_depth:
-        body.append(lines[index])
-        index += 1
-    return body, index
+def _blocks(lines: list[_Line], depth: int) -> list[tuple[_Line, list[_Line]]]:
+    """Split lines into objects: each line at ``depth`` with the lines below it.
+
+    Deeper lines before the first line at ``depth`` belong to no object and
+    are dropped.
+    """
+    blocks: list[tuple[_Line, list[_Line]]] = []
+    for line in lines:
+        if line.depth == depth:
+            blocks.append((line, []))
+        elif line.depth > depth and blocks:
+            blocks[-1][1].append(line)
+    return blocks
 
 
 def _expression(first: str, body: list[_Line], object_depth: int) -> str:
