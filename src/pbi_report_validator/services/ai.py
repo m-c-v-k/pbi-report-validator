@@ -34,10 +34,13 @@ def ai_settings(
 
     Raises:
         InvalidAiOptionsError: AI is disabled by the kill switch, the
-            variable is invalid, or ``allow_data`` is set without AI.
+            variable is invalid (unless ``--ai off`` is given), or
+            ``allow_data`` is set without AI.
         AiUnavailableError: ``api`` without the ``[ai]`` extra.
         MissingCredentialsError: ``api`` without ``ANTHROPIC_API_KEY``.
     """
+    if requested is AiMode.OFF and not allow_data:
+        return AiSettings()
     try:
         policy = load_ai_policy(environ)
     except InvalidAiConfigError as exc:
