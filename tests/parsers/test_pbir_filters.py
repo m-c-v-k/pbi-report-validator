@@ -71,11 +71,11 @@ def test_sales_v2_removed_filter_and_changed_slicer() -> None:
 
 
 def test_non_slicer_visuals_have_no_slicer_state() -> None:
-    assert parse_slicer_state({"visualType": "card"}, None, []) is None
+    assert parse_slicer_state({"visualType": "card"}, None) == (None, [])
 
 
 def test_slicer_without_selection_has_no_condition() -> None:
-    state = parse_slicer_state({"visualType": "slicer"}, YEAR, [])
+    state, _ = parse_slicer_state({"visualType": "slicer"}, YEAR)
 
     assert state is not None
     assert (state.field, state.condition) == (YEAR, None)
@@ -170,9 +170,7 @@ def test_unsupported_filter_is_kept_without_condition() -> None:
             ]
         }
     }
-    problems: list[str] = []
-
-    filters = parse_filters(container, FilterLevel.PAGE, problems)
+    filters, problems = parse_filters(container, FilterLevel.PAGE)
 
     assert [(f.name, f.filter_type, f.condition) for f in filters] == [
         ("adv", "Advanced", None)
@@ -184,7 +182,7 @@ def test_unsupported_filter_is_kept_without_condition() -> None:
     "container", [None, {}, {"filterConfig": []}, {"filterConfig": {"filters": {}}}]
 )
 def test_missing_filter_config_gives_no_filters(container: Any) -> None:
-    assert parse_filters(container, FilterLevel.REPORT, []) == ()
+    assert parse_filters(container, FilterLevel.REPORT) == ((), [])
 
 
 @pytest.mark.parametrize(
@@ -242,7 +240,7 @@ def test_slicer_with_no_projection_has_no_field() -> None:
         },
     }
 
-    state = parse_slicer_state(body, None, [])
+    state, _ = parse_slicer_state(body, None)
 
     assert state is not None
     assert (state.field, state.condition) == (None, "Sales[Year] in (1)")
