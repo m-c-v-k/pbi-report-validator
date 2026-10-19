@@ -72,12 +72,24 @@ class MsalTokenProvider:
     """
 
     def __init__(self, config: PowerBIConfig) -> None:
-        """Create the MSAL application for the service principal."""
-        self._app = msal.ConfidentialClientApplication(
-            config.client_id,
-            authority=AUTHORITY_URL.format(tenant_id=config.tenant_id),
-            client_credential=config.client_secret.get_secret_value(),
-        )
+        """Create the MSAL application for the service principal.
+
+        MSAL already contacts Entra ID here to look up the tenant.
+
+        Raises:
+            AuthenticationError: The tenant is unknown or invalid.
+            ServiceError: Entra ID could not be reached.
+        """
+        try:
+            self._app = msal.ConfidentialClientApplication(
+                config.client_id,
+                authority=AUTHORITY_URL.format(tenant_id=config.tenant_id),
+                client_credential=config.client_secret.get_secret_value(),
+            )
+        except OSError as exc:
+            raise ServiceError(f"could not reach Microsoft Entra ID: {exc}") from exc
+        except ValueError as exc:
+            raise AuthenticationError(f"could not sign in to Power BI: {exc}") from exc
 
     def get_token(self) -> str:
         """Return a token.
@@ -181,7 +193,12 @@ class PowerBIClient:
 
 
 def create_client(config: PowerBIConfig) -> PowerBIClient:
-    """Build a client for the public Power BI API with MSAL authentication."""
+    """Build a client for the public Power BI API with MSAL authentication.
+
+    Raises:
+        AuthenticationError: The tenant is unknown or invalid.
+        ServiceError: Entra ID could not be reached.
+    """
     http = httpx.Client(base_url=API_BASE_URL, timeout=DEFAULT_TIMEOUT_SECONDS)
     return PowerBIClient(http, MsalTokenProvider(config))
 

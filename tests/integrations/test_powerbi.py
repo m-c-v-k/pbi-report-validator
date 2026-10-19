@@ -292,3 +292,33 @@ def test_msal_network_failure_is_service_error(monkeypatch: pytest.MonkeyPatch) 
 
     with pytest.raises(ServiceError, match="could not reach Microsoft Entra ID"):
         MsalTokenProvider(CONFIG).get_token()
+
+
+@pytest.mark.parametrize(
+    ("raised", "error", "message"),
+    [
+        (
+            ValueError("Unable to get authority configuration"),
+            AuthenticationError,
+            "could not sign in to Power BI: Unable to get authority configuration",
+        ),
+        (
+            ConnectionError("login.microsoftonline.com unreachable"),
+            ServiceError,
+            "could not reach Microsoft Entra ID",
+        ),
+    ],
+)
+def test_msal_setup_failure_is_typed(
+    monkeypatch: pytest.MonkeyPatch,
+    raised: Exception,
+    error: type[Exception],
+    message: str,
+) -> None:
+    def failing_app(client_id: str, **kwargs: Any) -> FakeMsalApp:
+        raise raised
+
+    monkeypatch.setattr(powerbi.msal, "ConfidentialClientApplication", failing_app)
+
+    with pytest.raises(error, match=message):
+        MsalTokenProvider(CONFIG)
