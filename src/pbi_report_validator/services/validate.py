@@ -6,7 +6,7 @@ from pathlib import Path
 from pbi_report_validator.diff.content import diff_content
 from pbi_report_validator.diff.data import not_fully_validated
 from pbi_report_validator.diff.measures import diff_measures
-from pbi_report_validator.diff.severity import at_least, with_severity
+from pbi_report_validator.diff.severity import at_least, default_severity
 from pbi_report_validator.diff.structural import (
     diff_pages_and_visuals,
     without_unparseable,
@@ -85,7 +85,6 @@ def validate(
             data.settings,
         )
         findings += [f for c in comparisons for f in c.findings]
-    findings = with_severity(findings)
     logger.info("Found %d findings", len(findings))
     return DiffResult(
         old_source=old_path.as_posix(),
@@ -163,6 +162,7 @@ def _issue_findings(
         Finding(
             category=Category.PARSE_ISSUE,
             change=ChangeKind.ERROR,
+            severity=default_severity(Category.PARSE_ISSUE, ChangeKind.ERROR),
             path=f"{side}/{issue.path}",
             message=f"Could not fully parse the {side} version: {issue.message}",
             visual=issue.visual,
