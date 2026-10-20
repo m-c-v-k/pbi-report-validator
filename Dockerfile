@@ -1,15 +1,17 @@
 # syntax=docker/dockerfile:1
 
 # Build stage: install the package and its runtime dependencies into a venv.
+# EXTRAS names an optional extra to include (`ai` for the -ai image variant).
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim@sha256:e5b65587bce7de595f299855d7385fe7fca39b8a74baa261ba1b7147afa78e58 AS build
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never
+ARG EXTRAS=""
 COPY pyproject.toml uv.lock README.md LICENSE ./
-RUN uv sync --locked --no-dev --no-install-project
+RUN uv sync --locked --no-dev --no-install-project ${EXTRAS:+--extra "$EXTRAS"}
 COPY src ./src
-RUN uv sync --locked --no-dev --no-editable
+RUN uv sync --locked --no-dev --no-editable ${EXTRAS:+--extra "$EXTRAS"}
 
 # Runtime stage: only Python and the venv, run as a non-root user.
 FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1

@@ -109,8 +109,67 @@ jobs:
           test "$OUTCOME" = failure
           test ! -e "$JSON"
 
-      # Both runs above compare the same versions, so the second one must have
-      # updated the first one's comment instead of adding a new one.
+      # ai: api builds the -ai image; without ANTHROPIC_API_KEY the CLI stops
+      # before the run (the message is checked in docker.yml). No API call.
+      - name: Run the action with ai api but no key
+        id: ai-no-key
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          ai: api
+
+      # The kill switch on the step blocks ai: api even with a key.
+      - name: Run the action with ai api and AI disabled
+        id: ai-disabled
+        continue-on-error: true
+        uses: ./
+        env:
+          PBI_VALIDATE_AI: disabled
+          ANTHROPIC_API_KEY: not-a-real-key
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          ai: api
+
+      - name: Run the action with an invalid ai value
+        id: ai-invalid
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          ai: auto
+
+      - name: Run the action with allow-data-to-llm but ai off
+        id: ai-allow-data
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          allow-data-to-llm: true
+
+      - name: Check the AI runs
+        env:
+          NO_KEY: ${{ steps.ai-no-key.outcome }}
+          NO_KEY_JSON: ${{ steps.ai-no-key.outputs.json }}
+          DISABLED: ${{ steps.ai-disabled.outcome }}
+          DISABLED_JSON: ${{ steps.ai-disabled.outputs.json }}
+          INVALID: ${{ steps.ai-invalid.outcome }}
+          ALLOW_DATA: ${{ steps.ai-allow-data.outcome }}
+        run: |
+          test "$NO_KEY" = failure
+          test ! -e "$NO_KEY_JSON"
+          test "$DISABLED" = failure
+          test ! -e "$DISABLED_JSON"
+          test "$INVALID" = failure
+          test "$ALLOW_DATA" = failure
+
+      # Both runs with comment above compare the same versions, so the second
+      # one must have updated the first one's comment instead of adding a new
+      # one.
       - name: Check the pull request comment
         if: >-
           github.event_name == 'pull_request' &&
