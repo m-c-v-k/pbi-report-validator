@@ -19,6 +19,7 @@ CATEGORY_SEVERITY: Final = {
     Category.MEASURE: Severity.WARNING,
     Category.PARSE_ISSUE: Severity.WARNING,
     Category.DATA: Severity.CRITICAL,
+    Category.AI: Severity.INFO,
 }
 # Changes that matter more or less than the default of their category.
 CHANGE_SEVERITY: Final = {

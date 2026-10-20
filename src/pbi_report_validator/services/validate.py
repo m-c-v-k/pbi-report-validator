@@ -13,6 +13,8 @@ from pbi_report_validator.diff.structural import (
 )
 from pbi_report_validator.diff.view import build_page_views
 from pbi_report_validator.domain.models import (
+    AiMode,
+    AiSettings,
     Category,
     ChangeKind,
     DataSettings,
@@ -50,6 +52,7 @@ def validate(
     new_path: Path,
     settings: DataSettings | None = None,
     runner: QueryRunner | None = None,
+    ai: AiSettings | None = None,
 ) -> DiffResult:
     """Compare two PBIP projects structurally and, optionally, their data.
 
@@ -59,6 +62,7 @@ def validate(
         settings: Datasets and tolerance for data validation; ``None``
             skips it.
         runner: Runs the DAX queries; needed together with ``settings``.
+        ai: The AI settings, recorded in the result; ``None`` is AI off.
 
     Returns:
         All findings, including parse issues of either version.
@@ -98,6 +102,8 @@ def validate(
         pages=build_page_views(match, findings),
         data=tuple(sorted((c.summary for c in comparisons), key=lambda s: s.path)),
         data_values_shown=settings is not None and settings.show_values,
+        ai_mode=ai.mode if ai else AiMode.OFF,
+        ai_model=ai.model if ai else None,
     )
 
 

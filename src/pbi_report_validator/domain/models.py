@@ -2,10 +2,11 @@
 
 All models are immutable Pydantic models. Collections are tuples so that a
 model can be hashed, compared and serialised deterministically. The models
-live in ``report``, ``semantic``, ``data`` and ``diff``; this module
+live in ``report``, ``semantic``, ``data_validation``, ``diff`` and ``ai``; this module
 re-exports them all.
 """
 
+from pbi_report_validator.domain.ai import AiMode, AiSettings
 from pbi_report_validator.domain.base import DomainModel
 from pbi_report_validator.domain.data_validation import (
     CellValue,
@@ -67,6 +68,8 @@ from pbi_report_validator.domain.semantic import (
 
 __all__ = [
     "SCHEMA_VERSION",
+    "AiMode",
+    "AiSettings",
     "AllCondition",
     "BinaryCondition",
     "Category",

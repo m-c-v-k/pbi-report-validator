@@ -9,15 +9,24 @@ from typing import Annotated, NamedTuple, NoReturn
 
 import typer
 
-from pbi_report_validator.domain.models import DataSettings, DiffResult, Severity
+from pbi_report_validator.domain.models import (
+    AiMode,
+    AiSettings,
+    DataSettings,
+    DiffResult,
+    Severity,
+)
+from pbi_report_validator.integrations.anthropic_client import AiUnavailableError
 from pbi_report_validator.integrations.config import MissingCredentialsError
 from pbi_report_validator.integrations.files import OutputWriteError, ProjectLoadError
 from pbi_report_validator.integrations.powerbi import PowerBIError
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
 from pbi_report_validator.reporting.terminal import (
+    format_llm_data_warning,
     format_summary,
     format_unmasked_warning,
 )
+from pbi_report_validator.services.ai import InvalidAiOptionsError, ai_settings
 from pbi_report_validator.services.data_validation import (
     InvalidDataOptionsError,
     create_runner,
@@ -138,6 +147,24 @@ def diff(
             "masking them. The reports then contain row-level data.",
         ),
     ] = False,
+    ai: Annotated[
+        AiMode | None,
+        typer.Option(
+            "--ai",
+            help="Optional AI layer: off, or api (needs the [ai] extra and "
+            "ANTHROPIC_API_KEY; the key owner pays). Default: PBI_VALIDATE_AI, "
+            "else off.",
+            case_sensitive=False,
+        ),
+    ] = None,
+    allow_data_to_llm: Annotated[
+        bool,
+        typer.Option(
+            "--allow-data-to-llm",
+            help="With --ai api, allow row-level values in what is sent to the "
+            "model. By default only metadata is sent.",
+        ),
+    ] = False,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show progress logging.")
     ] = False,
@@ -153,8 +180,9 @@ def diff(
         if compare_data
         else None
     )
+    ai_options = _ai_or_exit(ai, allow_data_to_llm)
     outputs = Outputs(json=json_path, markdown=markdown_path, html=html_path)
-    result = _run_or_exit(old, new, settings, outputs)
+    result = _run_or_exit(old, new, settings, ai_options, outputs)
     _print_result(result, outputs)
     _exit_on_failures(result, fail_on, fail_on_data_error)
 
@@ -195,13 +223,31 @@ def _settings_or_exit(
         _fail(str(exc), EXIT_USAGE)
 
 
+def _ai_or_exit(requested: AiMode | None, allow_data: bool) -> AiSettings:
+    try:
+        ai = ai_settings(requested, allow_data, os.environ)
+    except (
+        InvalidAiOptionsError,
+        AiUnavailableError,
+        MissingCredentialsError,
+    ) as exc:
+        _fail(str(exc), EXIT_USAGE)
+    if ai.allow_data:
+        typer.echo(format_llm_data_warning(), err=True)
+    return ai
+
+
 def _run_or_exit(
-    old: Path, new: Path, settings: DataSettings | None, outputs: Outputs
+    old: Path,
+    new: Path,
+    settings: DataSettings | None,
+    ai: AiSettings,
+    outputs: Outputs,
 ) -> DiffResult:
     """Validate and write the requested outputs; errors exit with code 1."""
     try:
         runner = create_runner(os.environ) if settings else None
-        result = validate(old, new, settings, runner)
+        result = validate(old, new, settings, runner, ai)
         if outputs.json is not None:
             write_json(result, outputs.json)
         if outputs.markdown is not None:

@@ -3,6 +3,7 @@
 from collections import Counter
 
 from pbi_report_validator.domain.models import (
+    AiMode,
     Category,
     DataStatus,
     DiffResult,
@@ -18,6 +19,7 @@ CATEGORY_LABELS = {
     Category.MEASURE: "Measures",
     Category.PARSE_ISSUE: "Parse issues",
     Category.DATA: "Data",
+    Category.AI: "AI",
 }
 STATUS_LABELS = {
     ItemStatus.ADDED: "Added",
@@ -40,6 +42,10 @@ UNMASKED_WARNING = (
     "outside the people allowed to see the datasets."
 )
 
+# Every piece of AI output carries this label (AI_LABEL), and every report
+# made with --ai api says so.
+AI_LABEL = "AI-generated"
+
 
 def severity_overview(result: DiffResult) -> str:
     """Findings per severity, most severe first: ``1 critical, 0 warning, 2 info``."""
@@ -56,4 +62,14 @@ def data_overview(result: DiffResult) -> str | None:
         f"Data: {len(result.data)} visuals compared, "
         f"{counts[DataStatus.SAME]} same, {counts[DataStatus.DIFFERENT]} different, "
         f"{counts[DataStatus.NOT_VALIDATED]} not validated"
+    )
+
+
+def ai_overview(result: DiffResult) -> str | None:
+    """One line saying the AI layer was on, or ``None`` if it was off."""
+    if result.ai_mode is AiMode.OFF:
+        return None
+    return (
+        f"AI: {result.ai_mode.value} ({result.ai_model}). "
+        f"AI output is labelled '{AI_LABEL}'; the findings themselves are not."
     )

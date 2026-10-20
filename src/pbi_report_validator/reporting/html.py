@@ -17,6 +17,7 @@ from pbi_report_validator.reporting.labels import (
     STATUS_LABELS,
     STATUS_MARKS,
     UNMASKED_WARNING,
+    ai_overview,
     data_overview,
 )
 
@@ -46,6 +47,7 @@ def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
     keys = {visual_path(p.name, v.name) for p in result.pages for v in p.visuals}
     return environment.from_string(template_source).render(
         data_overview=data_overview(result),
+        ai_overview=ai_overview(result),
         data_by_path={s.path: s for s in result.data},
         details=visual_findings(result.findings, keys),
         visual_key=lambda finding: visual_key(finding, keys),

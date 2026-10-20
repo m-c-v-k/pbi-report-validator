@@ -6,6 +6,7 @@ import pytest
 
 from pbi_report_validator.domain.models import (
     SCHEMA_VERSION,
+    AiMode,
     Category,
     ChangeKind,
     DiffResult,
@@ -313,3 +314,11 @@ def test_visual_details_show_severity() -> None:
 
     assert '<span class="severity severity-critical">critical</span>' in details
     assert '<span class="severity severity-warning">warning</span>' in details
+
+
+def test_ai_mode_is_stated_only_when_on() -> None:
+    off = DiffResult(old_source="o", new_source="n")
+    on = off.model_copy(update={"ai_mode": AiMode.API, "ai_model": "claude-x"})
+
+    assert "ai-overview" not in render(off)
+    assert '<p class="ai-overview">AI: api (claude-x).' in render(on)

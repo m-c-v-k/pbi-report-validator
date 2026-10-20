@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -218,3 +219,67 @@ def test_invalid_fail_on_is_a_usage_error() -> None:
     result = runner.invoke(app, ["diff", OLD, NEW, "--fail-on", "severe"])
 
     assert result.exit_code == 2
+
+
+@pytest.fixture
+def no_ai_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("PBI_VALIDATE_AI", "PBI_VALIDATE_AI_MODEL", "ANTHROPIC_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+
+
+@pytest.mark.usefixtures("no_ai_environment")
+def test_ai_api_records_mode_and_labels_the_reports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    target = tmp_path / "diff.json"
+
+    result = runner.invoke(
+        app, ["diff", OLD, NEW, "--ai", "api", "--json", str(target)]
+    )
+
+    assert result.exit_code == 0
+    assert "AI: api (claude-opus-5-5)" in result.stdout
+    data = json.loads(target.read_text(encoding="utf-8"))
+    assert (data["ai_mode"], data["ai_model"]) == ("api", "claude-opus-5-5")
+
+
+@pytest.mark.usefixtures("no_ai_environment")
+@pytest.mark.parametrize(
+    ("args", "environ", "message"),
+    [
+        (["--ai", "api"], {}, "ANTHROPIC_API_KEY"),
+        (
+            ["--ai", "api"],
+            {"PBI_VALIDATE_AI": "disabled", "ANTHROPIC_API_KEY": "k"},
+            "PBI_VALIDATE_AI=disabled",
+        ),
+        ([], {"PBI_VALIDATE_AI": "sometimes"}, "PBI_VALIDATE_AI must be"),
+        (["--allow-data-to-llm"], {}, "needs --ai api"),
+    ],
+)
+def test_invalid_ai_options_are_usage_errors(
+    args: list[str],
+    environ: dict[str, str],
+    message: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name, value in environ.items():
+        monkeypatch.setenv(name, value)
+
+    result = runner.invoke(app, ["diff", OLD, NEW, *args])
+
+    assert result.exit_code == 2
+    assert message in result.stderr
+
+
+@pytest.mark.usefixtures("no_ai_environment")
+def test_allow_data_to_llm_warns(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    result = runner.invoke(
+        app, ["diff", OLD, NEW, "--ai", "api", "--allow-data-to-llm"]
+    )
+
+    assert result.exit_code == 0
+    assert "--allow-data-to-llm is on" in result.stderr

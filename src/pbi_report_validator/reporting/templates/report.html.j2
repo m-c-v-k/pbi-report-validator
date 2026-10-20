@@ -121,6 +121,9 @@ td a, .detail-body a { color: var(--accent); }
 {% if data_overview %}
   <p class="data-overview">{{ data_overview }}</p>
 {% endif %}
+{% if ai_overview %}
+  <p class="ai-overview">{{ ai_overview }}</p>
+{% endif %}
 {% if result.findings %}
   <div class="cards">
     <div class="card"><div class="n" data-count="total">{{ result.findings | length }}</div><div class="label">Findings</div></div>
