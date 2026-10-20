@@ -159,7 +159,10 @@ jobs:
           DISABLED_JSON: ${{ steps.ai-disabled.outputs.json }}
           INVALID: ${{ steps.ai-invalid.outcome }}
           ALLOW_DATA: ${{ steps.ai-allow-data.outcome }}
+        # The -ai image must have been built with the extra, so the ai: api
+        # runs failed in the CLI's setup check, not in the build.
         run: |
+          docker run --rm --entrypoint python pbi-validate:local-ai -c 'import anthropic'
           test "$NO_KEY" = failure
           test ! -e "$NO_KEY_JSON"
           test "$DISABLED" = failure
