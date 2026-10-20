@@ -227,13 +227,18 @@ pbi-validate diff ./old ./new --ai api
 - **What is sent:** metadata only, such as page and visual names, field
   references, filter definitions, measure expressions and counts from the
   data comparison. Row keys and values from `--data` are never sent unless
-  you also pass `--allow-data-to-llm` (stderr then shows a warning).
+  you also pass `--allow-data-to-llm` (stderr then shows a warning): data
+  findings go out as "visual X: data modified", without row keys, values or
+  engine messages, even when `--show-data-values` is on.
 - **Labelling:** every report made with `--ai api` says so and names the
   model (`ai_mode` and `ai_model` in the JSON). AI-written text is marked
   `AI-generated`; the findings themselves always come from the
   deterministic comparison.
 - **Errors:** `--ai api` without the extra or without `ANTHROPIC_API_KEY`
-  stops before the run with exit code 2 and a setup hint.
+  stops before the run with exit code 2 and a setup hint. If an AI call
+  fails during a run (network, rate limit, a refused or empty answer), that
+  becomes an `info` finding in the `ai` category, and the rest of the
+  result is produced as usual.
 - **Default and kill switch:** `PBI_VALIDATE_AI=off|api` sets the default
   when `--ai` is not given. `PBI_VALIDATE_AI=disabled` blocks AI whatever
   the flags say: `--ai api` then fails with exit code 2. Set it in a CI

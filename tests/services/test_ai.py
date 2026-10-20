@@ -1,13 +1,27 @@
 import pytest
 
-from pbi_report_validator.domain.models import AiMode, AiSettings
+from pbi_report_validator.domain.models import (
+    AiMode,
+    AiSettings,
+    Category,
+    ChangeKind,
+    Finding,
+    Severity,
+)
 from pbi_report_validator.integrations import anthropic_client
-from pbi_report_validator.integrations.anthropic_client import AiUnavailableError
+from pbi_report_validator.integrations.anthropic_client import (
+    AiError,
+    AiUnavailableError,
+)
 from pbi_report_validator.integrations.config import (
     DEFAULT_AI_MODEL,
     MissingCredentialsError,
 )
-from pbi_report_validator.services.ai import InvalidAiOptionsError, ai_settings
+from pbi_report_validator.services.ai import (
+    InvalidAiOptionsError,
+    ai_settings,
+    guarded,
+)
 
 KEY = {"ANTHROPIC_API_KEY": "test-key"}
 
@@ -76,3 +90,34 @@ def test_api_without_extra_explains_install(monkeypatch: pytest.MonkeyPatch) -> 
 
     with pytest.raises(AiUnavailableError, match="install"):
         ai_settings(AiMode.API, False, KEY)
+
+
+def test_guarded_returns_the_result_when_the_call_works() -> None:
+    assert guarded(lambda: "explained", "ai/explanations") == "explained"
+
+
+@pytest.mark.parametrize(
+    "error", [AiError("rate limited"), AiUnavailableError("no extra")]
+)
+def test_guarded_turns_ai_failures_into_an_info_finding(error: AiError) -> None:
+    def fail() -> str:
+        raise error
+
+    finding = guarded(fail, "ai/explanations")
+
+    assert isinstance(finding, Finding)
+    assert (finding.category, finding.change, finding.severity) == (
+        Category.AI,
+        ChangeKind.ERROR,
+        Severity.INFO,
+    )
+    assert finding.path == "ai/explanations"
+    assert finding.message == f"AI (not applied): {error}"
+
+
+def test_guarded_does_not_hide_other_errors() -> None:
+    def fail() -> str:
+        raise KeyError("bug")
+
+    with pytest.raises(KeyError):
+        guarded(fail, "ai/explanations")
