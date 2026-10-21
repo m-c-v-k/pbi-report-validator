@@ -1,8 +1,8 @@
 """--ai-explain end to end, with a fake model instead of the API."""
 
 import json
-from typing import get_args
 from pathlib import Path
+from typing import get_args
 
 import pytest
 from typer.testing import CliRunner
