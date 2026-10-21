@@ -11,7 +11,7 @@ happens in ``services``.
 import json
 from typing import Final
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from pbi_report_validator.domain.base import DomainModel
 from pbi_report_validator.domain.models import (
@@ -66,7 +66,7 @@ class _Answer(BaseModel):
 
     old_path: str
     new_path: str
-    confidence: float
+    confidence: float = Field(allow_inf_nan=False)
     reason: str
 
 

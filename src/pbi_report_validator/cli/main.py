@@ -272,6 +272,7 @@ def _run_or_exit(
         OutputWriteError,
         TemplateNotFoundError,
         MissingCredentialsError,
+        AiUnavailableError,
         PowerBIError,
     ) as exc:
         _fail(str(exc), EXIT_ERROR)

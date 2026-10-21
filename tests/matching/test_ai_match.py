@@ -130,7 +130,13 @@ def test_fenced_answer_with_extra_keys_and_wild_confidence_is_accepted() -> None
 
 @pytest.mark.parametrize(
     "text",
-    ["No idea.", '{"suggestions": [{"old_path": 1}]}', "{not json}"],
+    [
+        "No idea.",
+        '{"suggestions": [{"old_path": 1}]}',
+        "{not json}",
+        answer(("overview/card_old", "overview/card_new"), confidence=float("nan")),
+    ],
+    ids=["no json", "bad shape", "broken json", "nan confidence"],
 )
 def test_unusable_answer_raises(text: str) -> None:
     with pytest.raises(InvalidAiResponseError):
