@@ -1,6 +1,7 @@
 """--ai-explain end to end, with a fake model instead of the API."""
 
 import json
+from typing import get_args
 from pathlib import Path
 
 import pytest
@@ -145,3 +146,9 @@ def test_cli_labels_explanations_in_all_three_outputs(
     assert '<div class="ai-note">AI-generated: Explained ' in paths["html"].read_text(
         encoding="utf-8"
     )
+
+
+def test_explain_from_values_match_the_severities() -> None:
+    annotation = AiSettings.model_fields["explain_from"].annotation
+
+    assert get_args(annotation) == tuple(s.value for s in Severity)
