@@ -4,7 +4,14 @@ from collections import Counter
 from enum import StrEnum
 from typing import Final, Literal
 
-from pydantic import Field, TypeAdapter, field_validator, model_validator
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    TypeAdapter,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from pbi_report_validator.domain.ai import AiMode
 from pbi_report_validator.domain.base import DomainModel
@@ -15,7 +22,7 @@ from pbi_report_validator.domain.report import (
     Visual,
 )
 
-SCHEMA_VERSION: Final = "1.6"
+SCHEMA_VERSION: Final = "1.7"
 
 
 class MatchMethod(StrEnum):
@@ -92,12 +99,21 @@ class Severity(StrEnum):
     CRITICAL = "critical"
 
 
+class AiExplanation(DomainModel):
+    """A plain-language explanation of a finding, written by the AI layer."""
+
+    source: Literal["ai"] = "ai"
+    text: str
+
+
 class Finding(DomainModel):
     """One difference (or parse problem) between the old and new report.
 
     ``path`` locates the object, e.g. ``details/table_product_sales/filters/
     visual_filter_category`` or ``model/Sales/Total Sales``. ``severity`` is
     required; ``diff.severity.make_finding`` sets the usual level.
+    ``explanation`` is set only with ``--ai-explain`` and left out of the JSON
+    otherwise.
     """
 
     category: Category
@@ -111,6 +127,16 @@ class Finding(DomainModel):
     # its visual in the HTML report; not part of the JSON output (schema
     # unchanged), since it is already implied by ``path``.
     visual_path: str | None = Field(default=None, exclude=True)
+    explanation: AiExplanation | None = None
+
+    @model_serializer(mode="wrap")
+    def _without_empty_explanation(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, object]:
+        data: dict[str, object] = handler(self)
+        if self.explanation is None:
+            data.pop("explanation", None)
+        return data
 
     @property
     def sort_key(self) -> tuple[str, str, str, str, str, str]:
@@ -221,11 +247,12 @@ class DiffResult(DomainModel):
     1.3 added ``severity`` on findings and ``severity_counts``; 1.4 added
     ``data_values_shown`` (row keys and values are masked unless it is true);
     1.5 added the ``ai`` category, ``ai_mode`` and ``ai_model``; 1.6 added
-    ``ai_suggestions`` (``--ai-match``).
+    ``ai_suggestions`` (``--ai-match``); 1.7 added the optional
+    ``explanation`` on findings (``--ai-explain``).
     """
 
     # Keep the Literal in sync with SCHEMA_VERSION (enforced by a test).
-    schema_version: Literal["1.6"] = SCHEMA_VERSION
+    schema_version: Literal["1.7"] = SCHEMA_VERSION
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()

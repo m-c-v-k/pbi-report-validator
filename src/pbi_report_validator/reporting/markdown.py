@@ -13,6 +13,7 @@ from pbi_report_validator.domain.models import Category, DiffResult, Finding
 from pbi_report_validator.reporting.labels import (
     CATEGORY_LABELS,
     UNMASKED_WARNING,
+    ai_explanation,
     ai_notes,
     ai_overview,
     data_overview,
@@ -24,6 +25,7 @@ SAFETY_MARGIN = 1_000
 INLINE_VALUE_LIMIT = 80
 TITLE = "## Power BI report diff"
 SEE_JSON = "see the JSON output for the full list."
+NO_MENTION = "@​"
 MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]|<>#~])")
 
 
@@ -47,7 +49,11 @@ def to_markdown(result: DiffResult, limit: int = GITHUB_COMMENT_LIMIT) -> str:
     current: Category | None = None
     notes = ai_notes(result)
     for finding in _grouped(result.findings):
-        block = _finding(finding) + _note(notes.get((finding.category, finding.path)))
+        block = (
+            _finding(finding)
+            + _note(ai_explanation(finding))
+            + _note(notes.get((finding.category, finding.path)))
+        )
         if finding.category != current:
             block = f"\n### {CATEGORY_LABELS[finding.category]}\n\n{block}"
         if len(block) > budget:
@@ -106,7 +112,10 @@ def _finding(finding: Finding) -> str:
 
 
 def _note(note: str | None) -> str:
-    return f"  - _{escape(note)}_\n" if note else ""
+    """An AI note under a finding; a zero-width space keeps "@" from mentioning."""
+    if not note:
+        return ""
+    return f"  - _{escape(note).replace('@', NO_MENTION)}_\n"
 
 
 def _details(old: str | None, new: str | None) -> str:

@@ -262,7 +262,7 @@ td a, .detail-body a { color: var(--accent); }
           <td>{{ labels[f.category.value] }}</td>
 {% set target = visual_key(f) %}
           <td class="mono">{% if target %}<a href="#{{ target }}" data-open="{{ target }}">{{ f.path }}</a>{% else %}{{ f.path }}{% endif %}</td>
-          <td>{{ f.message }}{% set note = ai_notes.get((f.category, f.path)) %}{% if note %}<div class="ai-note">{{ note }}</div>{% endif %}</td>
+          <td>{{ f.message }}{% set explanation = ai_explanation(f) %}{% if explanation %}<div class="ai-note">{{ explanation }}</div>{% endif %}{% set note = ai_notes.get((f.category, f.path)) %}{% if note %}<div class="ai-note">{{ note }}</div>{% endif %}</td>
           <td class="values">
 {% if f.old is not none %}            <pre class="old">{{ f.old }}</pre>
 {% endif %}

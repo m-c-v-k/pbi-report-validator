@@ -177,6 +177,21 @@ def diff(
             "was probably renamed to which added one (labelled AI-generated).",
         ),
     ] = False,
+    ai_explain: Annotated[
+        bool,
+        typer.Option(
+            "--ai-explain",
+            help="With --ai api, explain findings in plain language (labelled "
+            "AI-generated), one request per run.",
+        ),
+    ] = False,
+    ai_explain_from: Annotated[
+        Severity | None,
+        typer.Option(
+            "--ai-explain-from",
+            help="With --ai-explain, the lowest severity to explain. Default: warning.",
+        ),
+    ] = None,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show progress logging.")
     ] = False,
@@ -192,7 +207,10 @@ def diff(
         if compare_data
         else None
     )
-    ai_options = _ai_or_exit(ai, allow_data_to_llm, ai_match)
+    if ai_explain_from is not None and not ai_explain:
+        _fail("--ai-explain-from needs --ai-explain", EXIT_USAGE)
+    explain_from = (ai_explain_from or Severity.WARNING) if ai_explain else None
+    ai_options = _ai_or_exit(ai, allow_data_to_llm, ai_match, explain_from)
     outputs = Outputs(json=json_path, markdown=markdown_path, html=html_path)
     result = _run_or_exit(old, new, settings, ai_options, outputs)
     _print_result(result, outputs)
@@ -235,9 +253,14 @@ def _settings_or_exit(
         _fail(str(exc), EXIT_USAGE)
 
 
-def _ai_or_exit(requested: AiMode | None, allow_data: bool, match: bool) -> AiSettings:
+def _ai_or_exit(
+    requested: AiMode | None,
+    allow_data: bool,
+    match: bool,
+    explain_from: Severity | None,
+) -> AiSettings:
     try:
-        ai = ai_settings(requested, allow_data, os.environ, match)
+        ai = ai_settings(requested, allow_data, os.environ, match, explain_from)
     except (
         InvalidAiOptionsError,
         AiUnavailableError,

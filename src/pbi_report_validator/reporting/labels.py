@@ -7,6 +7,7 @@ from pbi_report_validator.domain.models import (
     Category,
     DataStatus,
     DiffResult,
+    Finding,
     ItemStatus,
 )
 
@@ -75,6 +76,13 @@ def ai_overview(result: DiffResult) -> str | None:
         f"AI: {result.ai_mode.value} ({result.ai_model}).{renames} "
         f"AI output is labelled '{AI_LABEL}'; the findings themselves are not."
     )
+
+
+def ai_explanation(finding: Finding) -> str | None:
+    """The finding's AI explanation, labelled, or ``None`` if it has none."""
+    if finding.explanation is None:
+        return None
+    return f"{AI_LABEL}: {finding.explanation.text}"
 
 
 def ai_notes(result: DiffResult) -> dict[tuple[Category, str], str]:
