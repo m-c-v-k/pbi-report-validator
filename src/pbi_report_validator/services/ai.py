@@ -181,6 +181,9 @@ def with_explanations(
         A new result; ``result`` itself when no finding qualifies.
     """
     payload = build_payload(result, allow_data).findings
+    # The ids below index both tuples, so they must line up one to one.
+    if len(payload) != len(result.findings):
+        raise ValueError("the AI payload must keep every finding, in order")
     ids = finding_ids(_most_severe(result.findings, threshold))
     if not ids:
         return result

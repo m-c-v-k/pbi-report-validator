@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 from pbi_report_validator.cli.main import app
 from pbi_report_validator.domain.models import AiMode, AiSettings, Category, Severity
 from pbi_report_validator.integrations.anthropic_client import AiServiceError
+from pbi_report_validator.reporting.ai_payload import build_payload
 from pbi_report_validator.services.ai import (
     MAX_EXPLAINED,
     InvalidAiOptionsError,
@@ -152,3 +153,11 @@ def test_explain_from_values_match_the_severities() -> None:
     annotation = AiSettings.model_fields["explain_from"].annotation
 
     assert get_args(annotation) == tuple(s.value for s in Severity)
+
+
+def test_payload_keeps_every_finding_in_order() -> None:
+    result = validate(OLD, NEW)
+
+    payload = build_payload(result, allow_data=False).findings
+
+    assert [f.path for f in payload] == [f.path for f in result.findings]

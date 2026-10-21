@@ -25,6 +25,7 @@ SAFETY_MARGIN = 1_000
 INLINE_VALUE_LIMIT = 80
 TITLE = "## Power BI report diff"
 SEE_JSON = "see the JSON output for the full list."
+NO_MENTION = "@​"
 MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]|<>#~])")
 
 
@@ -111,7 +112,10 @@ def _finding(finding: Finding) -> str:
 
 
 def _note(note: str | None) -> str:
-    return f"  - _{escape(note)}_\n" if note else ""
+    """An AI note under a finding; a zero-width space keeps "@" from mentioning."""
+    if not note:
+        return ""
+    return f"  - _{escape(note).replace('@', NO_MENTION)}_\n"
 
 
 def _details(old: str | None, new: str | None) -> str:

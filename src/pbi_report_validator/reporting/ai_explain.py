@@ -80,7 +80,13 @@ def parse_explanations(text: str, ids: dict[str, int]) -> dict[int, str]:
         ) from exc
     texts = {}
     for item in response.explanations:
-        clean = " ".join(item.text.split())[:MAX_TEXT]
+        clean = _shortened(" ".join(item.text.split()))
         if item.id in ids and clean and ids[item.id] not in texts:
             texts[ids[item.id]] = clean
     return texts
+
+
+def _shortened(text: str) -> str:
+    if len(text) <= MAX_TEXT:
+        return text
+    return text[: MAX_TEXT - 1].rstrip() + "…"

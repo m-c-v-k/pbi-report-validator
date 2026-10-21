@@ -67,7 +67,7 @@ def test_blank_and_repeated_explanations_are_dropped_and_long_ones_cut() -> None
 
     texts = parse_explanations(json.dumps(body), {"f1": 0, "f2": 1})
 
-    assert texts == {1: "x" * MAX_TEXT}
+    assert texts == {1: "x" * (MAX_TEXT - 1) + "…"}
 
 
 @pytest.mark.parametrize("text", ["Sorry.", '{"explanations": [{"id": 1}]}', "{broken"])

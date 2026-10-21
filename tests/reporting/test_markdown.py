@@ -1,6 +1,7 @@
 import pytest
 
 from pbi_report_validator.domain.models import (
+    AiExplanation,
     AiMode,
     Category,
     ChangeKind,
@@ -123,3 +124,14 @@ def test_ai_mode_is_stated_only_when_on() -> None:
 
     assert "AI:" not in to_markdown(off)
     assert "AI: api (claude-x)." in to_markdown(on)
+
+
+def test_ai_notes_cannot_mention_users() -> None:
+    explained = finding("p/v").model_copy(
+        update={"explanation": AiExplanation(text="Ask @octocat about it")}
+    )
+
+    text = to_markdown(result(explained))
+
+    assert "@octocat" not in text
+    assert "AI-generated: Ask @​octocat" in text
