@@ -38,6 +38,7 @@ from pbi_report_validator.matching.ai_match import (
     InvalidAiResponseError,
     build_match_prompt,
     match_candidates,
+    match_response_schema,
     parse_suggestions,
 )
 from pbi_report_validator.reporting.ai_explain import (
@@ -149,9 +150,9 @@ def with_match_suggestions(
         return result
 
     def suggest() -> list[AiSuggestion]:
-        return parse_suggestions(
-            client.complete(*build_match_prompt(candidates)), candidates
-        )
+        system, prompt = build_match_prompt(candidates)
+        answer = client.complete(system, prompt, match_response_schema())
+        return parse_suggestions(answer, candidates)
 
     outcome = guarded(suggest, "ai/match")
     if isinstance(outcome, Finding):

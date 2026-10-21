@@ -2,6 +2,7 @@
 
 import json
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from typer.testing import CliRunner
 from pbi_report_validator.cli.main import app
 from pbi_report_validator.domain.models import AiMode, AiSettings, Category
 from pbi_report_validator.integrations.anthropic_client import AiRateLimitError
+from pbi_report_validator.matching.ai_match import match_response_schema
 from pbi_report_validator.services.ai import InvalidAiOptionsError, ai_settings
 from pbi_report_validator.services.validate import validate
 from tests.factories import FIXTURES, REPO_ROOT
@@ -36,14 +38,20 @@ class RecordedLlm:
     def __init__(self, answer: str = RECORDED) -> None:
         self.answer = answer
         self.prompts: list[str] = []
+        self.schemas: list[Mapping[str, object] | None] = []
 
-    def complete(self, system: str, prompt: str) -> str:
+    def complete(
+        self, system: str, prompt: str, schema: Mapping[str, object] | None = None
+    ) -> str:
         self.prompts.append(prompt)
+        self.schemas.append(schema)
         return self.answer
 
 
 class FailingLlm:
-    def complete(self, system: str, prompt: str) -> str:
+    def complete(
+        self, system: str, prompt: str, schema: Mapping[str, object] | None = None
+    ) -> str:
         raise AiRateLimitError("the Anthropic API rate limit was hit")
 
 
@@ -71,6 +79,7 @@ def test_renamed_and_edited_measure_gets_a_suggestion(renamed_and_edited: Path) 
     )
     assert suggestion.category is Category.MEASURE
     assert "Margin %" in llm.prompts[0]
+    assert llm.schemas == [match_response_schema()]
 
 
 def test_suggestions_never_change_findings(renamed_and_edited: Path) -> None:
