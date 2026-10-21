@@ -22,6 +22,8 @@ from pbi_report_validator.domain.data_validation import (
 )
 from pbi_report_validator.domain.diff import (
     SCHEMA_VERSION,
+    AiExplanation,
+    AiSuggestion,
     Category,
     ChangeKind,
     DataComparison,
@@ -70,10 +72,12 @@ from pbi_report_validator.domain.semantic import (
 __all__ = [
     "SCHEMA_VERSION",
     "AiDataSummary",
+    "AiExplanation",
     "AiFinding",
     "AiMode",
     "AiPayload",
     "AiSettings",
+    "AiSuggestion",
     "AllCondition",
     "BinaryCondition",
     "Category",

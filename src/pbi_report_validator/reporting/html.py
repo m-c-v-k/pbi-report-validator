@@ -17,6 +17,8 @@ from pbi_report_validator.reporting.labels import (
     STATUS_LABELS,
     STATUS_MARKS,
     UNMASKED_WARNING,
+    ai_explanation,
+    ai_notes,
     ai_overview,
     data_overview,
 )
@@ -48,6 +50,8 @@ def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
     return environment.from_string(template_source).render(
         data_overview=data_overview(result),
         ai_overview=ai_overview(result),
+        ai_notes=ai_notes(result),
+        ai_explanation=ai_explanation,
         data_by_path={s.path: s for s in result.data},
         details=visual_findings(result.findings, keys),
         visual_key=lambda finding: visual_key(finding, keys),

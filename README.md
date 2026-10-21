@@ -208,10 +208,14 @@ minute (40 on Pro/PPU), and each visual needs two.
 
 ### AI options (optional, `--ai`)
 
-The AI layer is **off by default**, and nothing in the tool needs it. It is
-the base for AI match suggestions and plain-language explanations, which
-arrive in later releases. For now, `--ai api` checks the setup and records
-in every output that AI was on.
+The AI layer is **off by default**, and nothing in the tool needs it.
+`--ai api` checks the setup and records in every output that AI was on;
+the features below each need their own flag, and they can be combined.
+
+| Flag (with `--ai api`) | What it adds |
+|---|---|
+| `--ai-match` | Rename suggestions: for removed and added pages, visuals and measures that the deterministic matcher could not pair (for example a measure that was renamed *and* edited), the model suggests which one probably became which. Each suggestion shows next to both findings as `AI-generated: probably renamed to …` with a confidence and a reason, and is listed in `ai_suggestions` in the JSON with `"source": "ai"`. Findings and severities never change. One request per run, and none when nothing can be paired. |
+| `--ai-explain` | Plain-language explanations: each finding at or above `--ai-explain-from` (`info`, `warning` or `critical`; default `warning`) gets one or two sentences a tester understands, shown under the finding as `AI-generated: …` and stored as `explanation` with `"source": "ai"` on the finding in the JSON. One request per run for at most 50 findings, the most severe first. Findings and severities never change. |
 
 | `--ai` | What happens |
 |---|---|

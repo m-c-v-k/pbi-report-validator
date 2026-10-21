@@ -26,6 +26,7 @@ from pbi_report_validator.domain.models import (
     Severity,
 )
 from pbi_report_validator.domain.raw import RawProject
+from pbi_report_validator.integrations.anthropic_client import LlmClient
 from pbi_report_validator.integrations.files import load_project, write_text
 from pbi_report_validator.integrations.templates import read_template
 from pbi_report_validator.matching.matcher import match_reports
@@ -38,6 +39,7 @@ from pbi_report_validator.reporting.terminal import (
     format_data_failure,
     format_failure,
 )
+from pbi_report_validator.services.ai import with_explanations, with_match_suggestions
 from pbi_report_validator.services.data_validation import (
     InvalidDataOptionsError,
     QueryRunner,
@@ -53,6 +55,7 @@ def validate(
     settings: DataSettings | None = None,
     runner: QueryRunner | None = None,
     ai: AiSettings | None = None,
+    llm: LlmClient | None = None,
 ) -> DiffResult:
     """Compare two PBIP projects structurally and, optionally, their data.
 
@@ -63,6 +66,8 @@ def validate(
             skips it.
         runner: Runs the DAX queries; needed together with ``settings``.
         ai: The AI settings, recorded in the result; ``None`` is AI off.
+        llm: Answers AI prompts; with ``ai.match`` it adds rename
+            suggestions, with ``ai.explain`` explanations of findings.
 
     Returns:
         All findings, including parse issues of either version.
@@ -95,7 +100,7 @@ def validate(
         )
         findings += [f for c in comparisons for f in c.findings]
     logger.info("Found %d findings", len(findings))
-    return DiffResult(
+    result = DiffResult(
         old_source=old_path.as_posix(),
         new_source=new_path.as_posix(),
         findings=tuple(findings),
@@ -105,6 +110,12 @@ def validate(
         ai_mode=ai.mode if ai else AiMode.OFF,
         ai_model=ai.model if ai else None,
     )
+    if ai and llm and ai.match:
+        result = with_match_suggestions(result, llm, ai.allow_data)
+    if ai and llm and ai.explain:
+        threshold = Severity(ai.explain_from)
+        result = with_explanations(result, llm, ai.allow_data, threshold)
+    return result
 
 
 def failure_reasons(

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.5",
+  "schema_version": "1.7",
   "old_source": "tests/fixtures/sales_v1",
   "new_source": "tests/fixtures/sales_v2",
   "findings": [
@@ -241,5 +241,6 @@
   "data": [],
   "data_values_shown": false,
   "ai_mode": "off",
-  "ai_model": null
+  "ai_model": null,
+  "ai_suggestions": []
 }

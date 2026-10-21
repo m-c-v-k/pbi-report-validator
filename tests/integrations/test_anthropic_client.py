@@ -62,6 +62,29 @@ def test_sends_system_prompt_and_model_and_returns_text() -> None:
     assert body["system"] == "Be brief."
     assert body["messages"] == [{"role": "user", "content": "Explain this finding."}]
     assert requests[0].headers["x-api-key"] == "test-key"
+    assert "output_config" not in body
+
+
+def test_schema_requests_structured_output() -> None:
+    requests: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        return httpx2.Response(200, json=message('{"answer": "yes"}'))
+
+    schema = {
+        "type": "object",
+        "properties": {"answer": {"type": "string"}},
+        "required": ["answer"],
+    }
+    answer = client_for(handler).complete("s", "p", schema)
+
+    assert answer == '{"answer": "yes"}'
+    output_format = json.loads(requests[0].content)["output_config"]["format"]
+    assert output_format["type"] == "json_schema"
+    assert output_format["schema"]["properties"] == schema["properties"]
+    assert output_format["schema"]["required"] == ["answer"]
+    assert output_format["schema"]["additionalProperties"] is False
 
 
 @pytest.mark.parametrize(
