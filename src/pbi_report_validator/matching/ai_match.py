@@ -2,7 +2,9 @@
 
 Runs only on what the deterministic matcher left unmatched: removed and
 added pages, visuals and measures. The model sees the metadata-only AI
-payload of those findings and answers with JSON; every suggestion is
+payload of those findings and answers with JSON in the shape of
+``match_response_schema()``, which the request also passes as a structured
+output format. The answer is still validated, and every suggestion is
 checked against the candidates, so the model can only pair objects that
 really were removed and added. Pure functions only: the model call itself
 happens in ``services``.
@@ -74,6 +76,11 @@ class _Response(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     suggestions: tuple[_Answer, ...] = ()
+
+
+def match_response_schema() -> dict[str, object]:
+    """The JSON schema of the answer ``parse_suggestions`` expects."""
+    return _Response.model_json_schema()
 
 
 def match_candidates(findings: tuple[AiFinding, ...]) -> MatchCandidates:

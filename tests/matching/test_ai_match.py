@@ -14,6 +14,7 @@ from pbi_report_validator.matching.ai_match import (
     MatchCandidates,
     build_match_prompt,
     match_candidates,
+    match_response_schema,
     parse_suggestions,
 )
 
@@ -141,3 +142,15 @@ def test_fenced_answer_with_extra_keys_and_wild_confidence_is_accepted() -> None
 def test_unusable_answer_raises(text: str) -> None:
     with pytest.raises(InvalidAiResponseError):
         parse_suggestions(text, CANDIDATES)
+
+
+def test_response_schema_describes_the_parsed_shape() -> None:
+    schema = match_response_schema()
+
+    assert schema["type"] == "object"
+    properties = schema["properties"]
+    assert isinstance(properties, dict)
+    assert "suggestions" in properties
+    answer = json.dumps(schema)
+    for key in ("old_path", "new_path", "confidence", "reason"):
+        assert f'"{key}"' in answer

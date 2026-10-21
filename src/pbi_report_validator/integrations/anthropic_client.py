@@ -7,6 +7,7 @@ extra installed. The API key, prompts and responses are never logged.
 
 import importlib.util
 import logging
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Protocol
 
 from pbi_report_validator.integrations.config import AnthropicConfig
@@ -53,8 +54,13 @@ class AiRequestError(AiError):
 class LlmClient(Protocol):
     """Something that answers a prompt (the Anthropic client in production)."""
 
-    def complete(self, system: str, prompt: str) -> str:
-        """Return the model's text answer to ``prompt``."""
+    def complete(
+        self, system: str, prompt: str, schema: Mapping[str, object] | None = None
+    ) -> str:
+        """Return the model's text answer to ``prompt``.
+
+        With a JSON ``schema`` the answer is JSON that matches it.
+        """
         ...
 
 
@@ -102,8 +108,17 @@ class AnthropicClient:
         self._sdk = sdk
         self._model = model
 
-    def complete(self, system: str, prompt: str) -> str:
+    def complete(
+        self, system: str, prompt: str, schema: Mapping[str, object] | None = None
+    ) -> str:
         """Return the model's text answer to ``prompt``.
+
+        Args:
+            system: The system prompt.
+            prompt: The user prompt.
+            schema: A JSON schema for the answer. When given, the request
+                uses structured outputs (``output_config.format``), so the
+                answer is JSON that matches it.
 
         Raises:
             AiAuthenticationError: The key was rejected.
@@ -119,6 +134,7 @@ class AnthropicClient:
                 max_tokens=MAX_TOKENS,
                 system=system,
                 messages=[{"role": "user", "content": prompt}],
+                output_config=_output_config(schema),
             )
         except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as exc:
             raise AiAuthenticationError(
@@ -143,3 +159,15 @@ class AnthropicClient:
         if not text.strip():
             raise AiRequestError("the model returned no text")
         return text
+
+
+def _output_config(
+    schema: Mapping[str, object] | None,
+) -> "anthropic.types.OutputConfigParam | anthropic.Omit":
+    """Structured outputs for ``schema``; the SDK makes it API-compatible."""
+    import anthropic
+
+    if schema is None:
+        return anthropic.omit
+    strict = anthropic.transform_schema(dict(schema))
+    return {"format": {"type": "json_schema", "schema": strict}}
