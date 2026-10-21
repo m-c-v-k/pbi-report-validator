@@ -2,7 +2,8 @@ name: Docker
 
 # Build and smoke-test the image on PRs that change it and on version tags;
 # on tags, publish the tested build to GitHub Container Registry (free for
-# public repositories).
+# public repositories). Each version has two variants: the default image
+# and one with the `[ai]` extra, tagged with the suffix -ai.
 on:
   push:
     tags: ["v*"]
@@ -23,8 +24,15 @@ env:
 
 jobs:
   test:
-    name: Build and test image
+    name: Build and test image${{ matrix.suffix }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - extras: ""
+            suffix: ""
+          - extras: ai
+            suffix: -ai
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -36,8 +44,9 @@ jobs:
           context: .
           load: true
           tags: pbi-validate:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          build-args: EXTRAS=${{ matrix.extras }}
+          cache-from: type=gha,scope=image${{ matrix.suffix }}
+          cache-to: type=gha,mode=max,scope=image${{ matrix.suffix }}
 
       - name: Smoke test
         run: |
@@ -47,11 +56,39 @@ jobs:
           grep -Eq "^[0-9]+ findings" out.txt
           docker image inspect pbi-validate:test --format 'Image size: {{.Size}} bytes'
 
+      # The default image must not contain the extra; the -ai image must get
+      # past the install check to the missing key, without calling the API.
+      - name: Check the AI extra
+        env:
+          EXTRAS: ${{ matrix.extras }}
+        run: |
+          has_ai="$(docker run --rm --entrypoint python pbi-validate:test -c \
+            'import importlib.util; print(importlib.util.find_spec("anthropic") is not None)')"
+          echo "anthropic installed: $has_ai"
+          if [[ -z "$EXTRAS" ]]; then
+            test "$has_ai" = False
+            exit 0
+          fi
+          test "$has_ai" = True
+          status=0
+          docker run --rm -v "$PWD:/work" pbi-validate:test \
+            diff tests/fixtures/sales_v1 tests/fixtures/sales_v2 --ai api 2> err.txt || status=$?
+          cat err.txt
+          test "$status" -eq 2
+          grep -q "needs ANTHROPIC_API_KEY" err.txt
+
   publish:
-    name: Publish to GHCR
+    name: Publish to GHCR${{ matrix.suffix }}
     if: startsWith(github.ref, 'refs/tags/')
     needs: test
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - extras: ""
+            suffix: ""
+          - extras: ai
+            suffix: -ai
     permissions:
       contents: read
       packages: write
@@ -60,14 +97,17 @@ jobs:
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
+      # latest=false: the automatic `latest` tag would not get the suffix,
+      # so the -ai variant could overwrite the default image's `latest`.
       - name: Image metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ env.IMAGE }}
+          flavor: latest=false
           tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
+            type=raw,value=latest${{ matrix.suffix }}
 
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
@@ -83,4 +123,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
+          build-args: EXTRAS=${{ matrix.extras }}
+          cache-from: type=gha,scope=image${{ matrix.suffix }}

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Run `pbi-validate diff` in the action's image, then publish the summary and
 # outputs. Inputs come in as IN_* environment variables (never interpolated
-# into the script), credentials as PBI_* variables from the calling step.
+# into the script), credentials and AI settings as PBI_* and
+# ANTHROPIC_API_KEY variables from the calling step.
 set -euo pipefail
 
 EXIT_USAGE=2  # same meaning as the CLI's exit code 2
@@ -54,6 +55,15 @@ boolean show_data_values show-data-values "$IN_SHOW_DATA_VALUES"
 if [[ "$show_data_values" == true && "$data" != true ]]; then
   fail_usage "Input show-data-values needs data: true"
 fi
+case "${IN_AI,,}" in
+  off | "") ai=off ;;
+  api) ai=api ;;
+  *) fail_usage "Input ai must be off or api, not '$IN_AI'" ;;
+esac
+boolean allow_data_to_llm allow-data-to-llm "$IN_ALLOW_DATA_TO_LLM"
+if [[ "$allow_data_to_llm" == true && "$ai" != api ]]; then
+  fail_usage "Input allow-data-to-llm needs ai: api"
+fi
 
 # A folder per step, so a second run in the same job never reads the first
 # run's results.
@@ -82,6 +92,13 @@ if [[ "$data" == true ]]; then
     echo "::warning::show-data-values is on: the job summary, outputs and any pull request comment contain unmasked row-level data."
   fi
 fi
+# Always explicit, so the input wins over a PBI_VALIDATE_AI default; the
+# disabled kill switch still blocks api in the CLI.
+args+=(--ai "$ai")
+if [[ "$allow_data_to_llm" == true ]]; then
+  args+=(--allow-data-to-llm)
+  echo "::warning::allow-data-to-llm is on: row-level values may be sent to the Anthropic API."
+fi
 
 # Same paths inside the container as on the runner, and the runner's user,
 # so relative paths work and written files are owned by the workflow.
@@ -92,6 +109,7 @@ docker run --rm \
   --volume "$RUNNER_TEMP:$RUNNER_TEMP" \
   --workdir "$GITHUB_WORKSPACE" \
   --env PBI_TENANT_ID --env PBI_CLIENT_ID --env PBI_CLIENT_SECRET \
+  --env ANTHROPIC_API_KEY --env PBI_VALIDATE_AI --env PBI_VALIDATE_AI_MODEL \
   "$IMAGE" "${args[@]}"
 status=$?
 set -e

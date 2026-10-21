@@ -53,6 +53,10 @@ docker run --rm -v "$PWD:/work" ghcr.io/m-c-v-k/pbi-report-validator diff old ne
 To write `--json`, `--markdown` or `--html` files into the mounted folder on Linux,
 add `--user "$(id -u):$(id -g)"` so the files are owned by you.
 
+The image does not include the optional AI extra. Releases after v0.2.0 also
+publish a variant with it, tagged with the suffix `-ai` (`<version>-ai` and
+`latest-ai`); see [AI options](#ai-options-optional---ai).
+
 ## Quick start
 
 1. Save both report versions as Power BI Projects (*File → Save as → Power BI
@@ -247,7 +251,8 @@ pbi-validate diff ./old ./new --ai api
   when `--ai` is not given. `PBI_VALIDATE_AI=disabled` blocks AI whatever
   the flags say: `--ai api` then fails with exit code 2. Set it in a CI
   template or a machine's environment to enforce "no AI".
-- The Docker image and the GitHub Action do not include the AI extra.
+- The default Docker image does not include the AI extra; use the `-ai`
+  image variant (see [Docker](#docker)) or the action input `ai: api`.
 
 ## GitHub Action
 
@@ -303,6 +308,23 @@ To fail the step, set `fail-on` (`info`, `warning` or `critical`) and, with
 `data: true`, `fail-on-data-error: true`; they work as the CLI options of the
 same name. Outputs are still set when the step fails.
 
+To turn on the AI layer, set `ai: api` and pass your key as an environment
+variable (never as an input); the key owner pays for use. The action then
+runs the `-ai` image variant. `allow-data-to-llm: true` works as the CLI
+option and needs `ai: api`. `PBI_VALIDATE_AI` and `PBI_VALIDATE_AI_MODEL`
+are passed on too, so `PBI_VALIDATE_AI: disabled` (for example from an
+organisation variable) blocks `ai: api`:
+
+```yaml
+- uses: m-c-v-k/pbi-report-validator@<version>  # a release after v0.2.0
+  env:
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  with:
+    old: reports/v1
+    new: reports/v2
+    ai: api
+```
+
 Outputs: `json`, `html` and `markdown` (paths), `findings`, and the counts
 `critical`, `warning` and `info`. All inputs are listed in
 [`action.yml`](action.yml).
@@ -330,7 +352,8 @@ commit, which takes about a minute longer.
 - The optional AI layer (`--ai api`, off by default) sends only metadata
   (names, field references, filter definitions, counts) to the Anthropic
   API with your own key. Row-level data is sent only with
-  `--allow-data-to-llm`. `PBI_VALIDATE_AI=disabled` blocks AI entirely.
+  `--allow-data-to-llm` (action input `allow-data-to-llm: true`).
+  `PBI_VALIDATE_AI=disabled` blocks AI entirely.
 
 ## Development
 
