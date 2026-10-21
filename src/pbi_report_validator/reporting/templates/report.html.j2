@@ -52,6 +52,7 @@ tr:last-child td { border-bottom: 0; }
 .values .old { color: var(--removed); }
 .values .new { color: var(--added); }
 .empty { color: var(--muted); }
+.ai-note { color: var(--muted); font-style: italic; margin-top: 4px; }
 .data-overview { margin: 0 0 12px; }
 footer { margin-top: 40px; color: var(--muted); font-size: 0.85rem; }
 footer a { color: var(--accent); }
@@ -261,7 +262,7 @@ td a, .detail-body a { color: var(--accent); }
           <td>{{ labels[f.category.value] }}</td>
 {% set target = visual_key(f) %}
           <td class="mono">{% if target %}<a href="#{{ target }}" data-open="{{ target }}">{{ f.path }}</a>{% else %}{{ f.path }}{% endif %}</td>
-          <td>{{ f.message }}</td>
+          <td>{{ f.message }}{% set note = ai_notes.get((f.category, f.path)) %}{% if note %}<div class="ai-note">{{ note }}</div>{% endif %}</td>
           <td class="values">
 {% if f.old is not none %}            <pre class="old">{{ f.old }}</pre>
 {% endif %}

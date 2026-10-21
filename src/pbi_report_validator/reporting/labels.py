@@ -69,7 +69,27 @@ def ai_overview(result: DiffResult) -> str | None:
     """One line saying the AI layer was on, or ``None`` if it was off."""
     if result.ai_mode is AiMode.OFF:
         return None
+    suggestions = len(result.ai_suggestions)
+    renames = f" {suggestions} rename suggestions." if suggestions else ""
     return (
-        f"AI: {result.ai_mode.value} ({result.ai_model}). "
+        f"AI: {result.ai_mode.value} ({result.ai_model}).{renames} "
         f"AI output is labelled '{AI_LABEL}'; the findings themselves are not."
     )
+
+
+def ai_notes(result: DiffResult) -> dict[tuple[Category, str], str]:
+    """AI rename suggestions as notes, keyed by category and finding path.
+
+    The removed object's finding gets "renamed to", the added one's
+    "renamed from"; both are labelled as AI output.
+    """
+    notes = {}
+    for s in result.ai_suggestions:
+        tail = f"(confidence {s.confidence:.0%}): {s.reason}"
+        notes[s.category, s.old_path] = (
+            f"{AI_LABEL}: probably renamed to {s.new_path} {tail}"
+        )
+        notes[s.category, s.new_path] = (
+            f"{AI_LABEL}: probably renamed from {s.old_path} {tail}"
+        )
+    return notes

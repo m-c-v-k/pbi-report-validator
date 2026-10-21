@@ -17,9 +17,10 @@ class AiSettings(DomainModel):
 
     ``model`` is set when ``mode`` is ``api``. ``allow_data`` lets row-level
     values reach the model (``--allow-data-to-llm``); by default only
-    metadata is sent.
+    metadata is sent. ``match`` asks for rename suggestions (``--ai-match``).
     """
 
     mode: AiMode = AiMode.OFF
     model: str | None = None
     allow_data: bool = False
+    match: bool = False

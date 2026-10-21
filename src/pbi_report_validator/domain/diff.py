@@ -15,7 +15,7 @@ from pbi_report_validator.domain.report import (
     Visual,
 )
 
-SCHEMA_VERSION: Final = "1.5"
+SCHEMA_VERSION: Final = "1.6"
 
 
 class MatchMethod(StrEnum):
@@ -189,6 +189,22 @@ class MeasureDiff(DomainModel):
     renames: dict[str, str] = Field(default_factory=dict)
 
 
+class AiSuggestion(DomainModel):
+    """A rename the AI layer suggests for a removed and an added object.
+
+    Pairs the ``path`` of a removed finding with that of an added finding of
+    the same category. A suggestion never changes findings or severities;
+    ``source`` labels it as AI output in the JSON.
+    """
+
+    source: Literal["ai"] = "ai"
+    category: Category
+    old_path: str
+    new_path: str
+    confidence: float = Field(ge=0, le=1)
+    reason: str
+
+
 class SeverityCounts(DomainModel):
     """Number of findings per severity."""
 
@@ -204,11 +220,12 @@ class DiffResult(DomainModel):
     1.2 added the ``data`` category and per-visual ``data`` summaries;
     1.3 added ``severity`` on findings and ``severity_counts``; 1.4 added
     ``data_values_shown`` (row keys and values are masked unless it is true);
-    1.5 added the ``ai`` category, ``ai_mode`` and ``ai_model``.
+    1.5 added the ``ai`` category, ``ai_mode`` and ``ai_model``; 1.6 added
+    ``ai_suggestions`` (``--ai-match``).
     """
 
     # Keep the Literal in sync with SCHEMA_VERSION (enforced by a test).
-    schema_version: Literal["1.5"] = SCHEMA_VERSION
+    schema_version: Literal["1.6"] = SCHEMA_VERSION
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()
@@ -219,11 +236,19 @@ class DiffResult(DomainModel):
     data_values_shown: bool = False
     ai_mode: AiMode = AiMode.OFF
     ai_model: str | None = None
+    ai_suggestions: tuple[AiSuggestion, ...] = ()
 
     @field_validator("findings")
     @classmethod
     def _sort_findings(cls, findings: tuple[Finding, ...]) -> tuple[Finding, ...]:
         return tuple(sorted(findings, key=lambda f: f.sort_key))
+
+    @field_validator("ai_suggestions")
+    @classmethod
+    def _sort_suggestions(
+        cls, suggestions: tuple[AiSuggestion, ...]
+    ) -> tuple[AiSuggestion, ...]:
+        return tuple(sorted(suggestions, key=lambda s: (s.old_path, s.new_path)))
 
     @model_validator(mode="before")
     @classmethod
