@@ -13,6 +13,7 @@ from pbi_report_validator.domain.models import Category, DiffResult, Finding
 from pbi_report_validator.reporting.labels import (
     CATEGORY_LABELS,
     UNMASKED_WARNING,
+    ai_explanation,
     ai_notes,
     ai_overview,
     data_overview,
@@ -47,7 +48,11 @@ def to_markdown(result: DiffResult, limit: int = GITHUB_COMMENT_LIMIT) -> str:
     current: Category | None = None
     notes = ai_notes(result)
     for finding in _grouped(result.findings):
-        block = _finding(finding) + _note(notes.get((finding.category, finding.path)))
+        block = (
+            _finding(finding)
+            + _note(ai_explanation(finding))
+            + _note(notes.get((finding.category, finding.path)))
+        )
         if finding.category != current:
             block = f"\n### {CATEGORY_LABELS[finding.category]}\n\n{block}"
         if len(block) > budget:

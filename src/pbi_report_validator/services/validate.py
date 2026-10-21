@@ -39,7 +39,7 @@ from pbi_report_validator.reporting.terminal import (
     format_data_failure,
     format_failure,
 )
-from pbi_report_validator.services.ai import with_match_suggestions
+from pbi_report_validator.services.ai import with_explanations, with_match_suggestions
 from pbi_report_validator.services.data_validation import (
     InvalidDataOptionsError,
     QueryRunner,
@@ -67,7 +67,7 @@ def validate(
         runner: Runs the DAX queries; needed together with ``settings``.
         ai: The AI settings, recorded in the result; ``None`` is AI off.
         llm: Answers AI prompts; with ``ai.match`` it adds rename
-            suggestions.
+            suggestions, with ``ai.explain`` explanations of findings.
 
     Returns:
         All findings, including parse issues of either version.
@@ -110,8 +110,11 @@ def validate(
         ai_mode=ai.mode if ai else AiMode.OFF,
         ai_model=ai.model if ai else None,
     )
-    if ai and ai.match and llm:
-        return with_match_suggestions(result, llm, ai.allow_data)
+    if ai and llm and ai.match:
+        result = with_match_suggestions(result, llm, ai.allow_data)
+    if ai and llm and ai.explain:
+        threshold = Severity(ai.explain_from)
+        result = with_explanations(result, llm, ai.allow_data, threshold)
     return result
 
 

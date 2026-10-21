@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.6",
+  "schema_version": "1.7",
   "old_source": "tests/fixtures/sales_v1",
   "new_source": "tests/fixtures/sales_v2",
   "findings": [
