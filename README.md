@@ -323,7 +323,14 @@ organisation variable) blocks `ai: api`:
     old: reports/v1
     new: reports/v2
     ai: api
+    ai-match: true
+    ai-explain: true
+    ai-explain-from: warning
 ```
+
+The `ai-match`, `ai-explain` and `ai-explain-from` inputs map to the matching
+CLI options and require `ai: api`. `ai-explain-from` accepts `info`, `warning`
+or `critical`, and only applies when `ai-explain: true`.
 
 Outputs: `json`, `html` and `markdown` (paths), `findings`, and the counts
 `critical`, `warning` and `info`. All inputs are listed in

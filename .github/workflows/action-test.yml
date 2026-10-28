@@ -151,6 +151,48 @@ jobs:
           new: tests/fixtures/sales_v2
           allow-data-to-llm: true
 
+      - name: Run the action with ai-match but ai off
+        id: ai-match-off
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          ai-match: true
+
+      - name: Run the action with ai-explain-from without ai-explain
+        id: ai-explain-from-without-explain
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          ai: api
+          ai-explain-from: info
+
+      - name: Run the action with an invalid ai-explain-from value
+        id: ai-explain-from-invalid
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          ai: api
+          ai-explain: true
+          ai-explain-from: debug
+
+      - name: Run the action with all AI feature inputs
+        id: ai-features
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+          new: tests/fixtures/sales_v2
+          ai: api
+          ai-match: true
+          ai-explain: true
+          ai-explain-from: critical
+
       - name: Check the AI runs
         env:
           NO_KEY: ${{ steps.ai-no-key.outcome }}
@@ -159,6 +201,10 @@ jobs:
           DISABLED_JSON: ${{ steps.ai-disabled.outputs.json }}
           INVALID: ${{ steps.ai-invalid.outcome }}
           ALLOW_DATA: ${{ steps.ai-allow-data.outcome }}
+          AI_MATCH_OFF: ${{ steps.ai-match-off.outcome }}
+          AI_EXPLAIN_FROM_WITHOUT_EXPLAIN: ${{ steps.ai-explain-from-without-explain.outcome }}
+          AI_EXPLAIN_FROM_INVALID: ${{ steps.ai-explain-from-invalid.outcome }}
+          AI_FEATURES: ${{ steps.ai-features.outcome }}
         # The -ai image must have been built with the extra, so the ai: api
         # runs failed in the CLI's setup check, not in the build.
         run: |
@@ -169,6 +215,10 @@ jobs:
           test ! -e "$DISABLED_JSON"
           test "$INVALID" = failure
           test "$ALLOW_DATA" = failure
+          test "$AI_MATCH_OFF" = failure
+          test "$AI_EXPLAIN_FROM_WITHOUT_EXPLAIN" = failure
+          test "$AI_EXPLAIN_FROM_INVALID" = failure
+          test "$AI_FEATURES" = failure
 
       # Both runs with comment above compare the same versions, so the second
       # one must have updated the first one's comment instead of adding a new
