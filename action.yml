@@ -61,6 +61,15 @@ inputs:
   allow-data-to-llm:
     description: With ai api, allow row-level values in what is sent to the Anthropic API.
     default: "false"
+  ai-match:
+    description: With ai api, suggest renamed pages, visuals and measures.
+    default: "false"
+  ai-explain:
+    description: With ai api, explain findings in plain language.
+    default: "false"
+  ai-explain-from:
+    description: Lowest severity to explain when ai-explain is enabled (info, warning, critical).
+    default: ""
 
 outputs:
   json:
@@ -135,4 +144,7 @@ runs:
         IN_SHOW_DATA_VALUES: ${{ inputs.show-data-values }}
         IN_AI: ${{ inputs.ai }}
         IN_ALLOW_DATA_TO_LLM: ${{ inputs.allow-data-to-llm }}
+        IN_AI_MATCH: ${{ inputs.ai-match }}
+        IN_AI_EXPLAIN: ${{ inputs.ai-explain }}
+        IN_AI_EXPLAIN_FROM: ${{ inputs.ai-explain-from }}
       run: bash "$GITHUB_ACTION_PATH/action/run.sh"
