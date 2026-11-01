@@ -42,6 +42,7 @@ from pbi_report_validator.domain.models import (
     LiteralValue,
     NotCondition,
     Page,
+    TopNCondition,
     UnsupportedQuery,
     Visual,
 )
@@ -165,7 +166,7 @@ def _filter_table(condition: Condition) -> str:
                 f"filters on {field.kind.value} fields are not supported yet"
             )
     if isinstance(condition, InCondition):
-        rows = ", ".join(_row(r, len(condition.fields)) for r in condition.rows)
+        rows = _rows(condition)
         targets = ", ".join(column(f) for f in condition.fields)
         return f"TREATAS({{{rows}}}, {targets})"
     if len({f.table for f in fields}) > 1:
@@ -177,7 +178,7 @@ def _filter_table(condition: Condition) -> str:
 def _predicate(condition: Condition) -> str:
     """The condition as a boolean DAX expression."""
     if isinstance(condition, InCondition):
-        rows = ", ".join(_row(r, len(condition.fields)) for r in condition.rows)
+        rows = _rows(condition)
         targets = [column(f) for f in condition.fields]
         target = targets[0] if len(targets) == 1 else f"({', '.join(targets)})"
         return f"{target} IN {{{rows}}}"
@@ -185,6 +186,8 @@ def _predicate(condition: Condition) -> str:
         return (
             f"{column(condition.field)} {condition.operator} {literal(condition.value)}"
         )
+    if isinstance(condition, TopNCondition):
+        raise UnsupportedError("TopN filters are not supported yet")
     if isinstance(condition, NotCondition):
         return f"NOT({_predicate(condition.operand)})"
     if isinstance(condition, BinaryCondition):
@@ -200,7 +203,7 @@ def _predicate(condition: Condition) -> str:
 def _fields(condition: Condition) -> list[FieldRef]:
     if isinstance(condition, InCondition):
         return list(condition.fields)
-    if isinstance(condition, ComparisonCondition):
+    if isinstance(condition, ComparisonCondition | TopNCondition):
         return [condition.field]
     if isinstance(condition, NotCondition):
         return _fields(condition.operand)
@@ -209,6 +212,12 @@ def _fields(condition: Condition) -> list[FieldRef]:
     if isinstance(condition, AllCondition):
         return [f for item in condition.items for f in _fields(item)]
     assert_never(condition)
+
+
+def _rows(condition: InCondition) -> str:
+    if not condition.rows:
+        raise UnsupportedError("filters without values are not supported")
+    return ", ".join(_row(r, len(condition.fields)) for r in condition.rows)
 
 
 def _row(values: Sequence[LiteralValue], width: int) -> str:

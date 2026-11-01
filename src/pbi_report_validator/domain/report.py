@@ -88,6 +88,16 @@ class ComparisonCondition(DomainModel):
     value: LiteralValue
 
 
+class TopNCondition(DomainModel):
+    """``field`` limited to its top or bottom ``count`` values by ``order_by``."""
+
+    kind: Literal["top_n"] = "top_n"
+    field: FieldRef
+    direction: Literal["top", "bottom"]
+    count: int = Field(gt=0)
+    order_by: FieldRef
+
+
 class NotCondition(DomainModel):
     """Negation of another condition."""
 
@@ -111,7 +121,12 @@ class AllCondition(DomainModel):
 
 
 Condition = Annotated[
-    InCondition | ComparisonCondition | NotCondition | BinaryCondition | AllCondition,
+    InCondition
+    | ComparisonCondition
+    | TopNCondition
+    | NotCondition
+    | BinaryCondition
+    | AllCondition,
     Field(discriminator="kind"),
 ]
 
