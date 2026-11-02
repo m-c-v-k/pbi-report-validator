@@ -31,6 +31,7 @@ from pbi_report_validator.services.data_validation import (
     InvalidDataOptionsError,
     _comparable_queries,
     _pair_values,
+    _truncation_reason,
     _with_unpaired,
     data_settings,
 )
@@ -282,6 +283,41 @@ def test_partly_validated_visual_keeps_a_found_difference() -> None:
     noted = _with_unpaired(comparison, "p/v", ["Margin"], [])
 
     assert noted.summary.status == DataStatus.DIFFERENT
+
+
+FULL_RESULT = QueryResult(columns=("[A]",), rows=((1,),) * 100_000)
+SMALL_RESULT = QueryResult(columns=("[A]",), rows=((1,),))
+WIDE_RESULT = QueryResult(columns=tuple("ABCDE"), rows=((1, 2, 3, 4, 5),) * 200_000)
+CUT_OFF = "reached the API limit of 100,000 rows or 1,000,000 values and may be cut off"
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "expected"),
+    [
+        (SMALL_RESULT, SMALL_RESULT, None),
+        (FULL_RESULT, SMALL_RESULT, f"the old result {CUT_OFF}"),
+        (SMALL_RESULT, WIDE_RESULT, f"the new result {CUT_OFF}"),
+        (FULL_RESULT, FULL_RESULT, f"the old and new result {CUT_OFF}"),
+    ],
+)
+def test_truncation_reason(
+    old: QueryResult, new: QueryResult, expected: str | None
+) -> None:
+    assert _truncation_reason(old, new) == expected
+
+
+def test_result_at_the_api_limit_is_not_validated() -> None:
+    class Full(FakeRunner):
+        def execute_query(self, dataset_id: str, dax: str) -> QueryResult:
+            full = super().execute_query(dataset_id, dax)
+            filler = (full.rows[0],) * 100_000 if dataset_id == OLD_DS else ()
+            return full.model_copy(update={"rows": (*full.rows, *filler)})
+
+    result = validate(FIXTURES / "sales_v1", FIXTURES / "sales_v2", SETTINGS, Full())
+
+    summary = next(s for s in result.data if s.path.endswith("chart_sales_by_month"))
+    assert summary.status == DataStatus.NOT_VALIDATED
+    assert summary.reason == f"the old result {CUT_OFF}"
 
 
 def test_rate_limited_query_is_not_validated() -> None:
