@@ -7,7 +7,7 @@
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
 
-**Status:** v0.2.0 – structural diff and data validation (`--data`, values masked by default), JSON, Markdown and HTML reports, and a GitHub Action with PR comments and `--fail-on`. See the [live demo report](https://m-c-v-k.github.io/pbi-report-validator/) and the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
+**Status:** v0.3.0 – structural diff and data validation (`--data`, values masked by default), JSON, Markdown and HTML reports, a GitHub Action with PR comments and `--fail-on`, and an optional AI layer (`--ai api`). See the [live demo report](https://m-c-v-k.github.io/pbi-report-validator/) and the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
 
 ## Why
 
@@ -28,13 +28,13 @@ Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 for you).
 Install the latest release as a command-line tool:
 
 ```bash
-uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.2.0
+uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.3.0
 ```
 
 Or run it once without installing:
 
 ```bash
-uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.2.0 pbi-validate --help
+uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.3.0 pbi-validate --help
 ```
 
 Each [GitHub release](https://github.com/m-c-v-k/pbi-report-validator/releases)
@@ -53,7 +53,7 @@ docker run --rm -v "$PWD:/work" ghcr.io/m-c-v-k/pbi-report-validator diff old ne
 To write `--json`, `--markdown` or `--html` files into the mounted folder on Linux,
 add `--user "$(id -u):$(id -g)"` so the files are owned by you.
 
-The image does not include the optional AI extra. Releases after v0.2.0 also
+The image does not include the optional AI extra. From v0.3.0, releases also
 publish a variant with it, tagged with the suffix `-ai` (`<version>-ai` and
 `latest-ai`); see [AI options](#ai-options-optional---ai).
 
@@ -76,7 +76,7 @@ or the `.Report` folder itself. The terminal always shows a summary; add any of:
 |---|---|
 | `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
 | `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
-| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.5) |
+| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.7) |
 
 Running it on the sample reports in this repository gives:
 
@@ -230,7 +230,7 @@ the features below each need their own flag, and they can be combined.
 Setup for `api`:
 
 ```bash
-uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator"
+uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator@v0.3.0"
 export ANTHROPIC_API_KEY=...
 pbi-validate diff ./old ./new --ai api
 ```
@@ -268,7 +268,7 @@ from v0.2.0:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: m-c-v-k/pbi-report-validator@v0.2.0
+- uses: m-c-v-k/pbi-report-validator@v0.3.0
   with:
     old: reports/v1        # paths relative to the workspace
     new: reports/v2
@@ -322,7 +322,7 @@ are passed on too, so `PBI_VALIDATE_AI: disabled` (for example from an
 organisation variable) blocks `ai: api`:
 
 ```yaml
-- uses: m-c-v-k/pbi-report-validator@<version>  # a release after v0.2.0
+- uses: m-c-v-k/pbi-report-validator@v0.3.0
   env:
     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   with:
@@ -339,7 +339,7 @@ The action needs a Linux runner with Docker (such as `ubuntu-latest`) and
 cannot run inside a job `container:`. Input and output paths must be
 relative to the workspace or lie inside it or `$RUNNER_TEMP`.
 
-**Versions.** Pin a full version tag such as `@v0.2.0`; it runs the
+**Versions.** Pin a full version tag such as `@v0.3.0`; it runs the
 published image of that version. Before 1.0, minor versions can change the
 output, so there is no moving `@v0` tag. Dependabot (`package-ecosystem:
 github-actions`) can keep the tag up to date. Organisations that require it
