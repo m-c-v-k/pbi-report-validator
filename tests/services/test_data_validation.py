@@ -265,12 +265,23 @@ def test_measure_only_in_one_version_is_noted_not_hidden() -> None:
 
     noted = _with_unpaired(comparison, "p/v", ["Margin"], ["Profit"])
 
-    assert noted.summary.status == DataStatus.SAME
+    assert noted.summary.status == DataStatus.NOT_VALIDATED
+    assert noted.summary.rows_matched == 1
     assert noted.summary.reason == (
         "not compared: [Margin] is only in the old visual; "
         "[Profit] is only in the new visual"
     )
     assert noted.findings[-1].change == ChangeKind.ERROR
+
+
+def test_partly_validated_visual_keeps_a_found_difference() -> None:
+    old = QueryResult(columns=("[A]",), rows=((1,),))
+    new = QueryResult(columns=("[A]",), rows=((2,),))
+    comparison = compare_results("p/v", old, new, [], [("[A]", "[A]")])
+
+    noted = _with_unpaired(comparison, "p/v", ["Margin"], [])
+
+    assert noted.summary.status == DataStatus.DIFFERENT
 
 
 def test_rate_limited_query_is_not_validated() -> None:
