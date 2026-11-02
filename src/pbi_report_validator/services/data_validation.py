@@ -31,6 +31,8 @@ from pbi_report_validator.domain.models import (
 )
 from pbi_report_validator.integrations.config import load_powerbi_config
 from pbi_report_validator.integrations.powerbi import (
+    MAX_RESULT_ROWS,
+    MAX_RESULT_VALUES,
     QueryError,
     RateLimitError,
     ServiceError,
@@ -148,6 +150,8 @@ def _compare(
         new_result = runner.execute_query(settings.new_dataset, new_dax.dax)
     except (QueryError, RateLimitError, ServiceError) as exc:
         return not_validated(path, _failure_reason(exc, settings.show_values))
+    if reason := _truncation_reason(old_result, new_result):
+        return not_validated(path, reason)
     keys = [(result_column(c), result_column(c)) for c in old_dax.group_by]
     values = _pair_values(old_dax.values, new_dax.values, value_renames)
     comparison = compare_results(
@@ -167,6 +171,25 @@ def _failure_reason(exc: Exception, show_values: bool) -> str:
     if isinstance(exc, QueryError) and not show_values:
         return f"query failed: {ENGINE_MESSAGE_MASKED}"
     return f"query failed: {exc}"
+
+
+def _truncation_reason(old: QueryResult, new: QueryResult) -> str | None:
+    """Why a result may be incomplete; the API cuts it off without an error."""
+    sides = [
+        label for label, result in (("old", old), ("new", new)) if _at_api_limit(result)
+    ]
+    if not sides:
+        return None
+    return (
+        f"the {' and '.join(sides)} result reached the API limit of "
+        f"{MAX_RESULT_ROWS:,} rows or {MAX_RESULT_VALUES:,} values "
+        "and may be cut off"
+    )
+
+
+def _at_api_limit(result: QueryResult) -> bool:
+    rows = len(result.rows)
+    return rows >= MAX_RESULT_ROWS or rows * len(result.columns) >= MAX_RESULT_VALUES
 
 
 def _comparable_queries(
