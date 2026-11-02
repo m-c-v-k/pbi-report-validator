@@ -73,8 +73,8 @@ def _diff_slicer(
     A slicer appearing or disappearing (the visual changed to or from a
     slicer) is only reported if it carried a selection.
     """
-    old_condition = _rename_in(old.condition, renames) if old else None
-    new_condition = new.condition if new else None
+    old_condition = _definition(old, renames) if old else None
+    new_condition = _definition(new, {}) if new else None
     if old_condition == new_condition:
         return None
     if old and new:
@@ -145,30 +145,57 @@ def _diff_filters(
     new: tuple[Filter, ...],
     renames: Mapping[str, str],
 ) -> list[Finding]:
-    old_by_name = {f.name: _rename_in(f.condition, renames) for f in old}
-    new_by_name = {f.name: f.condition for f in new}
+    old_by_name = {f.name: f for f in old}
+    new_by_name = {f.name: f for f in new}
     findings = []
     for name in sorted(old_by_name.keys() | new_by_name.keys()):
         path = f"{owner}/filters/{name}"
-        if name not in new_by_name:
-            change, message = ChangeKind.REMOVED, f"Filter {name} removed"
-        elif name not in old_by_name:
-            change, message = ChangeKind.ADDED, f"Filter {name} added"
-        elif old_by_name[name] != new_by_name[name]:
-            change, message = ChangeKind.MODIFIED, f"Filter {name} changed"
-        else:
-            continue
-        findings.append(
-            make_finding(
-                Category.FILTER,
-                change,
-                path=path,
-                message=message,
-                old=old_by_name.get(name),
-                new=new_by_name.get(name),
-            )
-        )
+        before, after = old_by_name.get(name), new_by_name.get(name)
+        finding = _filter_finding(path, name, before, after, renames)
+        if finding is not None:
+            findings.append(finding)
     return findings
+
+
+def _filter_finding(
+    path: str,
+    name: str,
+    old: Filter | None,
+    new: Filter | None,
+    renames: Mapping[str, str],
+) -> Finding | None:
+    before = _definition(old, renames) if old else None
+    after = _definition(new, {}) if new else None
+    if old is None or new is None:
+        change = ChangeKind.ADDED if old is None else ChangeKind.REMOVED
+        message = f"Filter {name} {change.value}"
+    elif before != after:
+        change, message = ChangeKind.MODIFIED, f"Filter {name} changed"
+    elif (key := _field_key(old, renames)) != _field_key(new, {}):
+        change = ChangeKind.MODIFIED
+        message = f"Filter {name} uses another field"
+        before, after = key, _field_key(new, {})
+    elif old.filter_type != new.filter_type:
+        change, message = ChangeKind.RETYPED, f"Filter {name} changed type"
+        before, after = old.filter_type, new.filter_type
+    else:
+        return None
+    return make_finding(
+        Category.FILTER, change, path=path, message=message, old=before, new=after
+    )
+
+
+def _definition(item: Filter | SlicerState, renames: Mapping[str, str]) -> str | None:
+    """What a filter or slicer selects: its condition or unread definition."""
+    if item.condition is None:
+        return item.unread
+    return _rename_in(item.condition, renames)
+
+
+def _field_key(item: Filter, renames: Mapping[str, str]) -> str | None:
+    if item.field is None:
+        return None
+    return renames.get(item.field.key, item.field.key)
 
 
 def _rename_in(condition: str | None, renames: Mapping[str, str]) -> str | None:

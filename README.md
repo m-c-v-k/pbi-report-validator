@@ -137,7 +137,7 @@ Every finding has a severity:
 |---|---|
 | `critical` | Data differences, removed pages and visuals, added/removed/changed filters and slicer selections, changed measure expressions |
 | `warning` | Changed visual type, changed fields, renamed or removed measures, parse issues, visuals whose data could not be validated |
-| `info` | Added pages, visuals and measures, moved or reordered pages and visuals, renamed pages, changed titles |
+| `info` | Added pages, visuals and measures, moved or reordered pages and visuals, renamed pages, changed titles, filters that only changed type |
 
 ### Limitations
 
@@ -147,6 +147,11 @@ Every finding has a severity:
   workspace; see its own limitations below
 - A visual moved to a different page shows as removed on one page and added
   on the other
+- Filters the parser cannot read (such as relative date or "contains") are
+  compared on their raw definition, so findings show JSON, and a renamed
+  measure inside one shows as a change. With `--data`, every visual such a
+  filter applies to is `not_validated`: one at report level covers the whole
+  report, and fails the run with `--fail-on warning`
 
 ### Data validation (optional, `--data`)
 
