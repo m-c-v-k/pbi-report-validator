@@ -21,6 +21,7 @@ from pbi_report_validator.domain.models import (
     ChangeKind,
     DataComparison,
     DataSettings,
+    DataStatus,
     DaxQuery,
     QueryResult,
     Report,
@@ -224,7 +225,11 @@ def _with_unpaired(
     only_old: Sequence[str],
     only_new: Sequence[str],
 ) -> DataComparison:
-    """Note values that exist in only one version, so they are not hidden."""
+    """Note values that exist in only one version, so they are not hidden.
+
+    Matching columns then prove too little for ``same``, so that status
+    becomes ``not_validated``; a difference that was found stays ``different``.
+    """
     parts = [f"[{n}] is only in the old visual" for n in only_old]
     parts += [f"[{n}] is only in the new visual" for n in only_new]
     if not parts:
@@ -236,7 +241,10 @@ def _with_unpaired(
         path=f"{path}/data",
         message=f"Data partly validated, {note}",
     )
-    summary = comparison.summary.model_copy(update={"reason": note})
+    status = comparison.summary.status
+    if status == DataStatus.SAME:
+        status = DataStatus.NOT_VALIDATED
+    summary = comparison.summary.model_copy(update={"status": status, "reason": note})
     return DataComparison(summary=summary, findings=(*comparison.findings, finding))
 
 
