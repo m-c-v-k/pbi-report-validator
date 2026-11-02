@@ -9,7 +9,7 @@ from pbi_report_validator.domain.models import (
     Finding,
     Severity,
 )
-from pbi_report_validator.reporting.markdown import NO_MENTION, escape, to_markdown
+from pbi_report_validator.reporting.markdown import escape, to_markdown
 
 
 def finding(path: str, **kwargs: str | None) -> Finding:
