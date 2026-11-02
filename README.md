@@ -246,7 +246,8 @@ pbi-validate diff ./old ./new --ai api
   stops before the run with exit code 2 and a setup hint. If an AI call
   fails during a run (network, rate limit, a refused or empty answer), that
   becomes an `info` finding in the `ai` category, and the rest of the
-  result is produced as usual.
+  result is produced as usual. Findings in the `ai` category never count
+  for `--fail-on`, so an outage cannot fail a CI run.
 - **Default and kill switch:** `PBI_VALIDATE_AI=off|api` sets the default
   when `--ai` is not given. `PBI_VALIDATE_AI=disabled` blocks AI whatever
   the flags say: `--ai api` then fails with exit code 2. Set it in a CI
