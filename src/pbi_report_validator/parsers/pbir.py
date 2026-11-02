@@ -33,6 +33,7 @@ DEFAULT_PAGE_WIDTH = 1280.0
 DEFAULT_PAGE_HEIGHT = 720.0
 GROUP_VISUAL_TYPE = "group"
 REQUIRED_POSITION_KEYS = ("x", "y", "width", "height")
+MALFORMED_PAGE_ORDER = "pageOrder is not a list of page names; pages sorted by name"
 
 
 class VisualParseError(ValueError):
@@ -52,8 +53,10 @@ def parse_report(raw: RawReport) -> Report:
     """
     filters, problems = parse_filters(raw.report.content, FilterLevel.REPORT)
     issues = [ParseIssue(path=raw.report.path, message=m) for m in problems]
+    names, order_issues = _page_order(raw)
+    issues += order_issues
     pages: list[Page] = []
-    for ordinal, raw_page in enumerate(_ordered_pages(raw)):
+    for ordinal, raw_page in enumerate(_ordered_pages(raw, names)):
         page, page_issues = _parse_page(raw_page, ordinal)
         issues += page_issues
         if page is not None:
@@ -61,10 +64,18 @@ def parse_report(raw: RawReport) -> Report:
     return Report(filters=filters, pages=tuple(pages), issues=tuple(issues))
 
 
-def _ordered_pages(raw: RawReport) -> list[RawPage]:
-    """Pages in ``pages.json`` order; unlisted pages follow, sorted by name."""
-    order = raw.pages_meta.content.get("pageOrder", []) if raw.pages_meta else []
-    names = [name for name in order if isinstance(name, str)]
+def _page_order(raw: RawReport) -> tuple[list[str], list[ParseIssue]]:
+    """The page names in ``pages.json``, or nothing and an issue if malformed."""
+    if raw.pages_meta is None:
+        return [], []
+    order = raw.pages_meta.content.get("pageOrder", [])
+    if isinstance(order, list) and all(isinstance(name, str) for name in order):
+        return order, []
+    return [], [ParseIssue(path=raw.pages_meta.path, message=MALFORMED_PAGE_ORDER)]
+
+
+def _ordered_pages(raw: RawReport, names: list[str]) -> list[RawPage]:
+    """Pages in the order of ``names``; unlisted pages follow, sorted by name."""
     position = {name: i for i, name in enumerate(names)}
     return sorted(
         raw.pages, key=lambda p: (position.get(p.name, len(position)), p.name)

@@ -1,6 +1,6 @@
 [project]
 name = "pbi-report-validator"
-version = "0.2.0"
+version = "0.3.0"
 description = "Compare two versions of a Power BI report (PBIP) and report what changed."
 readme = "README.md"
 license = "MIT"
@@ -36,6 +36,11 @@ Homepage = "https://github.com/m-c-v-k/pbi-report-validator"
 Repository = "https://github.com/m-c-v-k/pbi-report-validator"
 Issues = "https://github.com/m-c-v-k/pbi-report-validator/issues"
 Changelog = "https://github.com/m-c-v-k/pbi-report-validator/releases"
+
+[project.optional-dependencies]
+ai = [
+    "anthropic>=1.15.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -88,6 +93,7 @@ show_missing = true
 
 [dependency-groups]
 dev = [
+    "anthropic>=1.15.0",
     "mypy>=2.4.0",
     "pandas-stubs>=3.0.5.260914",
     "pytest>=9.1.1",

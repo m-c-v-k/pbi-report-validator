@@ -1,4 +1,5 @@
 from pbi_report_validator.domain.models import (
+    AiMode,
     Category,
     DataStatus,
     DataSummary,
@@ -9,6 +10,7 @@ from pbi_report_validator.reporting.labels import (
     CATEGORY_LABELS,
     STATUS_LABELS,
     STATUS_MARKS,
+    ai_overview,
     data_overview,
 )
 
@@ -33,4 +35,17 @@ def test_data_overview_only_when_data_was_compared() -> None:
 
     assert data_overview(result) == (
         "Data: 2 visuals compared, 1 same, 0 different, 1 not validated"
+    )
+
+
+def test_ai_overview_only_when_ai_was_on() -> None:
+    assert ai_overview(DiffResult(old_source="o", new_source="n")) is None
+
+    result = DiffResult(
+        old_source="o", new_source="n", ai_mode=AiMode.API, ai_model="claude-x"
+    )
+
+    assert ai_overview(result) == (
+        "AI: api (claude-x). AI output is labelled 'AI-generated'; "
+        "the findings themselves are not."
     )

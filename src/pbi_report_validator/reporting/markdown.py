@@ -13,6 +13,9 @@ from pbi_report_validator.domain.models import Category, DiffResult, Finding
 from pbi_report_validator.reporting.labels import (
     CATEGORY_LABELS,
     UNMASKED_WARNING,
+    ai_explanation,
+    ai_notes,
+    ai_overview,
     data_overview,
     severity_overview,
 )
@@ -22,6 +25,7 @@ SAFETY_MARGIN = 1_000
 INLINE_VALUE_LIMIT = 80
 TITLE = "## Power BI report diff"
 SEE_JSON = "see the JSON output for the full list."
+NO_MENTION = "@​"
 MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]|<>#~])")
 
 
@@ -43,8 +47,13 @@ def to_markdown(result: DiffResult, limit: int = GITHUB_COMMENT_LIMIT) -> str:
     sections: list[str] = []
     shown = 0
     current: Category | None = None
+    notes = ai_notes(result)
     for finding in _grouped(result.findings):
-        block = _finding(finding)
+        block = (
+            _finding(finding)
+            + _note(ai_explanation(finding))
+            + _note(notes.get((finding.category, finding.path)))
+        )
         if finding.category != current:
             block = f"\n### {CATEGORY_LABELS[finding.category]}\n\n{block}"
         if len(block) > budget:
@@ -73,9 +82,9 @@ def _header(result: DiffResult) -> str:
     ]
     if result.findings:
         lines += [f"Severity: {severity_overview(result)}", ""]
-    overview = data_overview(result)
-    if overview:
-        lines += [overview, ""]
+    for overview in (data_overview(result), ai_overview(result)):
+        if overview:
+            lines += [overview, ""]
     if result.findings:
         lines += ["| Category | Findings |", "|---|---:|"]
         lines += [
@@ -91,7 +100,7 @@ def _grouped(findings: tuple[Finding, ...]) -> list[Finding]:
 
 def _finding(finding: Finding) -> str:
     path = _code(finding.path)
-    message = escape(" ".join(finding.message.split()))
+    message = _unmentionable(" ".join(finding.message.split()))
     line = (
         f"- {finding.severity.value} · **{finding.change.value}** `{path}`: {message}"
     )
@@ -100,6 +109,18 @@ def _finding(finding: Finding) -> str:
     if _is_short(finding.old) and _is_short(finding.new):
         return f"{line} ({_inline(finding.old)} → {_inline(finding.new)})\n"
     return line + "\n" + _details(finding.old, finding.new)
+
+
+def _note(note: str | None) -> str:
+    """An AI note under a finding."""
+    if not note:
+        return ""
+    return f"  - _{_unmentionable(note)}_\n"
+
+
+def _unmentionable(text: str) -> str:
+    """Escaped text in which a zero-width space keeps "@" from mentioning."""
+    return escape(text).replace("@", NO_MENTION)
 
 
 def _details(old: str | None, new: str | None) -> str:

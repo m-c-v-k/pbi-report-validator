@@ -6,7 +6,9 @@ branding:
   color: yellow
 
 # Credentials are never inputs. Pass them as environment variables on the
-# step instead: PBI_TENANT_ID, PBI_CLIENT_ID, PBI_CLIENT_SECRET.
+# step instead: PBI_TENANT_ID, PBI_CLIENT_ID, PBI_CLIENT_SECRET, and for
+# ai: api ANTHROPIC_API_KEY (optionally PBI_VALIDATE_AI_MODEL).
+# PBI_VALIDATE_AI=disabled on the step blocks ai: api.
 inputs:
   old:
     description: Old PBIP project or .Report folder, relative to the workspace.
@@ -53,6 +55,12 @@ inputs:
   show-data-values:
     description: With data, show row keys and values instead of masking them. The job summary and pull request comment then contain row-level data.
     default: "false"
+  ai:
+    description: Optional AI layer, off or api (needs ANTHROPIC_API_KEY; the key owner pays). api uses the -ai image variant.
+    default: "off"
+  allow-data-to-llm:
+    description: With ai api, allow row-level values in what is sent to the Anthropic API.
+    default: "false"
 
 outputs:
   json:
@@ -83,21 +91,25 @@ runs:
     # A version tag uses the published image of that version; any other ref
     # (a branch, a commit SHA or a local `uses: ./`) builds the image from
     # the action's own source, so the code that runs always matches the ref.
+    # ai: api uses the variant with the [ai] extra (tag suffix -ai).
     - name: Prepare image
       id: image
       shell: bash
       env:
         ACTION_REF: ${{ github.action_ref }}
         ACTION_PATH: ${{ github.action_path }}
+        IN_AI: ${{ inputs.ai }}
       run: |
+        extras="" suffix=""
+        if [[ "${IN_AI,,}" == api ]]; then extras=ai suffix=-ai; fi
         if [[ "$ACTION_REF" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
-          image="ghcr.io/m-c-v-k/pbi-report-validator:${BASH_REMATCH[1]}"
+          image="ghcr.io/m-c-v-k/pbi-report-validator:${BASH_REMATCH[1]}$suffix"
           echo "Using the published image $image"
           docker pull --quiet "$image"
         else
-          image="pbi-validate:local"
+          image="pbi-validate:local$suffix"
           echo "Building the image from source (ref '${ACTION_REF}' is not a version tag)"
-          docker build --quiet --tag "$image" "$ACTION_PATH"
+          docker build --quiet --build-arg "EXTRAS=$extras" --tag "$image" "$ACTION_PATH"
         fi
         echo "image=$image" >> "$GITHUB_OUTPUT"
 
@@ -121,4 +133,6 @@ runs:
         IN_ABS_TOL: ${{ inputs.abs-tol }}
         IN_REL_TOL: ${{ inputs.rel-tol }}
         IN_SHOW_DATA_VALUES: ${{ inputs.show-data-values }}
+        IN_AI: ${{ inputs.ai }}
+        IN_ALLOW_DATA_TO_LLM: ${{ inputs.allow-data-to-llm }}
       run: bash "$GITHUB_ACTION_PATH/action/run.sh"

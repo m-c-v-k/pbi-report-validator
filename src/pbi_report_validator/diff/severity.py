@@ -19,12 +19,14 @@ CATEGORY_SEVERITY: Final = {
     Category.MEASURE: Severity.WARNING,
     Category.PARSE_ISSUE: Severity.WARNING,
     Category.DATA: Severity.CRITICAL,
+    Category.AI: Severity.INFO,
 }
 # Changes that matter more or less than the default of their category.
 CHANGE_SEVERITY: Final = {
     (Category.PAGE, ChangeKind.REMOVED): Severity.CRITICAL,
     (Category.VISUAL, ChangeKind.REMOVED): Severity.CRITICAL,
     (Category.VISUAL, ChangeKind.RETYPED): Severity.WARNING,
+    (Category.FILTER, ChangeKind.RETYPED): Severity.INFO,
     (Category.MEASURE, ChangeKind.ADDED): Severity.INFO,
     (Category.MEASURE, ChangeKind.MODIFIED): Severity.CRITICAL,
     (Category.DATA, ChangeKind.ERROR): Severity.WARNING,

@@ -13,6 +13,8 @@ from pbi_report_validator.diff.structural import (
 )
 from pbi_report_validator.diff.view import build_page_views
 from pbi_report_validator.domain.models import (
+    AiMode,
+    AiSettings,
     Category,
     ChangeKind,
     DataSettings,
@@ -24,6 +26,7 @@ from pbi_report_validator.domain.models import (
     Severity,
 )
 from pbi_report_validator.domain.raw import RawProject
+from pbi_report_validator.integrations.anthropic_client import LlmClient
 from pbi_report_validator.integrations.files import load_project, write_text
 from pbi_report_validator.integrations.templates import read_template
 from pbi_report_validator.matching.matcher import match_reports
@@ -36,6 +39,7 @@ from pbi_report_validator.reporting.terminal import (
     format_data_failure,
     format_failure,
 )
+from pbi_report_validator.services.ai import with_explanations, with_match_suggestions
 from pbi_report_validator.services.data_validation import (
     InvalidDataOptionsError,
     QueryRunner,
@@ -50,6 +54,8 @@ def validate(
     new_path: Path,
     settings: DataSettings | None = None,
     runner: QueryRunner | None = None,
+    ai: AiSettings | None = None,
+    llm: LlmClient | None = None,
 ) -> DiffResult:
     """Compare two PBIP projects structurally and, optionally, their data.
 
@@ -59,6 +65,9 @@ def validate(
         settings: Datasets and tolerance for data validation; ``None``
             skips it.
         runner: Runs the DAX queries; needed together with ``settings``.
+        ai: The AI settings, recorded in the result; ``None`` is AI off.
+        llm: Answers AI prompts; with ``ai.match`` it adds rename
+            suggestions, with ``ai.explain`` explanations of findings.
 
     Returns:
         All findings, including parse issues of either version.
@@ -91,20 +100,31 @@ def validate(
         )
         findings += [f for c in comparisons for f in c.findings]
     logger.info("Found %d findings", len(findings))
-    return DiffResult(
+    result = DiffResult(
         old_source=old_path.as_posix(),
         new_source=new_path.as_posix(),
         findings=tuple(findings),
         pages=build_page_views(match, findings),
         data=tuple(sorted((c.summary for c in comparisons), key=lambda s: s.path)),
         data_values_shown=settings is not None and settings.show_values,
+        ai_mode=ai.mode if ai else AiMode.OFF,
+        ai_model=ai.model if ai else None,
     )
+    if ai and llm and ai.match:
+        result = with_match_suggestions(result, llm, ai.allow_data)
+    if ai and llm and ai.explain:
+        threshold = Severity(ai.explain_from)
+        result = with_explanations(result, llm, ai.allow_data, threshold)
+    return result
 
 
 def failure_reasons(
     result: DiffResult, fail_on: Severity | None, fail_on_data_error: bool
 ) -> list[str]:
     """Why the run fails under ``--fail-on`` and ``--fail-on-data-error``.
+
+    Findings in the ``ai`` category never count: a failed AI call says
+    nothing about the reports, and the comparison itself is unaffected.
 
     Args:
         result: The diff result.
@@ -116,7 +136,8 @@ def failure_reasons(
         One message per rule that was triggered; empty when the run passes.
     """
     reasons = []
-    if fail_on is not None and (failing := at_least(result.findings, fail_on)):
+    counted = [f for f in result.findings if f.category != Category.AI]
+    if fail_on is not None and (failing := at_least(counted, fail_on)):
         reasons.append(format_failure(len(failing), fail_on))
     if fail_on_data_error and (unchecked := not_fully_validated(result.findings)):
         reasons.append(format_data_failure(len(unchecked)))

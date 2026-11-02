@@ -7,7 +7,7 @@
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
 
-**Status:** v0.2.0 – structural diff and data validation (`--data`, values masked by default), JSON, Markdown and HTML reports, and a GitHub Action with PR comments and `--fail-on`. See the [live demo report](https://m-c-v-k.github.io/pbi-report-validator/) and the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
+**Status:** v0.3.0 – structural diff and data validation (`--data`, values masked by default), JSON, Markdown and HTML reports, a GitHub Action with PR comments and `--fail-on`, and an optional AI layer (`--ai api`). See the [live demo report](https://m-c-v-k.github.io/pbi-report-validator/) and the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
 
 ## Why
 
@@ -28,13 +28,13 @@ Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 for you).
 Install the latest release as a command-line tool:
 
 ```bash
-uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.2.0
+uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.3.0
 ```
 
 Or run it once without installing:
 
 ```bash
-uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.2.0 pbi-validate --help
+uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.3.0 pbi-validate --help
 ```
 
 Each [GitHub release](https://github.com/m-c-v-k/pbi-report-validator/releases)
@@ -52,6 +52,10 @@ docker run --rm -v "$PWD:/work" ghcr.io/m-c-v-k/pbi-report-validator diff old ne
 
 To write `--json`, `--markdown` or `--html` files into the mounted folder on Linux,
 add `--user "$(id -u):$(id -g)"` so the files are owned by you.
+
+The image does not include the optional AI extra. From v0.3.0, releases also
+publish a variant with it, tagged with the suffix `-ai` (`<version>-ai` and
+`latest-ai`); see [AI options](#ai-options-optional---ai).
 
 ## Quick start
 
@@ -72,7 +76,7 @@ or the `.Report` folder itself. The terminal always shows a summary; add any of:
 |---|---|
 | `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
 | `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
-| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.4) |
+| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.7) |
 
 Running it on the sample reports in this repository gives:
 
@@ -113,7 +117,7 @@ fully validated.
 |---|---|
 | `0` | The comparison ran (with or without differences), and neither `--fail-on` nor `--fail-on-data-error` was triggered |
 | `1` | A project could not be loaded, an output file could not be written, or data validation could not run |
-| `2` | Invalid options |
+| `2` | Invalid options, including `--ai api` when AI is disabled or not set up |
 | `3` | At least one finding at or above the `--fail-on` severity, or (with `--fail-on-data-error`) data that was not fully validated |
 
 ### What it compares
@@ -133,7 +137,7 @@ Every finding has a severity:
 |---|---|
 | `critical` | Data differences, removed pages and visuals, added/removed/changed filters and slicer selections, changed measure expressions |
 | `warning` | Changed visual type, changed fields, renamed or removed measures, parse issues, visuals whose data could not be validated |
-| `info` | Added pages, visuals and measures, moved or reordered pages and visuals, renamed pages, changed titles |
+| `info` | Added pages, visuals and measures, moved or reordered pages and visuals, renamed pages, changed titles, filters that only changed type |
 
 ### Limitations
 
@@ -143,6 +147,11 @@ Every finding has a severity:
   workspace; see its own limitations below
 - A visual moved to a different page shows as removed on one page and added
   on the other
+- Filters the parser cannot read (such as relative date or "contains") are
+  compared on their raw definition, so findings show JSON, and a renamed
+  measure inside one shows as a change. With `--data`, every visual such a
+  filter applies to is `not_validated`: one at report level covers the whole
+  report, and fails the run with `--fail-on warning`
 
 ### Data validation (optional, `--data`)
 
@@ -202,6 +211,55 @@ principal; slicer interactions edited in Power BI and slicers synced from
 other pages are not taken into account; the API allows about 120 queries a
 minute (40 on Pro/PPU), and each visual needs two.
 
+### AI options (optional, `--ai`)
+
+The AI layer is **off by default**, and nothing in the tool needs it.
+`--ai api` checks the setup and records in every output that AI was on;
+the features below each need their own flag, and they can be combined.
+
+| Flag (with `--ai api`) | What it adds |
+|---|---|
+| `--ai-match` | Rename suggestions: for removed and added pages, visuals and measures that the deterministic matcher could not pair (for example a measure that was renamed *and* edited), the model suggests which one probably became which. Each suggestion shows next to both findings as `AI-generated: probably renamed to …` with a confidence and a reason, and is listed in `ai_suggestions` in the JSON with `"source": "ai"`. Findings and severities never change. One request per run, and none when nothing can be paired. |
+| `--ai-explain` | Plain-language explanations: each finding at or above `--ai-explain-from` (`info`, `warning` or `critical`; default `warning`) gets one or two sentences a tester understands, shown under the finding as `AI-generated: …` and stored as `explanation` with `"source": "ai"` on the finding in the JSON. One request per run for at most 50 findings, the most severe first. Findings and severities never change. |
+
+| `--ai` | What happens |
+|---|---|
+| `off` (default) | No AI. Nothing is imported, read or sent. |
+| `api` | Uses the Anthropic API with **your own key**. The key owner pays for use; this project never calls the API itself. |
+
+Setup for `api`:
+
+```bash
+uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator@v0.3.0"
+export ANTHROPIC_API_KEY=...
+pbi-validate diff ./old ./new --ai api
+```
+
+- The model defaults to the latest Claude model (`claude-opus-5-5`). Set
+  `PBI_VALIDATE_AI_MODEL` to use another one.
+- **What is sent:** metadata only, such as page and visual names, field
+  references, filter definitions, measure expressions and counts from the
+  data comparison. Row keys and values from `--data` are never sent unless
+  you also pass `--allow-data-to-llm` (stderr then shows a warning): data
+  findings go out as "visual X: data modified", without row keys, values or
+  engine messages, even when `--show-data-values` is on.
+- **Labelling:** every report made with `--ai api` says so and names the
+  model (`ai_mode` and `ai_model` in the JSON). AI-written text is marked
+  `AI-generated`; the findings themselves always come from the
+  deterministic comparison.
+- **Errors:** `--ai api` without the extra or without `ANTHROPIC_API_KEY`
+  stops before the run with exit code 2 and a setup hint. If an AI call
+  fails during a run (network, rate limit, a refused or empty answer), that
+  becomes an `info` finding in the `ai` category, and the rest of the
+  result is produced as usual. Findings in the `ai` category never count
+  for `--fail-on`, so an outage cannot fail a CI run.
+- **Default and kill switch:** `PBI_VALIDATE_AI=off|api` sets the default
+  when `--ai` is not given. `PBI_VALIDATE_AI=disabled` blocks AI whatever
+  the flags say: `--ai api` then fails with exit code 2. Set it in a CI
+  template or a machine's environment to enforce "no AI".
+- The default Docker image does not include the AI extra; use the `-ai`
+  image variant (see [Docker](#docker)) or the action input `ai: api`.
+
 ## GitHub Action
 
 Run the diff in any repository's workflow, with no Python setup. The
@@ -210,7 +268,7 @@ from v0.2.0:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: m-c-v-k/pbi-report-validator@v0.2.0
+- uses: m-c-v-k/pbi-report-validator@v0.3.0
   with:
     old: reports/v1        # paths relative to the workspace
     new: reports/v2
@@ -256,6 +314,23 @@ To fail the step, set `fail-on` (`info`, `warning` or `critical`) and, with
 `data: true`, `fail-on-data-error: true`; they work as the CLI options of the
 same name. Outputs are still set when the step fails.
 
+To turn on the AI layer, set `ai: api` and pass your key as an environment
+variable (never as an input); the key owner pays for use. The action then
+runs the `-ai` image variant. `allow-data-to-llm: true` works as the CLI
+option and needs `ai: api`. `PBI_VALIDATE_AI` and `PBI_VALIDATE_AI_MODEL`
+are passed on too, so `PBI_VALIDATE_AI: disabled` (for example from an
+organisation variable) blocks `ai: api`:
+
+```yaml
+- uses: m-c-v-k/pbi-report-validator@v0.3.0
+  env:
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  with:
+    old: reports/v1
+    new: reports/v2
+    ai: api
+```
+
 Outputs: `json`, `html` and `markdown` (paths), `findings`, and the counts
 `critical`, `warning` and `info`. All inputs are listed in
 [`action.yml`](action.yml).
@@ -264,7 +339,7 @@ The action needs a Linux runner with Docker (such as `ubuntu-latest`) and
 cannot run inside a job `container:`. Input and output paths must be
 relative to the workspace or lie inside it or `$RUNNER_TEMP`.
 
-**Versions.** Pin a full version tag such as `@v0.2.0`; it runs the
+**Versions.** Pin a full version tag such as `@v0.3.0`; it runs the
 published image of that version. Before 1.0, minor versions can change the
 output, so there is no moving `@v0` tag. Dependabot (`package-ecosystem:
 github-actions`) can keep the tag up to date. Organisations that require it
@@ -280,8 +355,11 @@ commit, which takes about a minute longer.
   Query results stay in memory and are never logged or sent anywhere else.
   The output files contain only masked rows unless you pass
   `--show-data-values` (action input `show-data-values: true`).
-- The optional AI layer only receives metadata (field names, filter
-  definitions), never row-level data, unless you explicitly opt in.
+- The optional AI layer (`--ai api`, off by default) sends only metadata
+  (names, field references, filter definitions, counts) to the Anthropic
+  API with your own key. Row-level data is sent only with
+  `--allow-data-to-llm` (action input `allow-data-to-llm: true`).
+  `PBI_VALIDATE_AI=disabled` blocks AI entirely.
 
 ## Development
 
