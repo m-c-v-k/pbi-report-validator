@@ -9,7 +9,7 @@ from pbi_report_validator.domain.models import (
     Finding,
     Severity,
 )
-from pbi_report_validator.reporting.markdown import escape, to_markdown
+from pbi_report_validator.reporting.markdown import NO_MENTION, escape, to_markdown
 
 
 def finding(path: str, **kwargs: str | None) -> Finding:
@@ -124,6 +124,13 @@ def test_ai_mode_is_stated_only_when_on() -> None:
 
     assert "AI:" not in to_markdown(off)
     assert "AI: api (claude-x)." in to_markdown(on)
+
+
+def test_finding_messages_cannot_mention_users() -> None:
+    text = to_markdown(result(finding("p/v", message="Visual 'Ask @data-team' moved")))
+
+    assert "@data-team" not in text
+    assert f"Ask {NO_MENTION}data-team" in text
 
 
 def test_ai_notes_cannot_mention_users() -> None:
