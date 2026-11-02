@@ -17,9 +17,9 @@ reason instead of a query that might return the wrong numbers.
 
 Known limitations: slicer interactions edited in Power BI ("edit
 interactions") and slicers synced from other pages are not taken into
-account. Like a visual,
-``SUMMARIZECOLUMNS`` leaves out rows where every value is blank, so such a
-row shows as missing rather than as blank in a data comparison.
+account. Like a visual, ``SUMMARIZECOLUMNS`` leaves out rows where every
+value is blank, so such a row shows as missing rather than as blank in a
+data comparison.
 """
 
 import re

@@ -188,6 +188,33 @@ def test_changed_field_is_a_finding_even_without_a_condition() -> None:
     ]
 
 
+def test_changed_field_with_an_equal_condition_is_a_finding() -> None:
+    old = card(bikes(), "Categorical", field="Category")
+    new = card(bikes(), "Categorical", field="Region")
+
+    assert diff(old, new) == [
+        (ChangeKind.MODIFIED, Severity.CRITICAL, "Sales[Category]", "Sales[Region]")
+    ]
+
+
+def test_renamed_measure_inside_an_unread_filter_shows_as_a_change() -> None:
+    def on_measure(name: str) -> dict[str, Any]:
+        query = contains("x")
+        measure = {"Expression": {"SourceRef": {"Source": "s"}}, "Property": name}
+        query["Where"][0]["Condition"]["Contains"]["Left"] = {"Measure": measure}
+        return card(query)
+
+    renames = {"Sales[Margin]": "Sales[Gross Margin]"}
+    findings = diff_content(
+        report(on_measure("Margin")),
+        report(on_measure("Gross Margin")),
+        ReportMatch(),
+        renames,
+    )
+
+    assert [f.change for f in findings] == [ChangeKind.MODIFIED]
+
+
 def test_renamed_measure_field_is_not_a_field_change() -> None:
     old = report(card(None, field="Margin"))
     new = report(card(None, field="Gross Margin"))
