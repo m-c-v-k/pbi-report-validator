@@ -1,3 +1,5 @@
+import pytest
+
 from pbi_report_validator.domain.models import FieldKind, FieldRef, Position, Projection
 from pbi_report_validator.domain.raw import RawJsonFile, RawPage, RawReport
 from pbi_report_validator.integrations.files import load_project
@@ -195,15 +197,21 @@ def test_pages_sorted_by_name_without_pages_json() -> None:
     assert [p.name for p in parse_report(report_with_pages(*pages)).pages] == ["a", "b"]
 
 
-def test_non_string_page_order_entries_are_ignored() -> None:
+@pytest.mark.parametrize("order", ["ba", {"b": 0, "a": 1}, [1, None, "b"], 7])
+def test_malformed_page_order_falls_back_to_name_order_with_an_issue(
+    order: object,
+) -> None:
     pages = (
-        RawPage(name="a", page=page_json("a")),
         RawPage(name="b", page=page_json("b")),
+        RawPage(name="a", page=page_json("a")),
     )
 
-    report = parse_report(report_with_pages(*pages, order=[1, None, "b"]))
+    report = parse_report(report_with_pages(*pages, order=order))
 
-    assert [p.name for p in report.pages] == ["b", "a"]
+    assert [p.name for p in report.pages] == ["a", "b"]
+    assert [(i.path, i.message) for i in report.issues] == [
+        ("pages.json", "pageOrder is not a list of page names; pages sorted by name")
+    ]
 
 
 def title_body(value: object) -> dict[str, object]:
