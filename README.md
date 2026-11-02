@@ -137,7 +137,7 @@ Every finding has a severity:
 |---|---|
 | `critical` | Data differences, removed pages and visuals, added/removed/changed filters and slicer selections, changed measure expressions |
 | `warning` | Changed visual type, changed fields, renamed or removed measures, parse issues, visuals whose data could not be validated |
-| `info` | Added pages, visuals and measures, moved or reordered pages and visuals, renamed pages, changed titles |
+| `info` | Added pages, visuals and measures, moved or reordered pages and visuals, renamed pages, changed titles, filters that only changed type |
 
 ### Limitations
 

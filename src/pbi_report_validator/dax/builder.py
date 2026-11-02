@@ -16,8 +16,8 @@ that cannot be translated faithfully gives an ``UnsupportedQuery`` with a
 reason instead of a query that might return the wrong numbers.
 
 Known limitations: slicer interactions edited in Power BI ("edit
-interactions"), slicers synced from other pages and filter cards that
-could not be parsed are not taken into account. Like a visual,
+interactions") and slicers synced from other pages are not taken into
+account. Like a visual,
 ``SUMMARIZECOLUMNS`` leaves out rows where every value is blank, so such a
 row shows as missing rather than as blank in a data comparison.
 """
@@ -145,6 +145,12 @@ def _conditions(
 ) -> list[Condition]:
     """Active conditions in scope, splitting ``AllCondition`` into its items."""
     filters = [*report_filters, *page.filters, *visual.filters]
+    for card in filters:
+        if card.unread is not None:
+            raise UnsupportedError(f"filter {card.name} could not be read")
+    for other in page.visuals:
+        if other.name != visual.name and other.slicer and other.slicer.unread:
+            raise UnsupportedError(f"slicer {other.name} could not be read")
     found = [f.expression for f in filters if f.expression is not None]
     found += [
         other.slicer.expression

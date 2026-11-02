@@ -137,7 +137,10 @@ class Filter(DomainModel):
     ``condition`` is a normalised, human-readable form of the filter
     expression (for example ``Product[Category] in ('Bikes', 'Clothing')``),
     or ``None`` when the filter card has no active condition. ``expression``
-    is the same condition in structured form, used to build DAX.
+    is the same condition in structured form, used to build DAX. ``unread``
+    is the normalised raw definition of a condition the parser does not
+    understand, so ``None`` in ``condition`` alone means no active filter
+    only when ``unread`` is ``None`` too.
     """
 
     name: str
@@ -146,6 +149,7 @@ class Filter(DomainModel):
     field: FieldRef | None = None
     condition: str | None = None
     expression: Condition | None = None
+    unread: str | None = None
 
 
 class SlicerState(DomainModel):
@@ -154,6 +158,7 @@ class SlicerState(DomainModel):
     field: FieldRef | None = None
     condition: str | None = None
     expression: Condition | None = None
+    unread: str | None = None
 
 
 class Position(DomainModel):

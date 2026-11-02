@@ -5,9 +5,12 @@ Filter conditions are stored in PBIR as small query-language trees
 models (used to build DAX) and rendered from those to a normalised,
 readable string such as ``Product[Category] in ('Bikes', 'Clothing')``,
 which is what the diff compares and the reports show. Rendering from the
-structured form keeps the two in agreement.
+structured form keeps the two in agreement. A condition that cannot be
+parsed keeps a normalised copy of its raw definition, so it can still be
+compared.
 """
 
+import json
 import re
 from typing import Any, Literal, NamedTuple, assert_never, cast
 
@@ -63,7 +66,7 @@ def parse_filters(
     Returns:
         The filters in file order, and a message for each filter that could
         not be fully parsed. Such filters are still returned, with
-        ``condition=None``.
+        ``condition=None`` and their definition in ``unread``.
     """
     config = container.get("filterConfig") if isinstance(container, dict) else None
     entries = config.get("filters", []) if isinstance(config, dict) else []
@@ -93,11 +96,13 @@ def parse_slicer_state(
     """
     if body.get("visualType") != "slicer":
         return None, []
-    expression, problem = _parse_or_problem(_slicer_query(body), "slicer selection")
+    query = _slicer_query(body)
+    expression, problem = _parse_or_problem(query, "slicer selection")
     state = SlicerState(
         field=field_hint,
         condition=render(expression) if expression else None,
         expression=expression,
+        unread=_unread_form(query) if problem else None,
     )
     return state, [problem] if problem else []
 
@@ -208,7 +213,8 @@ def _parse_filter(
     entry: dict[str, Any], level: FilterLevel
 ) -> tuple[Filter, str | None]:
     name = str(entry.get("name", ""))
-    expression, problem = _parse_or_problem(entry.get("filter"), f"filter {name}")
+    query = entry.get("filter")
+    expression, problem = _parse_or_problem(query, f"filter {name}")
     parsed = Filter(
         name=name,
         level=level,
@@ -216,6 +222,7 @@ def _parse_filter(
         filter_type=str(entry.get("type", "Unknown")),
         condition=render(expression) if expression else None,
         expression=expression,
+        unread=_unread_form(query) if problem else None,
     )
     return parsed, problem
 
@@ -226,6 +233,40 @@ def _parse_or_problem(query: Any, label: str) -> tuple[Condition | None, str | N
         return parse_condition(query), None
     except UnsupportedConditionError as exc:
         return None, f"{label}: unsupported condition ({exc})"
+
+
+def _unread_form(query: Any) -> str:
+    """The ``Where`` of a query as stable JSON, independent of alias names."""
+    sources = _sources(query.get("From"))
+    where = _canonical(query.get("Where"), sources)
+    return json.dumps(where, sort_keys=True, ensure_ascii=False)
+
+
+def _canonical(node: Any, sources: _Sources) -> Any:
+    if isinstance(node, list):
+        return [_canonical(item, sources) for item in node]
+    if not isinstance(node, dict):
+        return node
+    return {
+        key: _canonical_source(value, sources)
+        if key == "SourceRef"
+        else _canonical(value, sources)
+        for key, value in node.items()
+    }
+
+
+def _canonical_source(reference: Any, sources: _Sources) -> Any:
+    """A source reference with its alias replaced by what the alias stands for."""
+    alias = reference.get("Source") if isinstance(reference, dict) else None
+    if not isinstance(alias, str):
+        return reference
+    if alias in sources.tables:
+        return {"Entity": sources.tables[alias]}
+    if alias in sources.subqueries:
+        query = sources.subqueries[alias]
+        body = {k: v for k, v in query.items() if k not in ("From", "Version")}
+        return {"Subquery": _canonical(body, _sources(query.get("From")))}
+    return reference
 
 
 def _slicer_query(body: dict[str, Any]) -> Any:
