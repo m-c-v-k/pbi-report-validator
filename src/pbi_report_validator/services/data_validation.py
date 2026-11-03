@@ -38,6 +38,7 @@ from pbi_report_validator.integrations.config import load_powerbi_config
 from pbi_report_validator.integrations.powerbi import (
     MAX_RESULT_ROWS,
     MAX_RESULT_VALUES,
+    NEAR_RESULT_SIZE_LIMIT_BYTES,
     QueryError,
     RateLimitError,
     ServiceError,
@@ -275,7 +276,7 @@ def _failure_reason(exc: Exception, show_values: bool) -> str:
 
 
 def _truncation_reason(old: QueryResult, new: QueryResult) -> str | None:
-    """Why a result may be incomplete; the API cuts it off without an error."""
+    """Why a result may be incomplete, even if the API reported no error."""
     sides = [
         label for label, result in (("old", old), ("new", new)) if _at_api_limit(result)
     ]
@@ -283,14 +284,23 @@ def _truncation_reason(old: QueryResult, new: QueryResult) -> str | None:
         return None
     return (
         f"the {' and '.join(sides)} result reached the API limit of "
-        f"{MAX_RESULT_ROWS:,} rows or {MAX_RESULT_VALUES:,} values "
+        f"{MAX_RESULT_ROWS:,} rows, {MAX_RESULT_VALUES:,} values or 15 MB "
         "and may be cut off"
     )
 
 
 def _at_api_limit(result: QueryResult) -> bool:
-    rows = len(result.rows)
-    return rows >= MAX_RESULT_ROWS or rows * len(result.columns) >= MAX_RESULT_VALUES
+    """Whether the result may have been cut off by one of the API's limits.
+
+    The value limit counts as reached when one more row would not fit, since
+    the API returns only whole rows: 90,909 rows of 11 columns can be a cut.
+    """
+    rows, columns = len(result.rows), len(result.columns)
+    return (
+        rows >= MAX_RESULT_ROWS
+        or (rows + 1) * columns > MAX_RESULT_VALUES
+        or result.response_bytes >= NEAR_RESULT_SIZE_LIMIT_BYTES
+    )
 
 
 def _comparable_queries(
