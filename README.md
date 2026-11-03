@@ -176,9 +176,12 @@ fully validated.
 - Fields per visual, including role and aggregation
 - Filters at report, page and visual level; slicer selections
 - Measures in the semantic model (TMDL): added, removed, expression changed,
-  renamed (detected by identical expression)
-- Files that cannot be parsed are reported as findings instead of stopping
-  the run
+  renamed (detected by identical expression). When a version has no TMDL
+  model to read (a report connected to a published model, a missing model
+  folder, or a model saved as `model.bim`), a warning says measures were not
+  compared and why.
+- Files that cannot be parsed, `.tmdl` files included, are reported as
+  findings instead of stopping the run
 
 Every finding has a severity:
 
