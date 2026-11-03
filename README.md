@@ -233,11 +233,15 @@ service principal and uses the Power BI REST API `executeQueries` endpoint,
 so it runs in CI without Windows-only drivers:
 
 1. Register an app in Microsoft Entra ID and create a client secret.
-2. In the Power BI admin portal, enable *Allow service principals to use
-   Power BI APIs* and *Dataset Execute Queries REST API* (for the app or a
-   security group that contains it).
+2. In the Power BI admin portal, enable *Service principals can call Fabric
+   public APIs* (Developer settings) and *Semantic Model Execute Queries REST
+   API* (Integration settings). Older portals call them *Allow service
+   principals to use Power BI APIs* and *Dataset Execute Queries REST API*.
+   If you limit a setting to a security group, the service principal itself
+   must be a member of that group. Changes can take about 15 minutes to apply.
 3. Add the app to the workspace(s) that hold both semantic models, with at
-   least Contributor rights (it needs read and build permission).
+   least Contributor rights (it needs read and build permission). This can't
+   be *My workspace*, because an app can't be added to it.
 4. Provide the credentials as environment variables (`.env.example` lists
    them; never commit them):
 
@@ -246,10 +250,17 @@ so it runs in CI without Windows-only drivers:
    ```
 
 The dataset id is the GUID in the semantic model's URL in the Power BI
-service (`.../datasets/<id>/...`).
+service: `.../datasets/<id>/...`, `.../modeling/<id>/...` or
+`.../dataset/<id>/overview`.
 
 If sign-in fails or a dataset id is wrong, the run stops with exit code 1
-and no output files are written; fix the setup and run it again.
+and no output files are written; fix the setup and run it again. A `401
+Unauthorized` after a successful sign-in usually means the tenant setting
+from step 2 blocks the app: the setting is off, it hasn't applied yet, or
+the app is not in the allowed group. The API then sends
+`ServicePrincipalIsNotAllowedByTenantAdminSwitch` in the
+`x-powerbi-error-info` response header, which the tool doesn't show yet
+([#231](https://github.com/m-c-v-k/pbi-report-validator/issues/231)).
 
 Limitations: models with row-level security can't be queried by a service
 principal; slicer interactions edited in Power BI and slicers synced from
@@ -464,10 +475,17 @@ tests/             # Mirrors src/, plus sample reports in fixtures/ and expected
 
 - Only the PBIR report format; the legacy `report.json` and `.pbix` files are
   not supported (save as `.pbip` with PBIR enabled)
-- Data validation (`--data`) has only been tested against simulated API
-  responses, not yet against a live workspace
+- Data validation (`--data`) has been run against live published models once,
+  with the sample reports. CI still uses simulated API responses until
+  recorded ones are added
   ([#66](https://github.com/m-c-v-k/pbi-report-validator/issues/66)); see
   [its own limitations](#data-validation-optional---data)
+- Comparing published reports needs local copies, saved as `.pbip` from Power
+  BI Desktop ([#232](https://github.com/m-c-v-k/pbi-report-validator/issues/232)
+  would fetch them through the API). Reports with a `byConnection` reference
+  in `definition.pbir` skip the measure comparison, and with `--data` a
+  renamed measure then can't be paired, even with the model folder next to
+  the report ([#233](https://github.com/m-c-v-k/pbi-report-validator/issues/233))
 - A visual moved to a different page shows as removed on one page and added
   on the other
 - Filters the parser cannot read (such as relative date or "contains") are
