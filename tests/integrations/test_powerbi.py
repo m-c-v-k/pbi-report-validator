@@ -6,7 +6,6 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from pbi_report_validator.domain.models import QueryResult
 from pbi_report_validator.integrations import powerbi
 from pbi_report_validator.integrations.config import PowerBIConfig
 from pbi_report_validator.integrations.powerbi import (
@@ -72,10 +71,8 @@ def test_query_returns_columns_and_rows_in_order() -> None:
 
     result = pbi.execute_query(DATASET, DAX)
 
-    assert result == QueryResult(
-        columns=("Date[Month]", "[Total Sales]"),
-        rows=(("2025-01", 1280.0), ("2025-02", None)),
-    )
+    assert result.columns == ("Date[Month]", "[Total Sales]")
+    assert result.rows == (("2025-01", 1280.0), ("2025-02", None))
     sent = requests[0]
     assert str(sent.url) == f"{API_BASE_URL}datasets/{DATASET}/executeQueries"
     assert sent.headers["Authorization"] == "Bearer test-token"
@@ -84,6 +81,14 @@ def test_query_returns_columns_and_rows_in_order() -> None:
         "queries": [{"query": DAX}],
         "serializerSettings": {"includeNulls": True},
     }
+
+
+def test_result_records_the_response_size() -> None:
+    response = ok_rows({"[A]": 1})
+
+    result = client(response).execute_query(DATASET, DAX)
+
+    assert result.response_bytes == len(response.content) > 0
 
 
 def test_columns_missing_in_some_rows_become_none() -> None:
@@ -96,7 +101,9 @@ def test_columns_missing_in_some_rows_become_none() -> None:
 
 
 def test_empty_result() -> None:
-    assert client(ok_rows()).execute_query(DATASET, DAX) == QueryResult()
+    result = client(ok_rows()).execute_query(DATASET, DAX)
+
+    assert (result.columns, result.rows) == ((), ())
 
 
 def test_dax_error_in_result_body_is_query_error() -> None:
@@ -246,7 +253,7 @@ def test_null_error_next_to_rows_is_ignored() -> None:
 
     result = client(httpx.Response(200, json=body)).execute_query(DATASET, DAX)
 
-    assert result == QueryResult(columns=("[Total]",), rows=((1.0,),))
+    assert (result.columns, result.rows) == (("[Total]",), ((1.0,),))
 
 
 class FakeMsalApp:

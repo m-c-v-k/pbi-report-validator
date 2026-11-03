@@ -14,11 +14,14 @@ class QueryResult(DomainModel):
 
     ``columns`` keeps the column names in the order the API returned them
     (e.g. ``Date[Month]``, ``[Total Sales]``); each row has one value per
-    column, ``None`` for blanks.
+    column, ``None`` for blanks. ``response_bytes`` is the size of the API
+    response the result came from (0 when unknown), used to spot results the
+    API cut off at its size limit without saying so.
     """
 
     columns: tuple[str, ...] = ()
     rows: tuple[tuple[CellValue, ...], ...] = ()
+    response_bytes: int = Field(default=0, ge=0)
 
 
 class DaxQuery(DomainModel):
