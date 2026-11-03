@@ -13,8 +13,11 @@ from pbi_report_validator.domain.models import (
     DataSettings,
     DataStatus,
     DaxQuery,
+    ParseIssue,
     QueryResult,
+    Report,
     Severity,
+    SlicerState,
     UnsupportedQuery,
 )
 from pbi_report_validator.integrations.powerbi import (
@@ -24,19 +27,26 @@ from pbi_report_validator.integrations.powerbi import (
     RateLimitError,
 )
 from pbi_report_validator.integrations.templates import read_template
+from pbi_report_validator.matching.matcher import match_reports
 from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
 from pbi_report_validator.reporting.markdown import to_markdown
 from pbi_report_validator.reporting.terminal import format_summary
 from pbi_report_validator.services.data_validation import (
+    LOST_PAGE,
+    LOST_VISUAL,
+    PAGE_PARTLY_PARSED,
+    SLICER_IN_ONE_VERSION,
+    VISUAL_PARTLY_PARSED,
     InvalidDataOptionsError,
     _comparable_queries,
     _pair_values,
     _truncation_reason,
     _with_unpaired,
     data_settings,
+    validate_data,
 )
 from pbi_report_validator.services.validate import validate
-from tests.factories import FIXTURES, REPO_ROOT
+from tests.factories import FIXTURES, REPO_ROOT, column, measure, page, report, visual
 
 OLD_DS = "11111111-1111-1111-1111-111111111111"
 NEW_DS = "22222222-2222-2222-2222-222222222222"
@@ -101,6 +111,65 @@ def test_fixture_pair_compares_every_non_slicer_visual() -> None:
         ("overview/chart_sales_by_month", DataStatus.DIFFERENT),
     ]
     assert data_findings == ["overview/chart_sales_by_month/data/row 2/[Total Sales]"]
+
+
+CARD = visual("card", fields=[measure("Total Sales")])
+SLICER = visual(
+    "slicer", "slicer", fields=[column("Year", "Date")], slicer=SlicerState()
+)
+
+
+def with_issues(base: Report, *issues: ParseIssue) -> Report:
+    return base.model_copy(update={"issues": issues})
+
+
+def issue(visual_path: str | None = None, page: str | None = None) -> ParseIssue:
+    return ParseIssue(path="x.json", message="m", visual_path=visual_path, page=page)
+
+
+def data_of(old: Report, new: Report) -> tuple[list[tuple[str, str | None]], int]:
+    """(path, reason) of each comparison, and how many queries ran."""
+    runner = FakeRunner()
+    comparisons = validate_data(
+        old, new, match_reports(old.pages, new.pages), {}, runner, SETTINGS
+    )
+    summaries = sorted((c.summary.path, c.summary.reason) for c in comparisons)
+    return summaries, len(runner.queries)
+
+
+def test_visual_with_a_parse_issue_is_not_validated() -> None:
+    old = report(page("p", CARD))
+    new = with_issues(old, issue("p/card"))
+
+    assert data_of(old, new) == ([("p/card", VISUAL_PARTLY_PARSED)], 0)
+
+
+def test_page_that_lost_a_visual_is_not_validated() -> None:
+    old = report(page("p", CARD, SLICER))
+    new = with_issues(report(page("p", CARD)), issue("p/slicer"))
+
+    assert data_of(old, new) == ([("p/card", PAGE_PARTLY_PARSED)], 0)
+
+
+def test_visual_lost_in_one_version_is_not_validated() -> None:
+    old = report(page("p", CARD))
+    new = with_issues(report(page("p")), issue("p/card"))
+
+    assert data_of(old, new) == ([("p/card", LOST_VISUAL.format(side="new"))], 0)
+
+
+def test_page_lost_in_one_version_is_not_validated() -> None:
+    old = with_issues(report(), issue(page="p"))
+    new = report(page("p", CARD, SLICER))
+
+    assert data_of(old, new) == ([("p/card", LOST_PAGE.format(side="old"))], 0)
+
+
+def test_visual_that_became_a_slicer_is_not_validated() -> None:
+    old = report(page("p", visual("v", fields=[measure("Total Sales")])))
+    new = report(page("p", SLICER.model_copy(update={"name": "v"})))
+
+    assert data_of(old, new) == ([("p/v", SLICER_IN_ONE_VERSION)], 0)
 
 
 def test_queries_go_to_the_right_dataset_and_use_new_measure_names() -> None:
