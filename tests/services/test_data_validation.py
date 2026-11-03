@@ -172,6 +172,46 @@ def test_visual_that_became_a_slicer_is_not_validated() -> None:
     assert data_of(old, new) == ([("p/v", SLICER_IN_ONE_VERSION)], 0)
 
 
+def test_visuals_without_fields_are_skipped() -> None:
+    decorations = [
+        visual(name, kind)
+        for name, kind in [
+            ("text", "textbox"),
+            ("logo", "image"),
+            ("box", "shape"),
+            ("nav", "pageNavigator"),
+            ("frame", "group"),
+        ]
+    ]
+    card = visual("card", "card", fields=[measure("Total Sales")])
+    both = report(page("p", card, *decorations))
+    runner = FakeRunner()
+
+    comparisons = validate_data(
+        both, both, match_reports(both.pages, both.pages), {}, runner, SETTINGS
+    )
+
+    assert [(c.summary.path, c.summary.status) for c in comparisons] == [
+        ("p/card", DataStatus.SAME)
+    ]
+    assert len(runner.queries) == 2
+
+
+def test_unsupported_visual_with_fields_is_still_not_validated() -> None:
+    custom = report(page("p", visual("c", "myCustomChart", fields=[measure("M")])))
+
+    comparisons = validate_data(
+        custom,
+        custom,
+        match_reports(custom.pages, custom.pages),
+        {},
+        FakeRunner(),
+        SETTINGS,
+    )
+
+    assert [c.summary.status for c in comparisons] == [DataStatus.NOT_VALIDATED]
+
+
 def test_queries_go_to_the_right_dataset_and_use_new_measure_names() -> None:
     runner = FakeRunner()
     run(runner)

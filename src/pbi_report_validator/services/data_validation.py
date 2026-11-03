@@ -121,11 +121,13 @@ def validate_data(
 ) -> list[DataComparison]:
     """Compare the data of every matched visual.
 
-    Slicers are skipped (they show no numbers of their own). A visual whose
-    query cannot be built or fails becomes a ``not_validated`` result, and
-    so does one that is incomplete because of a parse issue: its own, one
-    of another visual on its page (a lost slicer would leave its filter
-    out), or a parse error that lost it, or its page, in one version.
+    Slicers and visuals without fields in either version (text boxes,
+    images, shapes, buttons, groups) are skipped: they show no numbers of
+    their own. A visual whose query cannot be built or fails becomes a
+    ``not_validated`` result, and so does one that is incomplete because
+    of a parse issue: its own, one of another visual on its page (a lost
+    slicer would leave its filter out), or a parse error that lost it, or
+    its page, in one version.
 
     Raises:
         AuthenticationError: The service principal cannot sign in.
@@ -141,6 +143,8 @@ def validate_data(
         )
         for visual_match in page_match.visuals:
             if visual_match.old.slicer and visual_match.new.slicer:
+                continue
+            if not visual_match.old.projections and not visual_match.new.projections:
                 continue
             path = visual_path(page_match.old.name, visual_match.old.name)
             reason = _incomplete_reason(
