@@ -397,7 +397,15 @@ def test_partly_validated_visual_keeps_a_found_difference() -> None:
 FULL_RESULT = QueryResult(columns=("[A]",), rows=((1,),) * 100_000)
 SMALL_RESULT = QueryResult(columns=("[A]",), rows=((1,),))
 WIDE_RESULT = QueryResult(columns=tuple("ABCDE"), rows=((1, 2, 3, 4, 5),) * 200_000)
-CUT_OFF = "reached the API limit of 100,000 rows or 1,000,000 values and may be cut off"
+ELEVEN = tuple("ABCDEFGHIJK")
+# 90,909 rows of 11 columns: one more row would pass 1,000,000 values.
+ELEVEN_AT_LIMIT = QueryResult(columns=ELEVEN, rows=(tuple(range(11)),) * 90_909)
+ELEVEN_BELOW = QueryResult(columns=ELEVEN, rows=(tuple(range(11)),) * 90_908)
+LARGE_RESPONSE = SMALL_RESULT.model_copy(update={"response_bytes": 13_500_000})
+CUT_OFF = (
+    "reached the API limit of 100,000 rows, 1,000,000 values or 15 MB "
+    "and may be cut off"
+)
 
 
 @pytest.mark.parametrize(
@@ -407,6 +415,9 @@ CUT_OFF = "reached the API limit of 100,000 rows or 1,000,000 values and may be 
         (FULL_RESULT, SMALL_RESULT, f"the old result {CUT_OFF}"),
         (SMALL_RESULT, WIDE_RESULT, f"the new result {CUT_OFF}"),
         (FULL_RESULT, FULL_RESULT, f"the old and new result {CUT_OFF}"),
+        (ELEVEN_AT_LIMIT, SMALL_RESULT, f"the old result {CUT_OFF}"),
+        (ELEVEN_BELOW, SMALL_RESULT, None),
+        (SMALL_RESULT, LARGE_RESPONSE, f"the new result {CUT_OFF}"),
     ],
 )
 def test_truncation_reason(
