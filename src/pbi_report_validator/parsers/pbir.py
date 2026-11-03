@@ -22,7 +22,7 @@ from pbi_report_validator.domain.models import (
     Visual,
 )
 from pbi_report_validator.domain.raw import RawJsonFile, RawPage, RawReport
-from pbi_report_validator.parsers.pbir_fields import parse_field
+from pbi_report_validator.parsers.pbir_fields import parse_field, unknown_field
 from pbi_report_validator.parsers.pbir_filters import (
     parse_filters,
     parse_slicer_state,
@@ -204,7 +204,12 @@ def _title(body: dict[str, Any]) -> str | None:
 
 
 def _projections(body: dict[str, Any]) -> tuple[tuple[Projection, ...], list[str]]:
-    """The fields in each role, and a message for each field that was skipped."""
+    """The fields in each role, and a message for each field that was skipped.
+
+    Fields of a kind the parser cannot read are kept as unknown fields, so
+    the field diff still compares them; only entries that are not a field
+    object at all are skipped.
+    """
     query = body.get("query")
     query_state = query.get("queryState") if isinstance(query, dict) else None
     if not isinstance(query_state, dict):
@@ -214,7 +219,8 @@ def _projections(body: dict[str, Any]) -> tuple[tuple[Projection, ...], list[str
     for role, state in query_state.items():
         items = state.get("projections", []) if isinstance(state, dict) else []
         for item in items:
-            field = parse_field(item.get("field") if isinstance(item, dict) else None)
+            raw = item.get("field") if isinstance(item, dict) else None
+            field = parse_field(raw) or unknown_field(raw)
             if field is None:
                 problems.append(f"unrecognised field in role {role} was skipped")
             else:
