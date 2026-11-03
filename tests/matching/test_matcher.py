@@ -1,6 +1,8 @@
 import pytest
 
 from pbi_report_validator.domain.models import (
+    FieldKind,
+    FieldRef,
     MatchMethod,
     Page,
     Position,
@@ -95,6 +97,24 @@ def test_renamed_visual_is_matched_by_similarity() -> None:
     ]
     assert matches[1].score == 1.0
     assert (removed, added) == ([], [])
+
+
+def test_similarity_tells_aggregations_apart() -> None:
+    def card(name: str, agg: str, x: float) -> Visual:
+        amount = FieldRef(
+            table="Sales", name="Amount", kind=FieldKind.AGGREGATION, aggregation=agg
+        )
+        return factories.visual(name, "card", fields=[amount], x=x)
+
+    old = page("p", card("sum_old", "Sum", 0), card("avg_old", "Avg", 600))
+    new = page("p", card("avg_new", "Avg", 0), card("sum_new", "Sum", 600))
+
+    matches, _, _ = match_visuals(old, new)
+
+    assert sorted((m.old.name, m.new.name) for m in matches) == [
+        ("avg_old", "avg_new"),
+        ("sum_old", "sum_new"),
+    ]
 
 
 def test_dissimilar_visuals_stay_unmatched() -> None:

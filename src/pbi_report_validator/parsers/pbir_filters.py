@@ -150,7 +150,7 @@ def render(condition: Condition) -> str:
         return _render_in(condition)
     if isinstance(condition, ComparisonCondition):
         value = render_literal(condition.value)
-        return f"{condition.field.key} {condition.operator} {value}"
+        return f"{condition.field.aggregated_key} {condition.operator} {value}"
     if isinstance(condition, TopNCondition):
         return _render_top_n(condition)
     if isinstance(condition, NotCondition):
@@ -195,7 +195,7 @@ def parse_literal(raw: str) -> LiteralValue:
 
 
 def _render_in(condition: InCondition) -> str:
-    fields = [f.key for f in condition.fields]
+    fields = [f.aggregated_key for f in condition.fields]
     values = [", ".join(render_literal(v) for v in row) for row in condition.rows]
     target = fields[0] if len(fields) == 1 else f"({', '.join(fields)})"
     rendered = values if len(fields) == 1 else [f"({v})" for v in values]
@@ -203,10 +203,9 @@ def _render_in(condition: InCondition) -> str:
 
 
 def _render_top_n(condition: TopNCondition) -> str:
-    order = condition.order_by
-    by = f"{order.aggregation}({order.key})" if order.aggregation else order.key
     limit = f"{condition.direction} {condition.count}"
-    return f"{condition.field.key} {limit} by {by}"
+    by = condition.order_by.aggregated_key
+    return f"{condition.field.aggregated_key} {limit} by {by}"
 
 
 def _parse_filter(

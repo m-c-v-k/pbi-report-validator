@@ -10,7 +10,7 @@ import re
 from collections.abc import Mapping
 
 from pbi_report_validator.diff.severity import make_finding
-from pbi_report_validator.domain.helpers import visual_path
+from pbi_report_validator.domain.helpers import aggregated, visual_path
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -195,7 +195,8 @@ def _definition(item: Filter | SlicerState, renames: Mapping[str, str]) -> str |
 def _field_key(item: Filter, renames: Mapping[str, str]) -> str | None:
     if item.field is None:
         return None
-    return renames.get(item.field.key, item.field.key)
+    key = renames.get(item.field.key, item.field.key)
+    return aggregated(key, item.field.aggregation)
 
 
 def _rename_in(condition: str | None, renames: Mapping[str, str]) -> str | None:

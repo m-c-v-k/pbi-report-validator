@@ -176,7 +176,7 @@ def _match_by_key[T: (Page, Visual)](
 
 
 def _field_keys(visual: Visual) -> set[str]:
-    return {p.field.key for p in visual.projections}
+    return {p.field.aggregated_key for p in visual.projections}
 
 
 def _jaccard(a: set[str], b: set[str]) -> float:
