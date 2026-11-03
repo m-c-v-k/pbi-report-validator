@@ -60,6 +60,7 @@ from pbi_report_validator.domain.report import (
     Projection,
     Report,
     SlicerState,
+    TopNCondition,
     Visual,
 )
 from pbi_report_validator.domain.semantic import (
@@ -122,6 +123,7 @@ __all__ = [
     "SlicerState",
     "Table",
     "Tolerance",
+    "TopNCondition",
     "UnsupportedQuery",
     "ValuePairing",
     "Visual",
