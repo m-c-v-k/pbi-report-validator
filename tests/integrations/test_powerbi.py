@@ -200,6 +200,55 @@ def test_unreadable_response_is_service_error(response: httpx.Response) -> None:
         client(response).execute_query(DATASET, DAX)
 
 
+ROW_LIMIT = {"code": "X", "message": "More than 100000 rows in a query result"}
+PARTIAL = [{"[Total]": 1.0}]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"error": ROW_LIMIT, "results": [{"tables": [{"rows": PARTIAL}]}]},
+        {"results": [{"tables": [{"rows": PARTIAL, "error": ROW_LIMIT}]}]},
+    ],
+    ids=["response", "table"],
+)
+def test_error_next_to_partial_rows_is_query_error(body: dict[str, Any]) -> None:
+    with pytest.raises(QueryError, match="More than 100000 rows"):
+        client(httpx.Response(200, json=body)).execute_query(DATASET, DAX)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        [],
+        {"results": []},
+        {"results": [None]},
+        {"results": [{}]},
+        {"results": [{"tables": None}]},
+        {"results": [{"tables": []}]},
+        {"results": [{"tables": {}}]},
+        {"results": [{"tables": [None]}]},
+        {"results": [{"tables": ["text"]}]},
+        {"results": [{"tables": [{}]}]},
+        {"results": [{"tables": [{"rows": "text"}]}]},
+        {"results": [{"tables": [{"rows": {}}]}]},
+        {"results": [{"tables": [{"rows": [{"[A]": 1}, None]}]}]},
+        {"results": [{"tables": [{"rows": [[1]]}]}]},
+    ],
+)
+def test_malformed_result_is_service_error(body: Any) -> None:
+    with pytest.raises(ServiceError):
+        client(httpx.Response(200, json=body)).execute_query(DATASET, DAX)
+
+
+def test_null_error_next_to_rows_is_ignored() -> None:
+    body = {"error": None, "results": [{"error": None, "tables": [{"rows": PARTIAL}]}]}
+
+    result = client(httpx.Response(200, json=body)).execute_query(DATASET, DAX)
+
+    assert result == QueryResult(columns=("[Total]",), rows=((1.0,),))
+
+
 class FakeMsalApp:
     def __init__(self, result: dict[str, Any]) -> None:
         self.result = result

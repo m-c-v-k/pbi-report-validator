@@ -217,8 +217,9 @@ Limitations: models with row-level security can't be queried by a service
 principal; slicer interactions edited in Power BI and slicers synced from
 other pages are not taken into account; the API allows about 120 queries a
 minute (40 on Pro/PPU), and each visual needs two; a query returns at most
-100,000 rows or 1,000,000 values and is cut off without an error, so a
-visual whose result reaches that limit is reported as "not validated".
+100,000 rows or 1,000,000 values. Over that limit the API still answers
+with HTTP 200 and partial rows, so a visual whose result reaches the limit,
+or whose response carries an error, is reported as "not validated".
 
 ### AI options (optional, `--ai`)
 
