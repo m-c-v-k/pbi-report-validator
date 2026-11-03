@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from pbi_report_validator.domain.base import DomainModel
-from pbi_report_validator.domain.helpers import field_key
+from pbi_report_validator.domain.helpers import aggregated, field_key
 
 
 class FieldKind(StrEnum):
@@ -31,6 +31,11 @@ class FieldRef(DomainModel):
     def key(self) -> str:
         """DAX-style identifier, e.g. ``Sales[Total Sales]``."""
         return field_key(self.table, self.name)
+
+    @property
+    def aggregated_key(self) -> str:
+        """The key with its aggregation, if any, e.g. ``Sum(Sales[Amount])``."""
+        return aggregated(self.key, self.aggregation)
 
 
 class Projection(DomainModel):
