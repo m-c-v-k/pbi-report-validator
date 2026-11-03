@@ -24,6 +24,7 @@ from pbi_report_validator.integrations.powerbi import (
     RateLimitError,
 )
 from pbi_report_validator.integrations.templates import read_template
+from pbi_report_validator.matching.matcher import match_reports
 from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
 from pbi_report_validator.reporting.markdown import to_markdown
 from pbi_report_validator.reporting.terminal import format_summary
@@ -34,9 +35,10 @@ from pbi_report_validator.services.data_validation import (
     _truncation_reason,
     _with_unpaired,
     data_settings,
+    validate_data,
 )
 from pbi_report_validator.services.validate import validate
-from tests.factories import FIXTURES, REPO_ROOT
+from tests.factories import FIXTURES, REPO_ROOT, measure, page, report, visual
 
 OLD_DS = "11111111-1111-1111-1111-111111111111"
 NEW_DS = "22222222-2222-2222-2222-222222222222"
@@ -101,6 +103,46 @@ def test_fixture_pair_compares_every_non_slicer_visual() -> None:
         ("overview/chart_sales_by_month", DataStatus.DIFFERENT),
     ]
     assert data_findings == ["overview/chart_sales_by_month/data/row 2/[Total Sales]"]
+
+
+def test_visuals_without_fields_are_skipped() -> None:
+    decorations = [
+        visual(name, kind)
+        for name, kind in [
+            ("text", "textbox"),
+            ("logo", "image"),
+            ("box", "shape"),
+            ("nav", "pageNavigator"),
+            ("frame", "group"),
+        ]
+    ]
+    card = visual("card", "card", fields=[measure("Total Sales")])
+    both = report(page("p", card, *decorations))
+    runner = FakeRunner()
+
+    comparisons = validate_data(
+        both, both, match_reports(both.pages, both.pages), {}, runner, SETTINGS
+    )
+
+    assert [(c.summary.path, c.summary.status) for c in comparisons] == [
+        ("p/card", DataStatus.SAME)
+    ]
+    assert len(runner.queries) == 2
+
+
+def test_unsupported_visual_with_fields_is_still_not_validated() -> None:
+    custom = report(page("p", visual("c", "myCustomChart", fields=[measure("M")])))
+
+    comparisons = validate_data(
+        custom,
+        custom,
+        match_reports(custom.pages, custom.pages),
+        {},
+        FakeRunner(),
+        SETTINGS,
+    )
+
+    assert [c.summary.status for c in comparisons] == [DataStatus.NOT_VALIDATED]
 
 
 def test_queries_go_to_the_right_dataset_and_use_new_measure_names() -> None:
