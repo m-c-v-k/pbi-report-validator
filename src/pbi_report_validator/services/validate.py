@@ -82,8 +82,8 @@ def validate(
     old_project, new_project = load_project(old_path), load_project(new_path)
     old_report, old_model = _parse(old_project)
     new_report, new_model = _parse(new_project)
-    match = match_reports(old_report.pages, new_report.pages)
     measures = diff_measures(old_model, new_model)
+    match = match_reports(old_report.pages, new_report.pages, renames=measures.renames)
     structural = without_unparseable(
         diff_pages_and_visuals(match), old_report.issues, new_report.issues
     )

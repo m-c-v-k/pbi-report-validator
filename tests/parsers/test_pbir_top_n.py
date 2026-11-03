@@ -6,6 +6,7 @@ import pytest
 
 from pbi_report_validator.dax.builder import build_query
 from pbi_report_validator.diff.content import diff_content
+from pbi_report_validator.domain.conditions import render
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
@@ -22,7 +23,6 @@ from pbi_report_validator.parsers.pbir_filters import (
     UnsupportedConditionError,
     parse_condition,
     parse_filters,
-    render,
 )
 from tests import factories
 

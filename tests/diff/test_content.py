@@ -1,13 +1,18 @@
 from pbi_report_validator.diff.content import diff_content
 from pbi_report_validator.diff.measures import diff_measures
 from pbi_report_validator.diff.structural import diff_pages_and_visuals
+from pbi_report_validator.domain.conditions import render
 from pbi_report_validator.domain.models import (
+    AllCondition,
     Category,
     ChangeKind,
+    ComparisonCondition,
     FieldKind,
     FieldRef,
     Filter,
     FilterLevel,
+    LiteralKind,
+    LiteralValue,
     Projection,
     Report,
     SlicerState,
@@ -152,23 +157,71 @@ def test_filter_on_another_aggregation_is_a_filter_change() -> None:
     ]
 
 
+def gt(
+    name: str,
+    measure: str,
+    value: str = "0",
+    table: str = "Sales",
+    level: FilterLevel = FilterLevel.VISUAL,
+) -> Filter:
+    """A parsed filter ``Table[measure] > value``, as the parser builds it."""
+    expression = ComparisonCondition(
+        field=FieldRef(table=table, name=measure, kind=FieldKind.MEASURE),
+        operator=">",
+        value=LiteralValue(kind=LiteralKind.NUMBER, value=value),
+    )
+    return factories.filter_card(
+        expression, name=name, condition=render(expression), level=level
+    )
+
+
 def test_renamed_measure_references_are_not_reported() -> None:
     old = report(
         visual(
             Projection(role="Values", field=field("Margin %")),
-            filters=(flt("f", "Sales[Margin %] > 0"),),
+            filters=(gt("f", "Margin %"),),
         ),
-        filters=(flt("r", "Sales[Margin %] > 1", FilterLevel.REPORT),),
+        filters=(gt("r", "Margin %", "1", level=FilterLevel.REPORT),),
     )
     new = report(
         visual(
             Projection(role="Values", field=field("Gross Margin %")),
-            filters=(flt("f", "Sales[Gross Margin %] > 0"),),
+            filters=(gt("f", "Gross Margin %"),),
         ),
-        filters=(flt("r", "Sales[Gross Margin %] > 1", FilterLevel.REPORT),),
+        filters=(gt("r", "Gross Margin %", "1", level=FilterLevel.REPORT),),
     )
 
     assert content(old, new, RENAMES) == []
+
+
+def test_new_visual_still_using_the_old_name_is_reported() -> None:
+    old = report(visual(Projection(role="Values", field=field("Margin %"))))
+    new = report(visual(Projection(role="Values", field=field("Margin %"))))
+
+    assert content(old, new, RENAMES) == [
+        (
+            "p/v/fields/Sales[Gross Margin %]",
+            Category.FIELD,
+            ChangeKind.REMOVED,
+            "Values",
+            None,
+        ),
+        (
+            "p/v/fields/Sales[Margin %]",
+            Category.FIELD,
+            ChangeKind.ADDED,
+            None,
+            "Values",
+        ),
+    ]
+
+
+def test_rename_leaves_longer_table_names_alone() -> None:
+    renames = {"Data[Margin]": "Data[Gross Margin]"}
+    old = report(visual(filters=(gt("f", "Margin", table="Sales Data"),)))
+    new = report(visual(filters=(gt("f", "Margin", table="Sales Data"),)))
+
+    assert content(old, new, renames) == []
 
 
 def test_filters_added_removed_and_changed_at_each_level() -> None:
@@ -220,8 +273,15 @@ def test_rename_does_not_touch_other_tables_with_similar_names() -> None:
 
 def test_chained_renames_are_applied_once() -> None:
     renames = {"Sales[A]": "Sales[B]", "Sales[B]": "Sales[C]"}
-    old = report(visual(filters=(flt("f", "Sales[A] > 0 and Sales[B] > 1"),)))
-    new = report(visual(filters=(flt("f", "Sales[B] > 0 and Sales[C] > 1"),)))
+
+    def both(first: str, second: str) -> Filter:
+        a, b = gt("f", first).expression, gt("f", second, "1").expression
+        assert a is not None and b is not None
+        expression = AllCondition(items=(a, b))
+        return factories.filter_card(expression, name="f", condition=render(expression))
+
+    old = report(visual(filters=(both("A", "B"),)))
+    new = report(visual(filters=(both("B", "C"),)))
 
     assert content(old, new, renames) == []
 

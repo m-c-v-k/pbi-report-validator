@@ -3,13 +3,15 @@
 Covers fields per visual, filters at report, page and visual level and
 slicer selections. Field keys and conditions on the old side are first
 rewritten through the measure rename map, so a renamed measure is not
-reported again for every visual or filter that uses it.
+reported again for every visual or filter that uses it. The new side is
+never rewritten: a new visual that still uses a measure's old name is a
+broken reference and is reported.
 """
 
-import re
 from collections.abc import Mapping
 
 from pbi_report_validator.diff.severity import make_finding
+from pbi_report_validator.domain.conditions import rename_fields, render
 from pbi_report_validator.domain.helpers import aggregated, visual_path
 from pbi_report_validator.domain.models import (
     Category,
@@ -100,7 +102,7 @@ def _diff_fields(
     renames: Mapping[str, str],
 ) -> list[Finding]:
     old_roles = _roles_by_field(old, renames)
-    new_roles = _roles_by_field(new, renames)
+    new_roles = _roles_by_field(new, {})
     findings = []
     for key in sorted(old_roles.keys() | new_roles.keys()):
         before, after = old_roles.get(key), new_roles.get(key)
@@ -186,10 +188,17 @@ def _filter_finding(
 
 
 def _definition(item: Filter | SlicerState, renames: Mapping[str, str]) -> str | None:
-    """What a filter or slicer selects: its condition or unread definition."""
+    """What a filter or slicer selects: its condition or unread definition.
+
+    Renames are applied to the parsed condition, so a key is only replaced
+    where it is a field reference (not inside a text literal or a longer
+    table name).
+    """
     if item.condition is None:
         return item.unread
-    return _rename_in(item.condition, renames)
+    if item.expression is None or not renames:
+        return item.condition
+    return render(rename_fields(item.expression, renames))
 
 
 def _field_key(item: Filter, renames: Mapping[str, str]) -> str | None:
@@ -197,17 +206,3 @@ def _field_key(item: Filter, renames: Mapping[str, str]) -> str | None:
         return None
     key = renames.get(item.field.key, item.field.key)
     return aggregated(key, item.field.aggregation)
-
-
-def _rename_in(condition: str | None, renames: Mapping[str, str]) -> str | None:
-    """Replace renamed field keys in one pass.
-
-    A key only matches as a whole reference (``Sales[X]`` does not match
-    inside ``OtherSales[X]``), and each key is replaced at most once, so
-    chained renames (A to B, B to C) cannot be applied twice.
-    """
-    if condition is None or not renames:
-        return condition
-    keys = sorted(renames, key=len, reverse=True)
-    pattern = re.compile(r"(?<![\w'])(?:" + "|".join(map(re.escape, keys)) + ")")
-    return pattern.sub(lambda m: renames[m.group(0)], condition)
