@@ -3,7 +3,7 @@ from typing import Any
 import pytest
 
 from pbi_report_validator.domain.models import FieldKind, FieldRef
-from pbi_report_validator.parsers.pbir_fields import parse_field
+from pbi_report_validator.parsers.pbir_fields import parse_field, unknown_field
 
 
 def entity(name: str) -> dict[str, Any]:
@@ -58,6 +58,59 @@ def test_hierarchy_level() -> None:
     assert parse_field(field) == FieldRef(
         table="Date", name="Calendar.Year", kind=FieldKind.HIERARCHY_LEVEL
     )
+
+
+def auto_date_level(column_name: str, level: str) -> dict[str, Any]:
+    """An auto date/time level, as Power BI Desktop writes it."""
+    variation = {
+        "PropertyVariationSource": {
+            "Expression": entity("Sales"),
+            "Name": "Variation",
+            "Property": column_name,
+        }
+    }
+    return {
+        "HierarchyLevel": {
+            "Expression": {
+                "Hierarchy": {"Expression": variation, "Hierarchy": "Date Hierarchy"}
+            },
+            "Level": level,
+        }
+    }
+
+
+def test_auto_date_hierarchy_level() -> None:
+    assert parse_field(auto_date_level("Order Date", "Month")) == FieldRef(
+        table="Sales",
+        name="Order Date.Date Hierarchy.Month",
+        kind=FieldKind.HIERARCHY_LEVEL,
+    )
+
+
+def test_auto_date_levels_of_different_columns_differ() -> None:
+    order = parse_field(auto_date_level("Order Date", "Year"))
+    ship = parse_field(auto_date_level("Ship Date", "Year"))
+
+    assert order is not None and ship is not None
+    assert order.key != ship.key
+
+
+def test_unknown_field_is_named_by_kind_and_content() -> None:
+    calc = {"NativeVisualCalculation": {"Name": "Running", "Expression": "RUNNINGSUM"}}
+    edited = {"NativeVisualCalculation": {"Name": "Running", "Expression": "SUM"}}
+
+    field = unknown_field(calc)
+
+    assert field is not None
+    assert field.kind == FieldKind.UNKNOWN
+    assert field.name.startswith("NativeVisualCalculation ")
+    assert field == unknown_field(dict(reversed(list(calc.items()))))
+    assert field != unknown_field(edited)
+
+
+@pytest.mark.parametrize("expression", [None, "text", {}, []])
+def test_unknown_field_needs_a_non_empty_object(expression: Any) -> None:
+    assert unknown_field(expression) is None
 
 
 def test_source_alias_is_resolved() -> None:
