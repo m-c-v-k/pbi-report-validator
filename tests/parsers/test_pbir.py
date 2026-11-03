@@ -241,7 +241,7 @@ def test_malformed_title_gives_none() -> None:
     assert visual.title is None
 
 
-def test_unparseable_projections_are_reported() -> None:
+def test_unreadable_projections_are_reported_and_unknown_fields_kept() -> None:
     body = {
         "visualType": "table",
         "query": {
@@ -253,8 +253,8 @@ def test_unparseable_projections_are_reported() -> None:
     }
     visual, problems = parse_visual({"name": "v", "position": POSITION, "visual": body})
 
-    assert visual.projections == ()
-    assert problems == ["unrecognised field in role Values was skipped"] * 2
+    assert [p.field.kind for p in visual.projections] == [FieldKind.UNKNOWN]
+    assert problems == ["unrecognised field in role Values was skipped"]
 
 
 def test_non_dict_query_state_gives_no_projections() -> None:
