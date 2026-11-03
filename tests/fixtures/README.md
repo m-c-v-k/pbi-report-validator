@@ -37,6 +37,23 @@ A copy of `sales_v1` with seven deliberate changes, listed with old and new
 values in [`EXPECTED_CHANGES.md`](EXPECTED_CHANGES.md). Keep that file in sync
 whenever either fixture changes.
 
+## `recorded/` – real API responses
+
+`sales_v1` and `sales_v2` were published as two semantic models, and
+`tests/integrations/test_recorded_powerbi.py` replays the answers of the real
+`executeQueries` endpoint through the real client:
+
+- `sales_v1_v2.json`: every query `--data` runs for the pair
+- `api_behaviour.json`: empty results, value types, errors and the row, value
+  and size limits. The partial rows of a failed result are cut to two rows
+
+Replies are looked up by their exact DAX, so a change to the DAX builder fails
+these tests until the recordings are updated. Record them again with
+`tests/record_powerbi_responses.py`, which replaces the dataset ids with
+placeholders and refuses any other id. If no published models exist any more,
+edit the `query` by hand, but only for a change that can't affect the result.
+Only ever record the synthetic sample reports.
+
 ## `sales_v3/` – field and parse issue
 
 A copy of `sales_v2` with two deliberate changes, so the `field` and

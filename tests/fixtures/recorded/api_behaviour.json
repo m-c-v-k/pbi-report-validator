@@ -1,0 +1,265 @@
+{
+  "exchanges": [
+    {
+      "dataset": "00000000-0000-0000-0000-000000000001",
+      "query": "EVALUATE FILTER('Date', 'Date'[Year] = 1900)",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": []
+              }
+            ]
+          }
+        ]
+      },
+      "name": "empty_result"
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000001",
+      "query": "EVALUATE ROW(\"int\", 1, \"dec\", 0.1, \"bool\", TRUE(), \"date\", DATE(2025, 1, 15), \"blank\", BLANK())",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "[int]": 1,
+                    "[dec]": 0.1,
+                    "[bool]": true,
+                    "[date]": "2025-01-15T00:00:00",
+                    "[blank]": null
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "name": "value_types"
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000001",
+      "query": "EVALUATE ROW(\"x\", 'Nope'[Nope])",
+      "status": 400,
+      "body": {
+        "error": {
+          "code": "DatasetExecuteQueriesError",
+          "pbi.error": {
+            "code": "DatasetExecuteQueriesError",
+            "parameters": {},
+            "details": [
+              {
+                "code": "DetailsMessage",
+                "detail": {
+                  "type": 1,
+                  "value": "Query (1, 19) Cannot find table '<oii>Nope</oii>'."
+                }
+              },
+              {
+                "code": "AnalysisServicesErrorCode",
+                "detail": {
+                  "type": 1,
+                  "value": "3241803779"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "name": "unknown_table"
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000001",
+      "query": "EVALUATE THIS IS NOT DAX",
+      "status": 400,
+      "body": {
+        "error": {
+          "code": "DatasetExecuteQueriesError",
+          "pbi.error": {
+            "code": "DatasetExecuteQueriesError",
+            "parameters": {},
+            "details": [
+              {
+                "code": "DetailsMessage",
+                "detail": {
+                  "type": 1,
+                  "value": "Query (1, 10) The syntax for 'THIS' is incorrect. (EVALUATE THIS IS NOT DAX)."
+                }
+              },
+              {
+                "code": "AnalysisServicesErrorCode",
+                "detail": {
+                  "type": 1,
+                  "value": "3238920194"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "name": "syntax_error"
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000001",
+      "query": "EVALUATE ROW(\"x\", ERROR(\"boom\"))",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": []
+              }
+            ],
+            "error": {
+              "code": "QueryUserError",
+              "message": "Query (1, 19) boom",
+              "details": [
+                {
+                  "code": "AnalysisServicesErrorCode",
+                  "detail": {
+                    "type": "1",
+                    "value": 3241804130
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "name": "runtime_error"
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000001",
+      "query": "EVALUATE GENERATESERIES(1, 150000)",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "[Value]": 1
+                  },
+                  {
+                    "[Value]": 2
+                  }
+                ]
+              }
+            ],
+            "error": {
+              "code": "DaxRowCountNotSupported",
+              "message": "More than 100000 rows have been encountered. Only 100000 rows are allowed given the number of columns returned which is 1."
+            }
+          }
+        ]
+      },
+      "name": "row_limit"
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000001",
+      "query": "EVALUATE ADDCOLUMNS(GENERATESERIES(1, 90000), \"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10, \"k\", 11, \"l\", 12)",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "[Value]": 1,
+                    "[a]": 1,
+                    "[b]": 2,
+                    "[c]": 3,
+                    "[d]": 4,
+                    "[e]": 5,
+                    "[f]": 6,
+                    "[g]": 7,
+                    "[h]": 8,
+                    "[i]": 9,
+                    "[j]": 10,
+                    "[k]": 11,
+                    "[l]": 12
+                  },
+                  {
+                    "[Value]": 2,
+                    "[a]": 1,
+                    "[b]": 2,
+                    "[c]": 3,
+                    "[d]": 4,
+                    "[e]": 5,
+                    "[f]": 6,
+                    "[g]": 7,
+                    "[h]": 8,
+                    "[i]": 9,
+                    "[j]": 10,
+                    "[k]": 11,
+                    "[l]": 12
+                  }
+                ]
+              }
+            ],
+            "error": {
+              "code": "DaxRowCountNotSupported",
+              "message": "More than 76923 rows have been encountered. Only 76923 rows are allowed given the number of columns returned which is 13."
+            }
+          }
+        ]
+      },
+      "name": "value_limit"
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000001",
+      "query": "EVALUATE ADDCOLUMNS(GENERATESERIES(1, 90000), \"a\", REPT(\"x\", 400))",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "[Value]": 1,
+                    "[a]": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  },
+                  {
+                    "[Value]": 2,
+                    "[a]": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  }
+                ]
+              }
+            ],
+            "error": {
+              "code": "DaxByteCountNotSupported",
+              "message": "More than 15728640 bytes have been encountered. Only 15728640 bytes are allowed."
+            }
+          }
+        ]
+      },
+      "name": "byte_limit"
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000009",
+      "query": "EVALUATE ROW(\"x\", 1)",
+      "status": 404,
+      "body": {
+        "error": {
+          "code": "PowerBIEntityNotFound",
+          "pbi.error": {
+            "code": "PowerBIEntityNotFound",
+            "parameters": {},
+            "details": [],
+            "exceptionCulprit": 1
+          }
+        }
+      },
+      "name": "unknown_dataset"
+    }
+  ]
+}

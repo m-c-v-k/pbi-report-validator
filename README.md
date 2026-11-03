@@ -266,11 +266,10 @@ Limitations: models with row-level security can't be queried by a service
 principal; slicer interactions edited in Power BI and slicers synced from
 other pages are not taken into account; the API allows about 120 queries a
 minute (40 on Pro/PPU), and each visual needs two; a query returns at most
-100,000 rows, 1,000,000 values or 15 MB. Over the row or value limit the
-API still answers with HTTP 200 and partial rows, and at 15 MB it stops
-without an error, so a visual whose result reaches a limit (or comes within
-10% of 15 MB), or whose response carries an error, is reported as "not
-validated".
+100,000 rows, 1,000,000 values or 15 MB. Over a limit the API still answers
+with HTTP 200 and partial rows, with the error inside the response, so a
+visual whose result reaches a limit (or comes within 10% of 15 MB), or whose
+response carries an error, is reported as "not validated".
 
 ### AI options (optional, `--ai`)
 
@@ -475,10 +474,8 @@ tests/             # Mirrors src/, plus sample reports in fixtures/ and expected
 
 - Only the PBIR report format; the legacy `report.json` and `.pbix` files are
   not supported (save as `.pbip` with PBIR enabled)
-- Data validation (`--data`) has been run against live published models once,
-  with the sample reports. CI still uses simulated API responses until
-  recorded ones are added
-  ([#66](https://github.com/m-c-v-k/pbi-report-validator/issues/66)); see
+- Data validation (`--data`) has been run against live published models with
+  the sample reports, and CI replays the recorded API responses. See
   [its own limitations](#data-validation-optional---data)
 - Comparing published reports needs local copies, saved as `.pbip` from Power
   BI Desktop ([#232](https://github.com/m-c-v-k/pbi-report-validator/issues/232)
