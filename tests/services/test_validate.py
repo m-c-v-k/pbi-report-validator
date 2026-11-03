@@ -127,6 +127,18 @@ def test_failure_reasons(
     assert failure_reasons(result, fail_on, fail_on_data_error) == expected
 
 
+def test_a_failed_ai_call_does_not_fail_the_run() -> None:
+    ai_error = Finding(
+        category=Category.AI,
+        change=ChangeKind.ERROR,
+        severity=Severity.INFO,
+        path="ai/match",
+        message="m",
+    )
+
+    assert failure_reasons(result_with(ai_error), Severity.INFO, False) == []
+
+
 def test_data_settings_without_runner_is_rejected() -> None:
     settings = DataSettings(old_dataset="a", new_dataset="b")
 

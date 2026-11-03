@@ -88,6 +88,16 @@ class ComparisonCondition(DomainModel):
     value: LiteralValue
 
 
+class TopNCondition(DomainModel):
+    """``field`` limited to its top or bottom ``count`` values by ``order_by``."""
+
+    kind: Literal["top_n"] = "top_n"
+    field: FieldRef
+    direction: Literal["top", "bottom"]
+    count: int = Field(gt=0)
+    order_by: FieldRef
+
+
 class NotCondition(DomainModel):
     """Negation of another condition."""
 
@@ -111,7 +121,12 @@ class AllCondition(DomainModel):
 
 
 Condition = Annotated[
-    InCondition | ComparisonCondition | NotCondition | BinaryCondition | AllCondition,
+    InCondition
+    | ComparisonCondition
+    | TopNCondition
+    | NotCondition
+    | BinaryCondition
+    | AllCondition,
     Field(discriminator="kind"),
 ]
 
@@ -122,7 +137,10 @@ class Filter(DomainModel):
     ``condition`` is a normalised, human-readable form of the filter
     expression (for example ``Product[Category] in ('Bikes', 'Clothing')``),
     or ``None`` when the filter card has no active condition. ``expression``
-    is the same condition in structured form, used to build DAX.
+    is the same condition in structured form, used to build DAX. ``unread``
+    is the normalised raw definition of a condition the parser does not
+    understand, so ``None`` in ``condition`` alone means no active filter
+    only when ``unread`` is ``None`` too.
     """
 
     name: str
@@ -131,6 +149,7 @@ class Filter(DomainModel):
     field: FieldRef | None = None
     condition: str | None = None
     expression: Condition | None = None
+    unread: str | None = None
 
 
 class SlicerState(DomainModel):
@@ -139,6 +158,7 @@ class SlicerState(DomainModel):
     field: FieldRef | None = None
     condition: str | None = None
     expression: Condition | None = None
+    unread: str | None = None
 
 
 class Position(DomainModel):

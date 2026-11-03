@@ -123,6 +123,9 @@ def failure_reasons(
 ) -> list[str]:
     """Why the run fails under ``--fail-on`` and ``--fail-on-data-error``.
 
+    Findings in the ``ai`` category never count: a failed AI call says
+    nothing about the reports, and the comparison itself is unaffected.
+
     Args:
         result: The diff result.
         fail_on: Fail on findings at or above this severity; ``None`` never.
@@ -133,7 +136,8 @@ def failure_reasons(
         One message per rule that was triggered; empty when the run passes.
     """
     reasons = []
-    if fail_on is not None and (failing := at_least(result.findings, fail_on)):
+    counted = [f for f in result.findings if f.category != Category.AI]
+    if fail_on is not None and (failing := at_least(counted, fail_on)):
         reasons.append(format_failure(len(failing), fail_on))
     if fail_on_data_error and (unchecked := not_fully_validated(result.findings)):
         reasons.append(format_data_failure(len(unchecked)))

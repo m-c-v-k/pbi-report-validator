@@ -21,6 +21,7 @@ from pbi_report_validator.domain.models import (
     ChangeKind,
     DataComparison,
     DataSettings,
+    DataStatus,
     DaxQuery,
     QueryResult,
     Report,
@@ -31,6 +32,8 @@ from pbi_report_validator.domain.models import (
 )
 from pbi_report_validator.integrations.config import load_powerbi_config
 from pbi_report_validator.integrations.powerbi import (
+    MAX_RESULT_ROWS,
+    MAX_RESULT_VALUES,
     QueryError,
     RateLimitError,
     ServiceError,
@@ -107,8 +110,10 @@ def validate_data(
 ) -> list[DataComparison]:
     """Compare the data of every matched visual.
 
-    Slicers are skipped (they show no numbers of their own). A visual whose
-    query cannot be built or fails becomes a ``not_validated`` result.
+    Slicers and visuals without fields in either version (text boxes,
+    images, shapes, buttons, groups) are skipped: they show no numbers of
+    their own. A visual whose query cannot be built or fails becomes a
+    ``not_validated`` result.
 
     Raises:
         AuthenticationError: The service principal cannot sign in.
@@ -120,6 +125,8 @@ def validate_data(
     for page_match in match.pages:
         for visual_match in page_match.visuals:
             if visual_match.old.slicer or visual_match.new.slicer:
+                continue
+            if not visual_match.old.projections and not visual_match.new.projections:
                 continue
             path = visual_path(page_match.old.name, visual_match.old.name)
             old_query = build_query(visual_match.old, page_match.old, old.filters)
@@ -148,6 +155,8 @@ def _compare(
         new_result = runner.execute_query(settings.new_dataset, new_dax.dax)
     except (QueryError, RateLimitError, ServiceError) as exc:
         return not_validated(path, _failure_reason(exc, settings.show_values))
+    if reason := _truncation_reason(old_result, new_result):
+        return not_validated(path, reason)
     keys = [(result_column(c), result_column(c)) for c in old_dax.group_by]
     values = _pair_values(old_dax.values, new_dax.values, value_renames)
     comparison = compare_results(
@@ -167,6 +176,25 @@ def _failure_reason(exc: Exception, show_values: bool) -> str:
     if isinstance(exc, QueryError) and not show_values:
         return f"query failed: {ENGINE_MESSAGE_MASKED}"
     return f"query failed: {exc}"
+
+
+def _truncation_reason(old: QueryResult, new: QueryResult) -> str | None:
+    """Why a result may be incomplete; the API cuts it off without an error."""
+    sides = [
+        label for label, result in (("old", old), ("new", new)) if _at_api_limit(result)
+    ]
+    if not sides:
+        return None
+    return (
+        f"the {' and '.join(sides)} result reached the API limit of "
+        f"{MAX_RESULT_ROWS:,} rows or {MAX_RESULT_VALUES:,} values "
+        "and may be cut off"
+    )
+
+
+def _at_api_limit(result: QueryResult) -> bool:
+    rows = len(result.rows)
+    return rows >= MAX_RESULT_ROWS or rows * len(result.columns) >= MAX_RESULT_VALUES
 
 
 def _comparable_queries(
@@ -201,7 +229,11 @@ def _with_unpaired(
     only_old: Sequence[str],
     only_new: Sequence[str],
 ) -> DataComparison:
-    """Note values that exist in only one version, so they are not hidden."""
+    """Note values that exist in only one version, so they are not hidden.
+
+    Matching columns then prove too little for ``same``, so that status
+    becomes ``not_validated``; a difference that was found stays ``different``.
+    """
     parts = [f"[{n}] is only in the old visual" for n in only_old]
     parts += [f"[{n}] is only in the new visual" for n in only_new]
     if not parts:
@@ -213,7 +245,10 @@ def _with_unpaired(
         path=f"{path}/data",
         message=f"Data partly validated, {note}",
     )
-    summary = comparison.summary.model_copy(update={"reason": note})
+    status = comparison.summary.status
+    if status == DataStatus.SAME:
+        status = DataStatus.NOT_VALIDATED
+    summary = comparison.summary.model_copy(update={"status": status, "reason": note})
     return DataComparison(summary=summary, findings=(*comparison.findings, finding))
 
 

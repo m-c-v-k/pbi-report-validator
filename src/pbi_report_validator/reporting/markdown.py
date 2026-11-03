@@ -100,7 +100,7 @@ def _grouped(findings: tuple[Finding, ...]) -> list[Finding]:
 
 def _finding(finding: Finding) -> str:
     path = _code(finding.path)
-    message = escape(" ".join(finding.message.split()))
+    message = _unmentionable(" ".join(finding.message.split()))
     line = (
         f"- {finding.severity.value} · **{finding.change.value}** `{path}`: {message}"
     )
@@ -112,10 +112,15 @@ def _finding(finding: Finding) -> str:
 
 
 def _note(note: str | None) -> str:
-    """An AI note under a finding; a zero-width space keeps "@" from mentioning."""
+    """An AI note under a finding."""
     if not note:
         return ""
-    return f"  - _{escape(note).replace('@', NO_MENTION)}_\n"
+    return f"  - _{_unmentionable(note)}_\n"
+
+
+def _unmentionable(text: str) -> str:
+    """Escaped text in which a zero-width space keeps "@" from mentioning."""
+    return escape(text).replace("@", NO_MENTION)
 
 
 def _details(old: str | None, new: str | None) -> str:
