@@ -25,6 +25,8 @@ SCOPE = "https://analysis.windows.net/powerbi/api/.default"
 DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_MAX_RETRIES = 3
 MAX_RETRY_AFTER_SECONDS = 60.0
+MAX_RESULT_ROWS = 100_000
+MAX_RESULT_VALUES = 1_000_000
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 GUID = re.compile(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}")
 

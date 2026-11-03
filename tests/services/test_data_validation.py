@@ -24,6 +24,7 @@ from pbi_report_validator.integrations.powerbi import (
     RateLimitError,
 )
 from pbi_report_validator.integrations.templates import read_template
+from pbi_report_validator.matching.matcher import match_reports
 from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
 from pbi_report_validator.reporting.markdown import to_markdown
 from pbi_report_validator.reporting.terminal import format_summary
@@ -31,11 +32,13 @@ from pbi_report_validator.services.data_validation import (
     InvalidDataOptionsError,
     _comparable_queries,
     _pair_values,
+    _truncation_reason,
     _with_unpaired,
     data_settings,
+    validate_data,
 )
 from pbi_report_validator.services.validate import validate
-from tests.factories import FIXTURES, REPO_ROOT
+from tests.factories import FIXTURES, REPO_ROOT, measure, page, report, visual
 
 OLD_DS = "11111111-1111-1111-1111-111111111111"
 NEW_DS = "22222222-2222-2222-2222-222222222222"
@@ -100,6 +103,46 @@ def test_fixture_pair_compares_every_non_slicer_visual() -> None:
         ("overview/chart_sales_by_month", DataStatus.DIFFERENT),
     ]
     assert data_findings == ["overview/chart_sales_by_month/data/row 2/[Total Sales]"]
+
+
+def test_visuals_without_fields_are_skipped() -> None:
+    decorations = [
+        visual(name, kind)
+        for name, kind in [
+            ("text", "textbox"),
+            ("logo", "image"),
+            ("box", "shape"),
+            ("nav", "pageNavigator"),
+            ("frame", "group"),
+        ]
+    ]
+    card = visual("card", "card", fields=[measure("Total Sales")])
+    both = report(page("p", card, *decorations))
+    runner = FakeRunner()
+
+    comparisons = validate_data(
+        both, both, match_reports(both.pages, both.pages), {}, runner, SETTINGS
+    )
+
+    assert [(c.summary.path, c.summary.status) for c in comparisons] == [
+        ("p/card", DataStatus.SAME)
+    ]
+    assert len(runner.queries) == 2
+
+
+def test_unsupported_visual_with_fields_is_still_not_validated() -> None:
+    custom = report(page("p", visual("c", "myCustomChart", fields=[measure("M")])))
+
+    comparisons = validate_data(
+        custom,
+        custom,
+        match_reports(custom.pages, custom.pages),
+        {},
+        FakeRunner(),
+        SETTINGS,
+    )
+
+    assert [c.summary.status for c in comparisons] == [DataStatus.NOT_VALIDATED]
 
 
 def test_queries_go_to_the_right_dataset_and_use_new_measure_names() -> None:
@@ -265,12 +308,58 @@ def test_measure_only_in_one_version_is_noted_not_hidden() -> None:
 
     noted = _with_unpaired(comparison, "p/v", ["Margin"], ["Profit"])
 
-    assert noted.summary.status == DataStatus.SAME
+    assert noted.summary.status == DataStatus.NOT_VALIDATED
+    assert noted.summary.rows_matched == 1
     assert noted.summary.reason == (
         "not compared: [Margin] is only in the old visual; "
         "[Profit] is only in the new visual"
     )
     assert noted.findings[-1].change == ChangeKind.ERROR
+
+
+def test_partly_validated_visual_keeps_a_found_difference() -> None:
+    old = QueryResult(columns=("[A]",), rows=((1,),))
+    new = QueryResult(columns=("[A]",), rows=((2,),))
+    comparison = compare_results("p/v", old, new, [], [("[A]", "[A]")])
+
+    noted = _with_unpaired(comparison, "p/v", ["Margin"], [])
+
+    assert noted.summary.status == DataStatus.DIFFERENT
+
+
+FULL_RESULT = QueryResult(columns=("[A]",), rows=((1,),) * 100_000)
+SMALL_RESULT = QueryResult(columns=("[A]",), rows=((1,),))
+WIDE_RESULT = QueryResult(columns=tuple("ABCDE"), rows=((1, 2, 3, 4, 5),) * 200_000)
+CUT_OFF = "reached the API limit of 100,000 rows or 1,000,000 values and may be cut off"
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "expected"),
+    [
+        (SMALL_RESULT, SMALL_RESULT, None),
+        (FULL_RESULT, SMALL_RESULT, f"the old result {CUT_OFF}"),
+        (SMALL_RESULT, WIDE_RESULT, f"the new result {CUT_OFF}"),
+        (FULL_RESULT, FULL_RESULT, f"the old and new result {CUT_OFF}"),
+    ],
+)
+def test_truncation_reason(
+    old: QueryResult, new: QueryResult, expected: str | None
+) -> None:
+    assert _truncation_reason(old, new) == expected
+
+
+def test_result_at_the_api_limit_is_not_validated() -> None:
+    class Full(FakeRunner):
+        def execute_query(self, dataset_id: str, dax: str) -> QueryResult:
+            full = super().execute_query(dataset_id, dax)
+            filler = (full.rows[0],) * 100_000 if dataset_id == OLD_DS else ()
+            return full.model_copy(update={"rows": (*full.rows, *filler)})
+
+    result = validate(FIXTURES / "sales_v1", FIXTURES / "sales_v2", SETTINGS, Full())
+
+    summary = next(s for s in result.data if s.path.endswith("chart_sales_by_month"))
+    assert summary.status == DataStatus.NOT_VALIDATED
+    assert summary.reason == f"the old result {CUT_OFF}"
 
 
 def test_rate_limited_query_is_not_validated() -> None:

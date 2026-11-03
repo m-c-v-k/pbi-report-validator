@@ -26,6 +26,7 @@ CHANGE_SEVERITY: Final = {
     (Category.PAGE, ChangeKind.REMOVED): Severity.CRITICAL,
     (Category.VISUAL, ChangeKind.REMOVED): Severity.CRITICAL,
     (Category.VISUAL, ChangeKind.RETYPED): Severity.WARNING,
+    (Category.FILTER, ChangeKind.RETYPED): Severity.INFO,
     (Category.MEASURE, ChangeKind.ADDED): Severity.INFO,
     (Category.MEASURE, ChangeKind.MODIFIED): Severity.CRITICAL,
     (Category.DATA, ChangeKind.ERROR): Severity.WARNING,
