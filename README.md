@@ -181,7 +181,9 @@ pbi-validate diff ./old ./new --data \
   everyone who can read the output may see the data.
 - Visuals whose query cannot be built faithfully (custom visuals, hierarchy
   levels, filters on measures, ...) or fails are reported as
-  "not validated" with the reason. Slicers are skipped: they only filter.
+  "not validated" with the reason. Slicers are skipped: they only filter. So are
+  visuals without fields in either version (text boxes, images, shapes,
+  buttons, groups), since they show no data.
 
 **Setup (one time).** Data validation signs in as a Microsoft Entra
 service principal and uses the Power BI REST API `executeQueries` endpoint,
