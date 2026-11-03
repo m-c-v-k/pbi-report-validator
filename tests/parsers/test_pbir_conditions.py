@@ -2,6 +2,7 @@ from typing import Any
 
 import pytest
 
+from pbi_report_validator.domain.conditions import render, render_literal
 from pbi_report_validator.domain.models import (
     AllCondition,
     BinaryCondition,
@@ -20,8 +21,6 @@ from pbi_report_validator.parsers.pbir_filters import (
     parse_condition,
     parse_filters,
     parse_literal,
-    render,
-    render_literal,
 )
 from tests.factories import fixture_report
 

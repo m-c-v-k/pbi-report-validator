@@ -12,8 +12,9 @@ compared.
 
 import json
 import re
-from typing import Any, Literal, NamedTuple, assert_never, cast
+from typing import Any, Literal, NamedTuple, cast
 
+from pbi_report_validator.domain.conditions import render
 from pbi_report_validator.domain.models import (
     AllCondition,
     BinaryCondition,
@@ -144,39 +145,6 @@ def parse_condition(query: Any) -> Condition | None:
     return items[0] if len(items) == 1 else AllCondition(items=items)
 
 
-def render(condition: Condition) -> str:
-    """Render a structured condition as normalised text."""
-    if isinstance(condition, InCondition):
-        return _render_in(condition)
-    if isinstance(condition, ComparisonCondition):
-        value = render_literal(condition.value)
-        return f"{condition.field.aggregated_key} {condition.operator} {value}"
-    if isinstance(condition, TopNCondition):
-        return _render_top_n(condition)
-    if isinstance(condition, NotCondition):
-        return f"not ({render(condition.operand)})"
-    if isinstance(condition, BinaryCondition):
-        left, right = render(condition.left), render(condition.right)
-        return f"({left}) {condition.kind} ({right})"
-    if isinstance(condition, AllCondition):
-        return " and ".join(
-            f"({render(item)})" if isinstance(item, BinaryCondition) else render(item)
-            for item in condition.items
-        )
-    assert_never(condition)
-
-
-def render_literal(literal: LiteralValue) -> str:
-    """Render a literal the way it appears in a normalised condition."""
-    if literal.kind == LiteralKind.TEXT:
-        return "'" + literal.value.replace("'", "''") + "'"
-    if literal.kind == LiteralKind.DATETIME:
-        return f"datetime'{literal.value}'"
-    if literal.kind == LiteralKind.NULL:
-        return "null"
-    return literal.value
-
-
 def parse_literal(raw: str) -> LiteralValue:
     """Classify a raw PBIR literal such as ``2025L``, ``'Bikes'`` or ``true``."""
     number = NUMBER_LITERAL.match(raw)
@@ -192,20 +160,6 @@ def parse_literal(raw: str) -> LiteralValue:
     if datetime:
         return LiteralValue(kind=LiteralKind.DATETIME, value=datetime["value"])
     return LiteralValue(kind=LiteralKind.OTHER, value=raw)
-
-
-def _render_in(condition: InCondition) -> str:
-    fields = [f.aggregated_key for f in condition.fields]
-    values = [", ".join(render_literal(v) for v in row) for row in condition.rows]
-    target = fields[0] if len(fields) == 1 else f"({', '.join(fields)})"
-    rendered = values if len(fields) == 1 else [f"({v})" for v in values]
-    return f"{target} in ({', '.join(rendered)})"
-
-
-def _render_top_n(condition: TopNCondition) -> str:
-    limit = f"{condition.direction} {condition.count}"
-    by = condition.order_by.aggregated_key
-    return f"{condition.field.aggregated_key} {limit} by {by}"
 
 
 def _parse_filter(
