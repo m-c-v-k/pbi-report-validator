@@ -5,11 +5,14 @@ Filter conditions are stored in PBIR as small query-language trees
 models (used to build DAX) and rendered from those to a normalised,
 readable string such as ``Product[Category] in ('Bikes', 'Clothing')``,
 which is what the diff compares and the reports show. Rendering from the
-structured form keeps the two in agreement.
+structured form keeps the two in agreement. A condition that cannot be
+parsed keeps a normalised copy of its raw definition, so it can still be
+compared.
 """
 
+import json
 import re
-from typing import Any, Literal, assert_never, cast
+from typing import Any, Literal, NamedTuple, assert_never, cast
 
 from pbi_report_validator.domain.models import (
     AllCondition,
@@ -24,12 +27,16 @@ from pbi_report_validator.domain.models import (
     LiteralValue,
     NotCondition,
     SlicerState,
+    TopNCondition,
 )
 from pbi_report_validator.parsers.pbir_fields import parse_field
 from pbi_report_validator.parsers.quoting import is_quoted, unquote
 
 Operator = Literal["=", ">", ">=", "<", "<="]
 COMPARISON_OPERATORS: dict[int, Operator] = {0: "=", 1: ">", 2: ">=", 3: "<", 4: "<="}
+Direction = Literal["top", "bottom"]
+# The sort direction of a TopN subquery: descending keeps the top values.
+TOP_N_DIRECTIONS: dict[int, Direction] = {1: "bottom", 2: "top"}
 # The L/D/M type suffix (integer/decimal/currency) is dropped: DAX number
 # literals do not need it, and the text form never showed it.
 NUMBER_LITERAL = re.compile(r"^(-?\d+(?:\.\d+)?)[LDM]?$")
@@ -38,6 +45,13 @@ DATETIME_LITERAL = re.compile(r"^datetime'(?P<value>[^']*)'$")
 
 class UnsupportedConditionError(ValueError):
     """A filter condition uses a construct the parser does not know."""
+
+
+class _Sources(NamedTuple):
+    """What a query's ``From`` list declares, by alias."""
+
+    tables: dict[str, str]
+    subqueries: dict[str, dict[str, Any]]
 
 
 def parse_filters(
@@ -52,7 +66,7 @@ def parse_filters(
     Returns:
         The filters in file order, and a message for each filter that could
         not be fully parsed. Such filters are still returned, with
-        ``condition=None``.
+        ``condition=None`` and their definition in ``unread``.
     """
     config = container.get("filterConfig") if isinstance(container, dict) else None
     entries = config.get("filters", []) if isinstance(config, dict) else []
@@ -82,11 +96,13 @@ def parse_slicer_state(
     """
     if body.get("visualType") != "slicer":
         return None, []
-    expression, problem = _parse_or_problem(_slicer_query(body), "slicer selection")
+    query = _slicer_query(body)
+    expression, problem = _parse_or_problem(query, "slicer selection")
     state = SlicerState(
         field=field_hint,
         condition=render(expression) if expression else None,
         expression=expression,
+        unread=_unread_form(query) if problem else None,
     )
     return state, [problem] if problem else []
 
@@ -117,12 +133,12 @@ def parse_condition(query: Any) -> Condition | None:
     """
     if not isinstance(query, dict):
         return None
-    aliases = _aliases(query.get("From"))
+    sources = _sources(query.get("From"))
     where = query.get("Where")
     if not isinstance(where, list) or not where:
         return None
     items = tuple(
-        _condition(item.get("Condition") if isinstance(item, dict) else None, aliases)
+        _condition(item.get("Condition") if isinstance(item, dict) else None, sources)
         for item in where
     )
     return items[0] if len(items) == 1 else AllCondition(items=items)
@@ -135,6 +151,8 @@ def render(condition: Condition) -> str:
     if isinstance(condition, ComparisonCondition):
         value = render_literal(condition.value)
         return f"{condition.field.key} {condition.operator} {value}"
+    if isinstance(condition, TopNCondition):
+        return _render_top_n(condition)
     if isinstance(condition, NotCondition):
         return f"not ({render(condition.operand)})"
     if isinstance(condition, BinaryCondition):
@@ -184,11 +202,19 @@ def _render_in(condition: InCondition) -> str:
     return f"{target} in ({', '.join(rendered)})"
 
 
+def _render_top_n(condition: TopNCondition) -> str:
+    order = condition.order_by
+    by = f"{order.aggregation}({order.key})" if order.aggregation else order.key
+    limit = f"{condition.direction} {condition.count}"
+    return f"{condition.field.key} {limit} by {by}"
+
+
 def _parse_filter(
     entry: dict[str, Any], level: FilterLevel
 ) -> tuple[Filter, str | None]:
     name = str(entry.get("name", ""))
-    expression, problem = _parse_or_problem(entry.get("filter"), f"filter {name}")
+    query = entry.get("filter")
+    expression, problem = _parse_or_problem(query, f"filter {name}")
     parsed = Filter(
         name=name,
         level=level,
@@ -196,6 +222,7 @@ def _parse_filter(
         filter_type=str(entry.get("type", "Unknown")),
         condition=render(expression) if expression else None,
         expression=expression,
+        unread=_unread_form(query) if problem else None,
     )
     return parsed, problem
 
@@ -206,6 +233,40 @@ def _parse_or_problem(query: Any, label: str) -> tuple[Condition | None, str | N
         return parse_condition(query), None
     except UnsupportedConditionError as exc:
         return None, f"{label}: unsupported condition ({exc})"
+
+
+def _unread_form(query: Any) -> str:
+    """The ``Where`` of a query as stable JSON, independent of alias names."""
+    sources = _sources(query.get("From"))
+    where = _canonical(query.get("Where"), sources)
+    return json.dumps(where, sort_keys=True, ensure_ascii=False)
+
+
+def _canonical(node: Any, sources: _Sources) -> Any:
+    if isinstance(node, list):
+        return [_canonical(item, sources) for item in node]
+    if not isinstance(node, dict):
+        return node
+    return {
+        key: _canonical_source(value, sources)
+        if key == "SourceRef"
+        else _canonical(value, sources)
+        for key, value in node.items()
+    }
+
+
+def _canonical_source(reference: Any, sources: _Sources) -> Any:
+    """A source reference with its alias replaced by what the alias stands for."""
+    alias = reference.get("Source") if isinstance(reference, dict) else None
+    if not isinstance(alias, str):
+        return reference
+    if alias in sources.tables:
+        return {"Entity": sources.tables[alias]}
+    if alias in sources.subqueries:
+        query = sources.subqueries[alias]
+        body = {k: v for k, v in query.items() if k not in ("From", "Version")}
+        return {"Subquery": _canonical(body, _sources(query.get("From")))}
+    return reference
 
 
 def _slicer_query(body: dict[str, Any]) -> Any:
@@ -227,42 +288,100 @@ def _aliases(sources: Any) -> dict[str, str]:
     }
 
 
-def _condition(node: Any, aliases: dict[str, str]) -> Condition:
+def _sources(sources: Any) -> _Sources:
+    subqueries = {}
+    for source in sources if isinstance(sources, list) else []:
+        query = _subquery_of(source)
+        if query is not None:
+            subqueries[source.get("Name")] = query
+    return _Sources(_aliases(sources), subqueries)
+
+
+def _subquery_of(source: Any) -> dict[str, Any] | None:
+    try:
+        query = source["Expression"]["Subquery"]["Query"]
+    except (KeyError, TypeError):
+        return None
+    return query if isinstance(query, dict) else None
+
+
+def _condition(node: Any, sources: _Sources) -> Condition:
     if not isinstance(node, dict) or len(node) != 1:
         raise UnsupportedConditionError("malformed condition")
     kind, body = next(iter(node.items()))
     if not isinstance(body, dict):
         raise UnsupportedConditionError(kind)
     if kind == "In":
-        return _in(body, aliases)
+        return _in(body, sources)
     if kind == "Not":
-        return NotCondition(operand=_condition(body.get("Expression"), aliases))
+        return NotCondition(operand=_condition(body.get("Expression"), sources))
     if kind in ("And", "Or"):
         return BinaryCondition(
             kind=cast(Literal["and", "or"], kind.lower()),
-            left=_condition(body.get("Left"), aliases),
-            right=_condition(body.get("Right"), aliases),
+            left=_condition(body.get("Left"), sources),
+            right=_condition(body.get("Right"), sources),
         )
     if kind == "Comparison":
-        return _comparison(body, aliases)
+        return _comparison(body, sources.tables)
     raise UnsupportedConditionError(kind)
 
 
-def _in(body: dict[str, Any], aliases: dict[str, str]) -> InCondition:
+def _in(body: dict[str, Any], sources: _Sources) -> InCondition | TopNCondition:
     expressions = body.get("Expressions", [])
+    if "Table" in body:
+        return _top_n(expressions, body["Table"], sources)
     rows = body.get("Values", [])
     if (
         not isinstance(expressions, list)
         or not isinstance(rows, list)
         or not expressions
+        or not rows
     ):
         raise UnsupportedConditionError("In")
     if any(not isinstance(row, list) or len(row) != len(expressions) for row in rows):
         raise UnsupportedConditionError("In with rows that do not match its fields")
     return InCondition(
-        fields=tuple(_field(e, aliases) for e in expressions),
+        fields=tuple(_field(e, sources.tables) for e in expressions),
         rows=tuple(tuple(_literal(v) for v in row) for row in rows),
     )
+
+
+def _top_n(expressions: Any, table: Any, sources: _Sources) -> TopNCondition:
+    """An ``In`` over a subquery; only the TopN form of a subquery is known."""
+    query = _referenced_subquery(table, sources)
+    count = query.get("Top")
+    order_by = query.get("OrderBy")
+    if (
+        not isinstance(expressions, list)
+        or len(expressions) != 1
+        or not isinstance(count, int)
+        or isinstance(count, bool)
+        or count < 1
+        or not isinstance(order_by, list)
+        or len(order_by) != 1
+        or not isinstance(order_by[0], dict)
+    ):
+        raise UnsupportedConditionError("In with a subquery")
+    direction = order_by[0].get("Direction")
+    limit = TOP_N_DIRECTIONS.get(direction) if isinstance(direction, int) else None
+    if limit is None:
+        raise UnsupportedConditionError("In with a subquery")
+    inner = _sources(query.get("From")).tables
+    return TopNCondition(
+        field=_field(expressions[0], sources.tables),
+        direction=limit,
+        count=count,
+        order_by=_field(order_by[0].get("Expression"), inner),
+    )
+
+
+def _referenced_subquery(table: Any, sources: _Sources) -> dict[str, Any]:
+    reference = table.get("SourceRef") if isinstance(table, dict) else None
+    alias = reference.get("Source") if isinstance(reference, dict) else None
+    query = sources.subqueries.get(alias) if isinstance(alias, str) else None
+    if query is None:
+        raise UnsupportedConditionError("In with a subquery")
+    return query
 
 
 def _comparison(body: dict[str, Any], aliases: dict[str, str]) -> ComparisonCondition:

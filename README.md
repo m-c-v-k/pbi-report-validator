@@ -7,7 +7,7 @@
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
 
-**Status:** v0.2.0 – structural diff and data validation (`--data`, values masked by default), JSON, Markdown and HTML reports, and a GitHub Action with PR comments and `--fail-on`. See the [live demo report](https://m-c-v-k.github.io/pbi-report-validator/) and the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
+**Status:** v0.3.0 – structural diff and data validation (`--data`, values masked by default), JSON, Markdown and HTML reports, a GitHub Action with PR comments and `--fail-on`, and an optional AI layer (`--ai api`). See the [live demo report](https://m-c-v-k.github.io/pbi-report-validator/) and the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
 
 ## Why
 
@@ -28,13 +28,13 @@ Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 for you).
 Install the latest release as a command-line tool:
 
 ```bash
-uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.2.0
+uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.3.0
 ```
 
 Or run it once without installing:
 
 ```bash
-uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.2.0 pbi-validate --help
+uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.3.0 pbi-validate --help
 ```
 
 Each [GitHub release](https://github.com/m-c-v-k/pbi-report-validator/releases)
@@ -53,7 +53,7 @@ docker run --rm -v "$PWD:/work" ghcr.io/m-c-v-k/pbi-report-validator diff old ne
 To write `--json`, `--markdown` or `--html` files into the mounted folder on Linux,
 add `--user "$(id -u):$(id -g)"` so the files are owned by you.
 
-The image does not include the optional AI extra. Releases after v0.2.0 also
+The image does not include the optional AI extra. From v0.3.0, releases also
 publish a variant with it, tagged with the suffix `-ai` (`<version>-ai` and
 `latest-ai`); see [AI options](#ai-options-optional---ai).
 
@@ -76,7 +76,7 @@ or the `.Report` folder itself. The terminal always shows a summary; add any of:
 |---|---|
 | `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
 | `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
-| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.5) |
+| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.7) |
 
 Running it on the sample reports in this repository gives:
 
@@ -137,7 +137,7 @@ Every finding has a severity:
 |---|---|
 | `critical` | Data differences, removed pages and visuals, added/removed/changed filters and slicer selections, changed measure expressions |
 | `warning` | Changed visual type, changed fields, renamed or removed measures, parse issues, visuals whose data could not be validated |
-| `info` | Added pages, visuals and measures, moved or reordered pages and visuals, renamed pages, changed titles |
+| `info` | Added pages, visuals and measures, moved or reordered pages and visuals, renamed pages, changed titles, filters that only changed type |
 
 ### Limitations
 
@@ -147,6 +147,11 @@ Every finding has a severity:
   workspace; see its own limitations below
 - A visual moved to a different page shows as removed on one page and added
   on the other
+- Filters the parser cannot read (such as relative date or "contains") are
+  compared on their raw definition, so findings show JSON, and a renamed
+  measure inside one shows as a change. With `--data`, every visual such a
+  filter applies to is `not_validated`: one at report level covers the whole
+  report, and fails the run with `--fail-on warning`
 
 ### Data validation (optional, `--data`)
 
@@ -176,7 +181,9 @@ pbi-validate diff ./old ./new --data \
   everyone who can read the output may see the data.
 - Visuals whose query cannot be built faithfully (custom visuals, hierarchy
   levels, filters on measures, ...) or fails are reported as
-  "not validated" with the reason. Slicers are skipped: they only filter.
+  "not validated" with the reason. Slicers are skipped: they only filter. So are
+  visuals without fields in either version (text boxes, images, shapes,
+  buttons, groups), since they show no data.
 
 **Setup (one time).** Data validation signs in as a Microsoft Entra
 service principal and uses the Power BI REST API `executeQueries` endpoint,
@@ -204,7 +211,9 @@ and no output files are written; fix the setup and run it again.
 Limitations: models with row-level security can't be queried by a service
 principal; slicer interactions edited in Power BI and slicers synced from
 other pages are not taken into account; the API allows about 120 queries a
-minute (40 on Pro/PPU), and each visual needs two.
+minute (40 on Pro/PPU), and each visual needs two; a query returns at most
+100,000 rows or 1,000,000 values and is cut off without an error, so a
+visual whose result reaches that limit is reported as "not validated".
 
 ### AI options (optional, `--ai`)
 
@@ -225,7 +234,7 @@ the features below each need their own flag, and they can be combined.
 Setup for `api`:
 
 ```bash
-uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator"
+uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator@v0.3.0"
 export ANTHROPIC_API_KEY=...
 pbi-validate diff ./old ./new --ai api
 ```
@@ -246,7 +255,8 @@ pbi-validate diff ./old ./new --ai api
   stops before the run with exit code 2 and a setup hint. If an AI call
   fails during a run (network, rate limit, a refused or empty answer), that
   becomes an `info` finding in the `ai` category, and the rest of the
-  result is produced as usual.
+  result is produced as usual. Findings in the `ai` category never count
+  for `--fail-on`, so an outage cannot fail a CI run.
 - **Default and kill switch:** `PBI_VALIDATE_AI=off|api` sets the default
   when `--ai` is not given. `PBI_VALIDATE_AI=disabled` blocks AI whatever
   the flags say: `--ai api` then fails with exit code 2. Set it in a CI
@@ -262,7 +272,7 @@ from v0.2.0:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: m-c-v-k/pbi-report-validator@v0.2.0
+- uses: m-c-v-k/pbi-report-validator@v0.3.0
   with:
     old: reports/v1        # paths relative to the workspace
     new: reports/v2
@@ -316,7 +326,7 @@ are passed on too, so `PBI_VALIDATE_AI: disabled` (for example from an
 organisation variable) blocks `ai: api`:
 
 ```yaml
-- uses: m-c-v-k/pbi-report-validator@<version>  # a release after v0.2.0
+- uses: m-c-v-k/pbi-report-validator@v0.3.0
   env:
     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   with:
@@ -333,7 +343,7 @@ The action needs a Linux runner with Docker (such as `ubuntu-latest`) and
 cannot run inside a job `container:`. Input and output paths must be
 relative to the workspace or lie inside it or `$RUNNER_TEMP`.
 
-**Versions.** Pin a full version tag such as `@v0.2.0`; it runs the
+**Versions.** Pin a full version tag such as `@v0.3.0`; it runs the
 published image of that version. Before 1.0, minor versions can change the
 output, so there is no moving `@v0` tag. Dependabot (`package-ecosystem:
 github-actions`) can keep the tag up to date. Organisations that require it
