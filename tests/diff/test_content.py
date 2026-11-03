@@ -136,6 +136,22 @@ def test_aggregation_change_is_a_field_change() -> None:
     ]
 
 
+def test_filter_on_another_aggregation_is_a_filter_change() -> None:
+    def card(agg: str) -> Filter:
+        amount = field("Amount", FieldKind.AGGREGATION, agg)
+        return Filter(
+            name="f", level=FilterLevel.VISUAL, filter_type="Advanced", field=amount
+        )
+
+    findings = content(
+        report(visual(filters=(card("Sum"),))), report(visual(filters=(card("Avg"),)))
+    )
+
+    assert [(p, c) for p, c, _, _, _ in findings] == [
+        ("p/v/filters/f", Category.FILTER)
+    ]
+
+
 def test_renamed_measure_references_are_not_reported() -> None:
     old = report(
         visual(

@@ -147,6 +147,25 @@ def test_comparison(kind: int, operator: str) -> None:
     assert render_condition(query(condition)) == f"Sales[Amount] {operator} 100"
 
 
+@pytest.mark.parametrize(("function", "name"), [(0, "Sum"), (1, "Avg")])
+def test_comparison_on_an_aggregation_keeps_it(function: int, name: str) -> None:
+    aggregated = {
+        "Aggregation": {"Expression": col("s", "Amount"), "Function": function}
+    }
+    condition = {
+        "Comparison": {"ComparisonKind": 1, "Left": aggregated, "Right": lit("100D")}
+    }
+
+    assert render_condition(query(condition)) == f"{name}(Sales[Amount]) > 100"
+
+
+def test_in_on_an_aggregation_keeps_it() -> None:
+    aggregated = {"Aggregation": {"Expression": col("s", "Amount"), "Function": 3}}
+    condition = {"In": {"Expressions": [aggregated], "Values": [[lit("1L")]]}}
+
+    assert render_condition(query(condition)) == "Min(Sales[Amount]) in (1)"
+
+
 def test_and_or_and_multiple_where_items() -> None:
     gt = {
         "Comparison": {"ComparisonKind": 1, "Left": col("s", "A"), "Right": lit("1L")}
