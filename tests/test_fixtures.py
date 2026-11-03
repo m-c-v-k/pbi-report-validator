@@ -56,3 +56,15 @@ def test_sales_v2_to_v3_reports_field_and_parse_issue() -> None:
         ),
     ]
     assert result.findings[1].visual_path == "overview/card_total_sales"
+
+
+@pytest.mark.parametrize("version", ["sales_v1", "sales_v2", "sales_v3"])
+def test_fixture_base_theme_version_is_an_object(version: str) -> None:
+    # report/3.0.0 needs an object here; Power BI Desktop refuses a string.
+    report = FIXTURES / version / "Sales.Report/definition/report.json"
+    theme = json.loads(report.read_text(encoding="utf-8"))["themeCollection"]
+    assert set(theme["baseTheme"]["reportVersionAtImport"]) == {
+        "visual",
+        "report",
+        "page",
+    }
