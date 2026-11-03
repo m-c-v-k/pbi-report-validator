@@ -27,13 +27,14 @@ DEFAULT_MAX_RETRIES = 3
 MAX_RETRY_AFTER_SECONDS = 60.0
 MAX_RESULT_ROWS = 100_000
 MAX_RESULT_VALUES = 1_000_000
-# The API stops writing rows after 15 MB of data, without an error. The docs
-# don't say how the bytes are counted, so results from 90% of that on count
-# as possibly cut off.
+# Over 15 MB of data the API answers with partial rows and an error in the
+# result. Results from 90% of that on also count as possibly cut off, since
+# the size of the response is not the size the API counts.
 NEAR_RESULT_SIZE_LIMIT_BYTES = 13_500_000
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 UNEXPECTED_RESPONSE = "unexpected executeQueries response"
 GUID = re.compile(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}")
+OII_TAGS = re.compile(r"</?oii>")
 
 
 class PowerBIError(Exception):
@@ -310,6 +311,6 @@ def _message_from(error: Any) -> str:
         body = detail.get("detail") if isinstance(detail, dict) else None
         value = body.get("value") if isinstance(body, dict) else None
         if isinstance(value, str) and value:
-            return value
+            return OII_TAGS.sub("", value)
     message = error.get("message") or error.get("code")
     return str(message) if message else "unknown error"
