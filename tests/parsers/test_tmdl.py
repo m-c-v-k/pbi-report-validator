@@ -5,6 +5,29 @@ from pbi_report_validator.parsers.tmdl import parse_semantic_model, parse_tmdl
 from tests.factories import FIXTURES
 
 
+def test_measure_without_expression_names_the_measure() -> None:
+    _, issues = parse_tmdl("table T\n\tmeasure M\n", "t.tmdl")
+
+    assert [(i.path, i.measure) for i in issues] == [("t.tmdl:2", "T[M]")]
+
+
+def test_unreadable_file_is_an_issue() -> None:
+    raw = RawSemanticModel(
+        path="M.SemanticModel",
+        files=(
+            RawTextFile(path="a.tmdl", error="bad byte"),
+            RawTextFile(path="b.tmdl", text="table T\n\tmeasure M = 1\n"),
+        ),
+    )
+
+    model = parse_semantic_model(raw)
+
+    assert [(i.path, i.message) for i in model.issues] == [
+        ("a.tmdl", "unreadable: bad byte")
+    ]
+    assert [t.name for t in model.tables] == ["T"]
+
+
 def test_parses_sales_v1_model() -> None:
     raw = load_project(FIXTURES / "sales_v1").semantic_model
     assert raw is not None

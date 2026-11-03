@@ -34,30 +34,57 @@ def diff_measures(old: SemanticModel | None, new: SemanticModel | None) -> Measu
     Returns:
         Added, removed, renamed and modified measures, and a map from old
         to new DAX key (``Sales[Margin %]`` -> ``Sales[Gross Margin %]``).
-        Nothing is compared unless both models are available.
+        Nothing is compared unless both models are available. A table
+        declared in several files is compared as one, and a measure that
+        could not be parsed in one version is not reported as added or
+        removed (its parse issue already is).
     """
     if old is None or new is None:
         return MeasureDiff()
-    old_tables = {t.name: t.measures for t in old.tables}
-    new_tables = {t.name: t.measures for t in new.tables}
+    old_tables, new_tables = _measures_by_table(old), _measures_by_table(new)
+    unparsed = _unparsed_measures(old) | _unparsed_measures(new)
     findings: list[Finding] = []
     renames: dict[str, str] = {}
     for table in sorted(old_tables.keys() | new_tables.keys()):
         table_findings, table_renames = _diff_table(
-            table, old_tables.get(table, ()), new_tables.get(table, ())
+            table, old_tables.get(table, ()), new_tables.get(table, ()), unparsed
         )
         findings += table_findings
         renames.update(table_renames)
     return MeasureDiff(findings=tuple(findings), renames=renames)
 
 
+def _measures_by_table(model: SemanticModel) -> dict[str, tuple[Measure, ...]]:
+    """Measures per table name, merging tables declared in several files."""
+    merged: dict[str, tuple[Measure, ...]] = {}
+    for table in model.tables:
+        merged[table.name] = (*merged.get(table.name, ()), *table.measures)
+    return merged
+
+
+def _unparsed_measures(model: SemanticModel) -> set[str]:
+    """``Table[Name]`` keys of the measures that could not be parsed."""
+    return {i.measure for i in model.issues if i.measure}
+
+
 def _diff_table(
-    table: str, old: tuple[Measure, ...], new: tuple[Measure, ...]
+    table: str,
+    old: tuple[Measure, ...],
+    new: tuple[Measure, ...],
+    unparsed: set[str],
 ) -> tuple[list[Finding], dict[str, str]]:
     old_by_name = {m.name: m for m in old}
     new_by_name = {m.name: m for m in new}
-    removed = [m for m in old if m.name not in new_by_name]
-    added = [m for m in new if m.name not in old_by_name]
+    removed = [
+        m
+        for m in old
+        if m.name not in new_by_name and field_key(table, m.name) not in unparsed
+    ]
+    added = [
+        m
+        for m in new
+        if m.name not in old_by_name and field_key(table, m.name) not in unparsed
+    ]
     pairs = _renamed_pairs(removed, added)
     renamed_old = {o.name for o, _ in pairs}
     renamed_new = {n.name for _, n in pairs}
