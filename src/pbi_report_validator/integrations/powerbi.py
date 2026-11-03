@@ -27,6 +27,10 @@ DEFAULT_MAX_RETRIES = 3
 MAX_RETRY_AFTER_SECONDS = 60.0
 MAX_RESULT_ROWS = 100_000
 MAX_RESULT_VALUES = 1_000_000
+# The API stops writing rows after 15 MB of data, without an error. The docs
+# don't say how the bytes are counted, so results from 90% of that on count
+# as possibly cut off.
+NEAR_RESULT_SIZE_LIMIT_BYTES = 13_500_000
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 UNEXPECTED_RESPONSE = "unexpected executeQueries response"
 GUID = re.compile(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}")
@@ -162,7 +166,8 @@ class PowerBIClient:
             "serializerSettings": {"includeNulls": True},
         }
         response = self._post(f"datasets/{dataset_id}/executeQueries", body)
-        return _parse_result(_json(response))
+        result = _parse_result(_json(response))
+        return result.model_copy(update={"response_bytes": len(response.content)})
 
     def _post(self, path: str, body: dict[str, Any]) -> httpx.Response:
         for attempt in range(self._max_retries + 1):
