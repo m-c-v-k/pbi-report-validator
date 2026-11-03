@@ -74,6 +74,57 @@ def test_non_slicer_visuals_have_no_slicer_state() -> None:
     assert parse_slicer_state({"visualType": "card"}, None) == (None, [])
 
 
+def year_selection(year: str) -> dict[str, Any]:
+    """A slicer selection as the filter API stores it in ``objects.general``."""
+    selection = {
+        "In": {"Expressions": [col("s", "Year")], "Values": [[lit(f"{year}L")]]}
+    }
+    return {"properties": {"filter": {"filter": query(selection)}}}
+
+
+@pytest.mark.parametrize(
+    "visual_type", ["slicer", "listSlicer", "advancedSlicerVisual", "textSlicer"]
+)
+def test_built_in_slicer_types_read_their_selection(visual_type: str) -> None:
+    body = {"visualType": visual_type, "objects": {"general": [year_selection("2025")]}}
+
+    state, problems = parse_slicer_state(body, YEAR)
+
+    assert state is not None
+    assert state.condition == "Sales[Year] in (2025)"
+    assert problems == []
+
+
+def test_custom_visual_with_a_stored_selection_is_a_slicer() -> None:
+    body = {
+        "visualType": "chicletSlicer1A2B3C",
+        "objects": {"general": [year_selection("2024")]},
+    }
+
+    state, _ = parse_slicer_state(body, YEAR)
+
+    assert state is not None
+    assert state.condition == "Sales[Year] in (2024)"
+
+
+def test_selection_in_a_later_general_entry_is_read() -> None:
+    general = [{"properties": {"orientation": 1}}, year_selection("2025")]
+
+    state, _ = parse_slicer_state(
+        {"visualType": "listSlicer", "objects": {"general": general}}, YEAR
+    )
+
+    assert state is not None
+    assert state.condition == "Sales[Year] in (2025)"
+
+
+def test_newer_slicer_without_selection_is_still_a_slicer() -> None:
+    state, _ = parse_slicer_state({"visualType": "advancedSlicerVisual"}, YEAR)
+
+    assert state is not None
+    assert state.condition is None
+
+
 def test_slicer_without_selection_has_no_condition() -> None:
     state, _ = parse_slicer_state({"visualType": "slicer"}, YEAR)
 
