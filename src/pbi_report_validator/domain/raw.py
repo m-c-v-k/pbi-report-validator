@@ -45,10 +45,11 @@ class RawReport(RawModel):
 
 
 class RawTextFile(RawModel):
-    """A text file, e.g. a ``.tmdl`` file."""
+    """A text file, e.g. a ``.tmdl`` file. ``error`` is set if it was unreadable."""
 
     path: str
-    text: str
+    text: str = ""
+    error: str | None = None
 
 
 class RawSemanticModel(RawModel):
@@ -59,8 +60,13 @@ class RawSemanticModel(RawModel):
 
 
 class RawProject(RawModel):
-    """A PBIP project: one report and, if referenced by path, its semantic model."""
+    """A PBIP project: one report and, if referenced by path, its semantic model.
+
+    ``model_missing`` says why there is no semantic model to read, if there
+    is none.
+    """
 
     name: str
     report: RawReport
     semantic_model: RawSemanticModel | None = None
+    model_missing: str | None = None

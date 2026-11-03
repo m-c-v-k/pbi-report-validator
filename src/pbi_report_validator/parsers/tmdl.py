@@ -52,11 +52,16 @@ def parse_semantic_model(raw: RawSemanticModel) -> SemanticModel:
 
     Returns:
         Tables with their columns and measures, in file order, plus a parse
-        issue for every object that could not be read.
+        issue for every file or object that could not be read.
     """
     tables: list[Table] = []
     issues: list[ParseIssue] = []
     for file in raw.files:
+        if file.error is not None:
+            issues.append(
+                ParseIssue(path=file.path, message=f"unreadable: {file.error}")
+            )
+            continue
         file_tables, file_issues = parse_tmdl(file.text, file.path)
         tables.extend(file_tables)
         issues.extend(file_issues)
@@ -103,6 +108,7 @@ def _read_table(
                     ParseIssue(
                         path=f"{path}:{header.number}",
                         message=f"measure {key} has no expression",
+                        measure=key,
                     )
                 )
             else:

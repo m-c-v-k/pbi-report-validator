@@ -200,13 +200,15 @@ class ParseIssue(DomainModel):
 
     Parse issues are reported as findings instead of aborting the run.
     ``visual_path`` is the ``page/visual`` the issue belongs to, if any;
-    ``page`` is set when the whole page could not be parsed.
+    ``page`` is set when the whole page could not be parsed, and ``measure``
+    (a ``Table[Name]`` key) when a measure could not be.
     """
 
     path: str
     message: str
     visual_path: str | None = None
     page: str | None = None
+    measure: str | None = None
 
 
 class Report(DomainModel):

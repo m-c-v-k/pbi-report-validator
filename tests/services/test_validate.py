@@ -37,7 +37,7 @@ def test_parse_issues_become_findings(tmp_path: Path) -> None:
     assert [f.visual_path for f in issues] == ["overview/card_margin"]
 
 
-def test_measures_are_skipped_without_semantic_model(tmp_path: Path) -> None:
+def test_missing_semantic_model_is_reported_not_compared(tmp_path: Path) -> None:
     new = tmp_path / "new"
     shutil.copytree(FIXTURES / "sales_v2", new)
     (new / "Sales.Report/definition.pbir").write_text(
@@ -48,6 +48,26 @@ def test_measures_are_skipped_without_semantic_model(tmp_path: Path) -> None:
 
     assert not any(f.category == Category.MEASURE for f in result.findings)
     assert any(f.category == Category.PAGE for f in result.findings)
+    [warning] = [f for f in result.findings if f.path == "new/model"]
+    assert warning.severity == Severity.WARNING
+    assert warning.message == (
+        "Measures were not compared: in the new version, "
+        "the report uses a published semantic model (byConnection)"
+    )
+
+
+def test_unreadable_tmdl_is_a_parse_issue_not_a_stopped_run(tmp_path: Path) -> None:
+    new = tmp_path / "new"
+    shutil.copytree(FIXTURES / "sales_v2", new)
+    (new / "Sales.SemanticModel/definition/tables/Sales.tmdl").write_bytes(b"\xff")
+
+    result = validate(FIXTURES / "sales_v1", new)
+
+    issues = [f for f in result.findings if f.category == Category.PARSE_ISSUE]
+    assert [f.path for f in issues] == [
+        "new/Sales.SemanticModel/definition/tables/Sales.tmdl"
+    ]
+    assert issues[0].message.startswith("Could not fully parse the new version")
 
 
 def test_unparseable_visual_in_old_version_is_not_reported_added(
