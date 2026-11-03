@@ -275,7 +275,7 @@ def _failure_reason(exc: Exception, show_values: bool) -> str:
 
 
 def _truncation_reason(old: QueryResult, new: QueryResult) -> str | None:
-    """Why a result may be incomplete; the API cuts it off without an error."""
+    """Why a result may be incomplete, even if the API reported no error."""
     sides = [
         label for label, result in (("old", old), ("new", new)) if _at_api_limit(result)
     ]
