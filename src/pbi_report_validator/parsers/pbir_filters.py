@@ -12,6 +12,7 @@ compared.
 
 import json
 import re
+from decimal import Decimal
 from typing import Any, Literal, NamedTuple, cast
 
 from pbi_report_validator.domain.conditions import render
@@ -42,7 +43,9 @@ Direction = Literal["top", "bottom"]
 TOP_N_DIRECTIONS: dict[int, Direction] = {1: "bottom", 2: "top"}
 # The L/D/M type suffix (integer/decimal/currency) is dropped: DAX number
 # literals do not need it, and the text form never showed it.
-NUMBER_LITERAL = re.compile(r"^(-?\d+(?:\.\d+)?)[LDM]?$")
+NUMBER_LITERAL = re.compile(r"^(-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)[LDM]?$")
+# Exponents beyond this are left unread rather than written out in full.
+MAX_EXPONENT = 100
 DATETIME_LITERAL = re.compile(r"^datetime'(?P<value>[^']*)'$")
 # Built-in slicers: the classic one and the newer list, button and text slicers.
 SLICER_TYPES = frozenset({"slicer", "listSlicer", "advancedSlicerVisual", "textSlicer"})
@@ -165,8 +168,8 @@ def parse_condition(query: Any) -> Condition | None:
 def parse_literal(raw: str) -> LiteralValue:
     """Classify a raw PBIR literal such as ``2025L``, ``'Bikes'`` or ``true``."""
     number = NUMBER_LITERAL.match(raw)
-    if number:
-        return LiteralValue(kind=LiteralKind.NUMBER, value=number.group(1))
+    if number and (plain := _plain_number(number.group(1))) is not None:
+        return LiteralValue(kind=LiteralKind.NUMBER, value=plain)
     if is_quoted(raw):
         return LiteralValue(kind=LiteralKind.TEXT, value=unquote(raw))
     if raw in ("true", "false"):
@@ -177,6 +180,20 @@ def parse_literal(raw: str) -> LiteralValue:
     if datetime:
         return LiteralValue(kind=LiteralKind.DATETIME, value=datetime["value"])
     return LiteralValue(kind=LiteralKind.OTHER, value=raw)
+
+
+def _plain_number(digits: str) -> str | None:
+    """One text form per value: ``1.50`` and ``1.5`` -> ``1.5``, ``1E+3`` -> ``1000``.
+
+    ``None`` when the exponent is too large to write out.
+    """
+    value = Decimal(digits)
+    exponent = value.adjusted()
+    if abs(exponent) > MAX_EXPONENT:
+        return None
+    if value.is_zero():
+        return "0"
+    return format(value.normalize(), "f")
 
 
 def _parse_filter(
