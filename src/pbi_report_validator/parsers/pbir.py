@@ -11,7 +11,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from pbi_report_validator.domain.helpers import visual_path
+from pbi_report_validator.domain.helpers import json_location, visual_path
 from pbi_report_validator.domain.models import (
     FilterLevel,
     Page,
@@ -51,7 +51,9 @@ def parse_report(raw: RawReport) -> Report:
         page's ``ordinal`` is its position in ``pages.json``, counting pages
         that failed to parse, so it stays stable when one page breaks.
     """
-    filters, problems = parse_filters(raw.report.content, FilterLevel.REPORT)
+    filters, problems = parse_filters(
+        raw.report.content, FilterLevel.REPORT, raw.report.path
+    )
     issues = [ParseIssue(path=raw.report.path, message=m) for m in problems]
     names, order_issues = _page_order(raw)
     issues += order_issues
@@ -96,10 +98,11 @@ def _parse_page(raw: RawPage, ordinal: int) -> tuple[Page | None, list[ParseIssu
         issues += visual_issues
         if visual is not None:
             visuals.append(visual)
-    filters, problems = parse_filters(content, FilterLevel.PAGE)
+    filters, problems = parse_filters(content, FilterLevel.PAGE, raw.page.path)
     issues += [ParseIssue(path=raw.page.path, message=m) for m in problems]
     try:
         page = Page(
+            location=json_location(raw.page.path),
             name=page_name,
             display_name=str(content.get("displayName", raw.name)),
             ordinal=ordinal,
@@ -124,24 +127,33 @@ def _parse_visual_or_issue(
     key = visual_path(page_name, PurePosixPath(raw.path).parent.name)
     if raw.error is not None:
         return None, [_unreadable(raw, visual_path=key)]
-    visual, problems = _try_parse_visual(raw.content)
+    visual, problems = _try_parse_visual(raw.content, raw.path)
     return visual, [
         ParseIssue(path=raw.path, message=m, visual_path=key) for m in problems
     ]
 
 
-def _try_parse_visual(content: dict[str, Any]) -> tuple[Visual | None, list[str]]:
+def _try_parse_visual(
+    content: dict[str, Any], file: str
+) -> tuple[Visual | None, list[str]]:
     """The visual and its problems, or ``None`` and why it could not be parsed."""
     try:
-        return parse_visual(content)
+        return parse_visual(content, file)
     except VisualParseError as exc:
         return None, [str(exc)]
     except ValidationError as exc:
         return None, [_first_error(exc)]
 
 
-def parse_visual(content: dict[str, Any]) -> tuple[Visual, list[str]]:
+def parse_visual(
+    content: dict[str, Any], file: str | None = None
+) -> tuple[Visual, list[str]]:
     """Parse one ``visual.json``.
+
+    Args:
+        content: The file's JSON.
+        file: Its path, recorded as the location of the visual and its
+            fields, filters and slicer selection; ``None`` records none.
 
     Returns:
         The visual, and a message for each part that was skipped because it
@@ -159,20 +171,23 @@ def parse_visual(content: dict[str, Any]) -> tuple[Visual, list[str]]:
     missing = [key for key in REQUIRED_POSITION_KEYS if key not in position]
     if missing:
         raise VisualParseError(f"visual position is missing {', '.join(missing)}")
-    filters, problems = parse_filters(content, FilterLevel.VISUAL)
+    filters, problems = parse_filters(content, FilterLevel.VISUAL, file)
+    location = json_location(file)
     body = content.get("visual")
     if not isinstance(body, dict):
         group = Visual(
+            location=location,
             name=name,
             visual_type=GROUP_VISUAL_TYPE if "visualGroup" in content else "unknown",
             position=_position(position),
             filters=filters,
         )
         return group, problems
-    projections, field_problems = _projections(body)
+    projections, field_problems = _projections(body, file)
     first_field = projections[0].field if projections else None
-    slicer, slicer_problems = parse_slicer_state(body, first_field)
+    slicer, slicer_problems = parse_slicer_state(body, first_field, file)
     visual = Visual(
+        location=location,
         name=name,
         visual_type=str(body.get("visualType", "unknown")),
         position=_position(position),
@@ -203,7 +218,9 @@ def _title(body: dict[str, Any]) -> str | None:
     return unquote(literal) if isinstance(literal, str) else None
 
 
-def _projections(body: dict[str, Any]) -> tuple[tuple[Projection, ...], list[str]]:
+def _projections(
+    body: dict[str, Any], file: str | None
+) -> tuple[tuple[Projection, ...], list[str]]:
     """The fields in each role, and a message for each field that was skipped.
 
     Fields of a kind the parser cannot read are kept as unknown fields, so
@@ -221,13 +238,15 @@ def _projections(body: dict[str, Any]) -> tuple[tuple[Projection, ...], list[str
         if not isinstance(items, list):
             problems.append(f"projections in role {role} are not a list, skipped")
             continue
-        for item in items:
+        for index, item in enumerate(items):
             raw = item.get("field") if isinstance(item, dict) else None
             field = parse_field(raw) or unknown_field(raw)
             if field is None:
                 problems.append(f"unrecognised field in role {role} was skipped")
-            else:
-                projections.append(Projection(role=role, field=field))
+                continue
+            where = ("visual", "query", "queryState", role, "projections", index)
+            location = json_location(file, *where)
+            projections.append(Projection(role=role, field=field, location=location))
     return tuple(projections), problems
 
 

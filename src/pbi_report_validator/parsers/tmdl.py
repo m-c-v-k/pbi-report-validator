@@ -14,12 +14,13 @@ they are kept as part of the DAX.
 import re
 from dataclasses import dataclass
 
-from pbi_report_validator.domain.helpers import field_key
+from pbi_report_validator.domain.helpers import field_key, tmdl_reference
 from pbi_report_validator.domain.models import (
     Column,
     Measure,
     ParseIssue,
     SemanticModel,
+    SourceLocation,
     Table,
 )
 from pbi_report_validator.domain.raw import RawSemanticModel
@@ -101,7 +102,9 @@ def _read_table(
         if match and match["kind"] == "column":
             columns.append(_read_column(match, header, body))
         elif match and match["kind"] == "measure":
-            measure = _read_measure(match, header, body)
+            reference = tmdl_reference(name, unquote(match["name"]))
+            location = SourceLocation(file=path, pointer=reference)
+            measure = _read_measure(match, header, body, location)
             if measure is None:
                 key = field_key(name, unquote(match["name"]))
                 issues.append(
@@ -118,7 +121,10 @@ def _read_table(
 
 
 def _read_measure(
-    match: re.Match[str], header: _Line, body: list[_Line]
+    match: re.Match[str],
+    header: _Line,
+    body: list[_Line],
+    location: SourceLocation,
 ) -> Measure | None:
     """The measure, or ``None`` if it has no expression."""
     expression = (
@@ -126,7 +132,9 @@ def _read_measure(
     )
     if not expression:
         return None
-    return Measure(name=unquote(match["name"]), expression=expression)
+    return Measure(
+        name=unquote(match["name"]), expression=expression, location=location
+    )
 
 
 def _read_column(match: re.Match[str], header: _Line, body: list[_Line]) -> Column:
