@@ -13,10 +13,12 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from pbi_report_validator.dax.builder import build_query, result_column
+from pbi_report_validator.diff.attribution import attribute_difference
 from pbi_report_validator.diff.results import compare_results, not_validated
 from pbi_report_validator.diff.severity import make_finding
 from pbi_report_validator.domain.helpers import field_name, is_within, visual_path
 from pbi_report_validator.domain.models import (
+    Attribution,
     Category,
     ChangeKind,
     DataComparison,
@@ -58,6 +60,7 @@ PAGE_PARTLY_PARSED = (
 LOST_VISUAL = "the visual could not be parsed in the {side} version"
 LOST_PAGE = "the page could not be parsed in the {side} version"
 SLICER_IN_ONE_VERSION = "the visual is a slicer in only one version"
+CROSS_QUERY = "the new report's query on the old model"
 
 
 class QueryRunner(Protocol):
@@ -78,6 +81,7 @@ def data_settings(
     absolute: float = 0.0,
     relative: float = 1e-9,
     show_values: bool = False,
+    attribute: bool = False,
 ) -> DataSettings:
     """Settings from the CLI options.
 
@@ -98,6 +102,7 @@ def data_settings(
         new_dataset=new_dataset,
         tolerance=tolerance,
         show_values=show_values,
+        attribute=attribute,
     )
 
 
@@ -265,7 +270,42 @@ def _compare(
         settings.tolerance,
         show_values=settings.show_values,
     )
+    if settings.attribute and comparison.summary.status is DataStatus.DIFFERENT:
+        attribution, reason = _attribution(
+            path, (old_result, new_result), new_dax, (keys, values), runner, settings
+        )
+        summary = comparison.summary.model_copy(
+            update={"attribution": attribution, "attribution_reason": reason}
+        )
+        comparison = comparison.model_copy(update={"summary": summary})
     return _with_unpaired(comparison, path, values.only_old, values.only_new)
+
+
+def _attribution(
+    path: str,
+    results: tuple[QueryResult, QueryResult],
+    new_dax: DaxQuery,
+    pairs: tuple[list[tuple[str, str]], ValuePairing],
+    runner: QueryRunner,
+    settings: DataSettings,
+) -> tuple[Attribution, str | None]:
+    """Run the new query on the old dataset and attribute the difference."""
+    try:
+        cross = runner.execute_query(settings.old_dataset, new_dax.dax)
+    except (QueryError, RateLimitError, ServiceError) as exc:
+        reason = _failure_reason(exc, settings.show_values)
+        return Attribution.UNKNOWN, f"{CROSS_QUERY}: {reason}"
+    if _at_api_limit(cross):
+        return Attribution.UNKNOWN, f"{CROSS_QUERY}: the result may be cut off"
+    old_result, new_result = results
+    keys, values = pairs
+    return attribute_difference(
+        path,
+        (old_result, cross, new_result),
+        keys,
+        values.columns,
+        settings.tolerance,
+    )
 
 
 def _failure_reason(exc: Exception, show_values: bool) -> str:

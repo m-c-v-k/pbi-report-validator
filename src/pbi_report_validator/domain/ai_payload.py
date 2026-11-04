@@ -1,7 +1,7 @@
 """What the optional AI layer may send to the model."""
 
 from pbi_report_validator.domain.base import DomainModel
-from pbi_report_validator.domain.data_validation import DataStatus
+from pbi_report_validator.domain.data_validation import Attribution, DataStatus
 from pbi_report_validator.domain.diff import Category, ChangeKind, Severity
 
 
@@ -33,6 +33,8 @@ class AiDataSummary(DomainModel):
     rows_only_new: int = 0
     max_abs_delta: float | None = None
     reason: str | None = None
+    attribution: Attribution | None = None
+    attribution_reason: str | None = None
 
 
 class AiPayload(DomainModel):

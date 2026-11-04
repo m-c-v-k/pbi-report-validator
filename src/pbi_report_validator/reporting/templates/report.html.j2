@@ -218,6 +218,9 @@ td a, .detail-body a { color: var(--accent); }
 {% set data = data_by_path.get(key) %}
 {% if data %}
         <dt>Data</dt><dd>{% if data.status.value == 'not_validated' %}not validated: {{ data.reason }}{% else %}{{ data.status.value }}: {{ data.rows_matched }} rows matched, {{ data.rows_differing }} differing, {{ data.rows_only_old }} only old, {{ data.rows_only_new }} only new{% if data.max_abs_delta is not none %}, largest difference {{ data.max_abs_delta }}{% endif %}{% endif %}</dd>
+{% if data.attribution %}
+        <dt>Cause</dt><dd>{{ attribution_label(data) }}</dd>
+{% endif %}
 {% endif %}
       </dl>
       <ul>

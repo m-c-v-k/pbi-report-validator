@@ -22,7 +22,7 @@ from pbi_report_validator.domain.report import (
     Visual,
 )
 
-SCHEMA_VERSION: Final = "1.7"
+SCHEMA_VERSION: Final = "1.8"
 
 
 class MatchMethod(StrEnum):
@@ -248,11 +248,12 @@ class DiffResult(DomainModel):
     ``data_values_shown`` (row keys and values are masked unless it is true);
     1.5 added the ``ai`` category, ``ai_mode`` and ``ai_model``; 1.6 added
     ``ai_suggestions`` (``--ai-match``); 1.7 added the optional
-    ``explanation`` on findings (``--ai-explain``).
+    ``explanation`` on findings (``--ai-explain``); 1.8 added ``attribution``
+    and ``attribution_reason`` on data summaries (``--attribute``).
     """
 
     # Keep the Literal in sync with SCHEMA_VERSION (enforced by a test).
-    schema_version: Literal["1.7"] = SCHEMA_VERSION
+    schema_version: Literal["1.8"] = SCHEMA_VERSION
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()

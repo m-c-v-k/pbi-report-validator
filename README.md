@@ -125,7 +125,7 @@ or the `.Report` folder itself. The terminal always shows a summary; add any of:
 |---|---|
 | `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
 | `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
-| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.7) |
+| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.8) |
 
 Running it on the sample reports in this repository gives:
 
@@ -227,6 +227,16 @@ pbi-validate diff ./old ./new --data \
   visuals or pages that could not be parsed in one version, and visuals that
   are a slicer in only one version. All of these count for
   `--fail-on-data-error`.
+- `--attribute` tells you, for each visual whose numbers differ, whether the
+  **report** or the **semantic model** caused it. The new report's query is
+  also run against the old model (one extra query per differing visual,
+  nothing is written or rebound). If that already gives the new numbers, the
+  report changed; if it still gives the old numbers, the model changed; if
+  it gives neither, both did. When this cannot be told (for example the new
+  query uses a measure the old model does not have), the cause is `unknown`
+  with the reason. The cause is listed under the data summary in the
+  terminal and Markdown, in the HTML drill-down, and as `attribution` /
+  `attribution_reason` on each `data` summary in the JSON (schema 1.8).
 
 **Setup (one time).** Data validation signs in as a Microsoft Entra
 service principal and uses the Power BI REST API `executeQueries` endpoint,
