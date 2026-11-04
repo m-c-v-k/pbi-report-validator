@@ -11,6 +11,7 @@ from pbi_report_validator.domain.models import (
     DiffResult,
     Finding,
     ItemStatus,
+    SourceLocation,
 )
 
 CATEGORY_LABELS = {
@@ -92,6 +93,19 @@ def attribution_lines(result: DiffResult) -> list[tuple[str, str]]:
         for summary in result.data
         if (label := attribution_label(summary))
     ]
+
+
+def source_locations(finding: Finding) -> list[tuple[str, SourceLocation]]:
+    """Where the finding's object is defined, labelled for the reader.
+
+    One ``Defined in`` entry when both versions define it at the same place,
+    otherwise an ``Old`` and/or ``New`` entry for each side that has it.
+    """
+    old, new = finding.old_location, finding.new_location
+    if old is not None and old == new:
+        return [("Defined in", old)]
+    sides = [("Old", old), ("New", new)]
+    return [(label, location) for label, location in sides if location is not None]
 
 
 def ai_overview(result: DiffResult) -> str | None:

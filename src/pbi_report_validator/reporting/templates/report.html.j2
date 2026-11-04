@@ -53,6 +53,7 @@ tr:last-child td { border-bottom: 0; }
 .values .new { color: var(--added); }
 .empty { color: var(--muted); }
 .ai-note { color: var(--muted); font-style: italic; margin-top: 4px; }
+.source { color: var(--muted); font-size: 0.85em; margin-top: 4px; overflow-wrap: anywhere; }
 .data-overview { margin: 0 0 12px; }
 footer { margin-top: 40px; color: var(--muted); font-size: 0.85rem; }
 footer a { color: var(--accent); }
@@ -234,6 +235,9 @@ td a, .detail-body a { color: var(--accent); }
 {% endif %}
           </div>
 {% endif %}
+{% for label, location in source_locations(f) %}
+          <div class="source">{{ label }}: <code>{{ location.file }}</code>{% if location.pointer %} <code>{{ location.pointer }}</code>{% endif %}</div>
+{% endfor %}
         </li>
 {% endfor %}
       </ul>
