@@ -35,6 +35,15 @@ RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 UNEXPECTED_RESPONSE = "unexpected executeQueries response"
 GUID = re.compile(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}")
 OII_TAGS = re.compile(r"</?oii>")
+# The API names some causes only in this header, for example a 401 with an
+# empty body when a tenant setting blocks the service principal.
+ERROR_INFO_HEADER = "x-powerbi-error-info"
+ERROR_INFO_HINTS = {
+    "ServicePrincipalIsNotAllowedByTenantAdminSwitch": (
+        "enable the service principal tenant settings in the Power BI admin "
+        "portal and check that the app is a member of the allowed security group"
+    ),
+}
 
 
 class PowerBIError(Exception):
@@ -224,7 +233,7 @@ def _raise_for_status(response: httpx.Response) -> None:
     status = response.status_code
     if status < 400:
         return
-    message = _error_message(response)
+    message = _error_message(response) + _error_info(response)
     if status in (401, 403):
         raise AuthenticationError(f"access denied by Power BI ({status}): {message}")
     if status == 404:
@@ -291,6 +300,16 @@ def _cell(value: Any) -> CellValue:
     if value is None or isinstance(value, str | int | float | bool):
         return value
     return str(value)
+
+
+def _error_info(response: httpx.Response) -> str:
+    """The ``x-powerbi-error-info`` header and its hint, or ``""`` without it."""
+    info = response.headers.get(ERROR_INFO_HEADER, "").strip()
+    if not info:
+        return ""
+    hint = ERROR_INFO_HINTS.get(info)
+    text = f" [{ERROR_INFO_HEADER}: {_redact(info)}]"
+    return f"{text}; {hint}" if hint else text
 
 
 def _error_message(response: httpx.Response) -> str:

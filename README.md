@@ -270,8 +270,8 @@ Unauthorized` after a successful sign-in usually means the tenant setting
 from step 2 blocks the app: the setting is off, it hasn't applied yet, or
 the app is not in the allowed group. The API then sends
 `ServicePrincipalIsNotAllowedByTenantAdminSwitch` in the
-`x-powerbi-error-info` response header, which the tool doesn't show yet
-([#231](https://github.com/m-c-v-k/pbi-report-validator/issues/231)).
+`x-powerbi-error-info` response header; the error message shows that value
+and what to check.
 
 Limitations: models with row-level security can't be queried by a service
 principal; slicer interactions edited in Power BI and slicers synced from

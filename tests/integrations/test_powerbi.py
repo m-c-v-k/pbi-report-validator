@@ -156,6 +156,43 @@ def test_status_codes_map_to_typed_errors(status: int, error: type[Exception]) -
         client(response).execute_query(DATASET, DAX)
 
 
+def test_empty_401_names_the_error_info_header_and_a_hint() -> None:
+    response = httpx.Response(
+        401,
+        headers={
+            "x-powerbi-error-info": "ServicePrincipalIsNotAllowedByTenantAdminSwitch"
+        },
+    )
+
+    with pytest.raises(AuthenticationError) as caught:
+        client(response).execute_query(DATASET, DAX)
+
+    message = str(caught.value)
+    assert message.startswith("access denied by Power BI (401): Unauthorized")
+    assert "ServicePrincipalIsNotAllowedByTenantAdminSwitch" in message
+    assert "allowed security group" in message
+
+
+def test_empty_401_without_header_is_unchanged() -> None:
+    with pytest.raises(AuthenticationError) as caught:
+        client(httpx.Response(401)).execute_query(DATASET, DAX)
+
+    assert str(caught.value) == "access denied by Power BI (401): Unauthorized"
+
+
+def test_other_error_info_is_shown_with_ids_redacted() -> None:
+    info = "SomethingElse 11111111-2222-3333-4444-555555555555"
+    response = httpx.Response(403, headers={"x-powerbi-error-info": info})
+
+    with pytest.raises(AuthenticationError) as caught:
+        client(response).execute_query(DATASET, DAX)
+
+    assert str(caught.value) == (
+        "access denied by Power BI (403): Forbidden"
+        " [x-powerbi-error-info: SomethingElse <id>]"
+    )
+
+
 def test_rate_limit_is_retried_honouring_retry_after() -> None:
     sleeps: list[float] = []
     pbi = client(
