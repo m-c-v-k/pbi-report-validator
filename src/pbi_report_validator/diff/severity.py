@@ -8,6 +8,7 @@ from pbi_report_validator.domain.models import (
     ChangeKind,
     Finding,
     Severity,
+    SourceLocation,
 )
 
 CATEGORY_SEVERITY: Final = {
@@ -49,6 +50,8 @@ def make_finding(
     old: str | None = None,
     new: str | None = None,
     visual_path: str | None = None,
+    old_location: SourceLocation | None = None,
+    new_location: SourceLocation | None = None,
 ) -> Finding:
     """A finding with the default severity of its category and change."""
     return Finding(
@@ -60,6 +63,8 @@ def make_finding(
         old=old,
         new=new,
         visual_path=visual_path,
+        old_location=old_location,
+        new_location=new_location,
     )
 
 

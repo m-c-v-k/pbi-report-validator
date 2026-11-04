@@ -22,6 +22,7 @@ from pbi_report_validator.domain.models import (
     Report,
     ReportMatch,
     SlicerState,
+    SourceLocation,
     VisualMatch,
 )
 
@@ -92,6 +93,8 @@ def _diff_slicer(
         message=message,
         old=old_condition,
         new=new_condition,
+        old_location=old.location if old else None,
+        new_location=new.location if new else None,
     )
 
 
@@ -103,6 +106,7 @@ def _diff_fields(
 ) -> list[Finding]:
     old_roles = _roles_by_field(old, renames)
     new_roles = _roles_by_field(new, {})
+    old_at, new_at = _first_locations(old, renames), _first_locations(new, {})
     findings = []
     for key in sorted(old_roles.keys() | new_roles.keys()):
         before, after = old_roles.get(key), new_roles.get(key)
@@ -122,6 +126,8 @@ def _diff_fields(
                 message=message,
                 old=before,
                 new=after,
+                old_location=old_at.get(key),
+                new_location=new_at.get(key),
             )
         )
     return findings
@@ -133,12 +139,27 @@ def _roles_by_field(
     """Map each field (with aggregation) to its comma-separated roles."""
     roles: dict[str, set[str]] = {}
     for projection in projections:
-        field = projection.field
-        key = renames.get(field.key, field.key)
-        if field.aggregation:
-            key = f"{key} ({field.aggregation})"
-        roles.setdefault(key, set()).add(projection.role)
+        roles.setdefault(_projection_key(projection, renames), set()).add(
+            projection.role
+        )
     return {key: ", ".join(sorted(r)) for key, r in roles.items()}
+
+
+def _first_locations(
+    projections: tuple[Projection, ...], renames: Mapping[str, str]
+) -> dict[str, SourceLocation | None]:
+    """Where each field (with aggregation) is first placed in the visual."""
+    locations: dict[str, SourceLocation | None] = {}
+    for projection in projections:
+        locations.setdefault(_projection_key(projection, renames), projection.location)
+    return locations
+
+
+def _projection_key(projection: Projection, renames: Mapping[str, str]) -> str:
+    """The field's key after renames, with its aggregation if it has one."""
+    field = projection.field
+    key = renames.get(field.key, field.key)
+    return f"{key} ({field.aggregation})" if field.aggregation else key
 
 
 def _diff_filters(
@@ -183,7 +204,14 @@ def _filter_finding(
     else:
         return None
     return make_finding(
-        Category.FILTER, change, path=path, message=message, old=before, new=after
+        Category.FILTER,
+        change,
+        path=path,
+        message=message,
+        old=before,
+        new=after,
+        old_location=old.location if old else None,
+        new_location=new.location if new else None,
     )
 
 
