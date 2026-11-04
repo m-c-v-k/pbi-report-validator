@@ -44,7 +44,10 @@ def diff_content(
         match: Page and visual pairing from the matcher.
         renames: Old to new field key for renamed measures.
     """
-    findings = _diff_filters(REPORT_PATH, old.filters, new.filters, renames)
+    findings = [
+        f.model_copy(update={"report_level": True})
+        for f in _diff_filters(REPORT_PATH, old.filters, new.filters, renames)
+    ]
     for page_match in match.pages:
         page = page_match.old.name
         findings += _diff_filters(

@@ -29,7 +29,7 @@ def build_page_views(
     Matched pages use the new order; added pages their new position and
     removed pages their old one. Ties sort removed pages last, then by name.
     """
-    paths = {f.path for f in findings}
+    paths = {f.page_path for f in findings if f.page_path is not None}
     changes = {(f.path, f.change) for f in findings}
     views = [_matched_page(m, paths, changes) for m in match.pages]
     views += [_whole_page(p, ChangeKind.ADDED, changes) for p in match.added_pages]

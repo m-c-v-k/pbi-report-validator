@@ -106,6 +106,9 @@ class AiExplanation(DomainModel):
     text: str
 
 
+OFF_PAGE_CATEGORIES = frozenset({Category.MEASURE, Category.PARSE_ISSUE, Category.AI})
+
+
 class Finding(DomainModel):
     """One difference (or parse problem) between the old and new report.
 
@@ -131,6 +134,9 @@ class Finding(DomainModel):
     # its visual in the HTML report; not part of the JSON output (schema
     # unchanged), since it is already implied by ``path``.
     visual_path: str | None = Field(default=None, exclude=True)
+    # Set on report-level filters, whose path (``report/filters/...``) is the
+    # same as a filter on a page named ``report``. Not part of the JSON.
+    report_level: bool = Field(default=False, exclude=True)
     explanation: AiExplanation | None = None
 
     @model_serializer(mode="wrap")
@@ -141,6 +147,18 @@ class Finding(DomainModel):
         if self.explanation is None:
             data.pop("explanation", None)
         return data
+
+    @property
+    def page_path(self) -> str | None:
+        """The ``page`` or ``page/...`` path the finding is inside, if any.
+
+        Measures, parse issues, AI notes and report filters have paths with
+        a fixed prefix (``model``, ``old``, ``new``, ``ai``, ``report``) that
+        a page can share as its name, so they belong to no page.
+        """
+        if self.report_level or self.category in OFF_PAGE_CATEGORIES:
+            return None
+        return self.path
 
     @property
     def sort_key(self) -> tuple[str, str, str, str, str, str]:
