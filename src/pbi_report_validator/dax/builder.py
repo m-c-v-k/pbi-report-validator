@@ -189,9 +189,7 @@ def _predicate(condition: Condition) -> str:
         target = targets[0] if len(targets) == 1 else f"({', '.join(targets)})"
         return f"{target} IN {{{rows}}}"
     if isinstance(condition, ComparisonCondition):
-        return (
-            f"{column(condition.field)} {condition.operator} {literal(condition.value)}"
-        )
+        return _comparison(condition)
     if isinstance(condition, TopNCondition):
         raise UnsupportedError("TopN filters are not supported yet")
     if isinstance(condition, NotCondition):
@@ -204,6 +202,18 @@ def _predicate(condition: Condition) -> str:
     if isinstance(condition, AllCondition):
         return " && ".join(f"({_predicate(item)})" for item in condition.items)
     assert_never(condition)
+
+
+def _comparison(condition: ComparisonCondition) -> str:
+    """A comparison; blank tests use ``ISBLANK`` because ``= BLANK()`` matches 0."""
+    target = column(condition.field)
+    if condition.value.kind != LiteralKind.NULL:
+        return f"{target} {condition.operator} {literal(condition.value)}"
+    if condition.operator != "=":
+        raise UnsupportedError(
+            f"comparison {condition.operator} against blank is not supported"
+        )
+    return f"ISBLANK({target})"
 
 
 def _fields(condition: Condition) -> list[FieldRef]:
