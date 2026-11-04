@@ -45,11 +45,13 @@ from pbi_report_validator.services.data_validation import (
     _comparable_queries,
     _pair_values,
     _truncation_reason,
+    _value_renames,
     _with_unpaired,
     data_settings,
     validate_data,
 )
 from pbi_report_validator.services.validate import validate
+from tests import factories
 from tests.factories import FIXTURES, REPO_ROOT, column, measure, page, report, visual
 
 OLD_DS = "11111111-1111-1111-1111-111111111111"
@@ -692,6 +694,18 @@ def test_pair_values_follows_renames_and_lists_unpaired() -> None:
 
     assert pairs.columns == (("[Margin %]", "[Gross Margin %]"), ("[Sales]", "[Sales]"))
     assert (pairs.only_old, pairs.only_new) == (("Old only",), ("New only",))
+
+
+def test_value_renames_use_measure_names_in_tables_with_brackets() -> None:
+    renames = factories.renames(
+        ("Sales [EUR]", "Margin", "Sales [EUR]", "Gross Margin"),
+        ("Sales", "Rate [%]", "Measures", "Rate [%]"),
+    )
+
+    assert _value_renames(renames) == {
+        "Margin": "Gross Margin",
+        "Rate [%]": "Rate [%]",
+    }
 
 
 # Typer's own min=0 check already rejects -inf; nan and inf reach Tolerance.

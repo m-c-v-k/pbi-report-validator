@@ -67,6 +67,7 @@ from pbi_report_validator.domain.report import (
 from pbi_report_validator.domain.semantic import (
     Column,
     Measure,
+    MeasureRename,
     SemanticModel,
     Table,
 )
@@ -109,6 +110,7 @@ __all__ = [
     "MatchMethod",
     "Measure",
     "MeasureDiff",
+    "MeasureRename",
     "NotCondition",
     "Page",
     "PageMatch",

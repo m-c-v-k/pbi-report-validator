@@ -21,6 +21,7 @@ from pbi_report_validator.domain.report import (
     Position,
     Visual,
 )
+from pbi_report_validator.domain.semantic import MeasureRename
 
 SCHEMA_VERSION: Final = "1.9"
 
@@ -234,7 +235,7 @@ class MeasureDiff(DomainModel):
     """Measure findings plus the renames found, keyed by old field key."""
 
     findings: tuple[Finding, ...] = ()
-    renames: dict[str, str] = Field(default_factory=dict)
+    renames: dict[str, MeasureRename] = Field(default_factory=dict)
 
 
 class AiSuggestion(DomainModel):

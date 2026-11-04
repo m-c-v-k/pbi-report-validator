@@ -204,7 +204,7 @@ def test_renamed_measure_inside_an_unread_filter_shows_as_a_change() -> None:
         query["Where"][0]["Condition"]["Contains"]["Left"] = {"Measure": measure}
         return card(query)
 
-    renames = {"Sales[Margin]": "Sales[Gross Margin]"}
+    renames = factories.renames(("Sales", "Margin", "Sales", "Gross Margin"))
     findings = diff_content(
         report(on_measure("Margin")),
         report(on_measure("Gross Margin")),
@@ -219,7 +219,7 @@ def test_renamed_measure_field_is_not_a_field_change() -> None:
     old = report(card(None, field="Margin"))
     new = report(card(None, field="Gross Margin"))
 
-    renames = {"Sales[Margin]": "Sales[Gross Margin]"}
+    renames = factories.renames(("Sales", "Margin", "Sales", "Gross Margin"))
 
     assert diff_content(old, new, ReportMatch(), renames) == []
 

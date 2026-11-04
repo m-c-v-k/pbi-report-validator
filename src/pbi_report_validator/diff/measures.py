@@ -22,6 +22,7 @@ from pbi_report_validator.domain.models import (
     Finding,
     Measure,
     MeasureDiff,
+    MeasureRename,
     SemanticModel,
 )
 
@@ -50,7 +51,7 @@ def diff_measures(old: SemanticModel | None, new: SemanticModel | None) -> Measu
     old_tables, new_tables = _measures_by_table(old), _measures_by_table(new)
     unparsed = _unparsed_measures(old) | _unparsed_measures(new)
     findings: list[Finding] = []
-    renames: dict[str, str] = {}
+    renames: dict[str, MeasureRename] = {}
     removed: list[TableMeasure] = []
     added: list[TableMeasure] = []
     for table in sorted(old_tables.keys() | new_tables.keys()):
@@ -64,7 +65,9 @@ def diff_measures(old: SemanticModel | None, new: SemanticModel | None) -> Measu
     moves = _moved_pairs(removed, added)
     findings += [_moved(old, new) for old, new in moves]
     for (old_table, measure), (new_table, _) in moves:
-        renames[field_key(old_table, measure.name)] = field_key(new_table, measure.name)
+        renames[field_key(old_table, measure.name)] = _rename(
+            old_table, measure.name, new_table, measure.name
+        )
     moved = {item for pair in moves for item in pair}
     findings += [_removed(t, m) for t, m in removed if (t, m) not in moved]
     findings += [_added(t, m) for t, m in added if (t, m) not in moved]
@@ -88,7 +91,7 @@ class _TableDiff(NamedTuple):
     """Findings and renames within one table, and its unpaired measures."""
 
     findings: list[Finding]
-    renames: dict[str, str]
+    renames: dict[str, MeasureRename]
     removed: list[Measure]
     added: list[Measure]
 
@@ -120,7 +123,10 @@ def _diff_table(
         for name in sorted(old_by_name.keys() & new_by_name.keys())
         if old_by_name[name].expression != new_by_name[name].expression
     ]
-    renames = {field_key(table, o.name): field_key(table, n.name) for o, n in pairs}
+    renames = {
+        field_key(table, o.name): _rename(table, o.name, table, n.name)
+        for o, n in pairs
+    }
     return _TableDiff(
         findings=findings,
         renames=renames,
@@ -160,6 +166,14 @@ def _renamed_pairs(
 
 def _expression(measure: Measure) -> str:
     return measure.expression
+
+
+def _rename(
+    old_table: str, old_name: str, new_table: str, new_name: str
+) -> MeasureRename:
+    return MeasureRename(
+        old_table=old_table, old_name=old_name, new_table=new_table, new_name=new_name
+    )
 
 
 def _path(table: str, name: str) -> str:

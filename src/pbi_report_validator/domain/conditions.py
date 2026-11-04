@@ -9,7 +9,6 @@ from collections.abc import Mapping
 from decimal import Decimal, InvalidOperation
 from typing import assert_never
 
-from pbi_report_validator.domain.helpers import field_name, field_table
 from pbi_report_validator.domain.report import (
     AllCondition,
     BinaryCondition,
@@ -22,6 +21,7 @@ from pbi_report_validator.domain.report import (
     NotCondition,
     TopNCondition,
 )
+from pbi_report_validator.domain.semantic import MeasureRename
 
 
 def render(condition: Condition) -> str:
@@ -57,7 +57,9 @@ def render_literal(literal: LiteralValue) -> str:
     return literal.value
 
 
-def rename_fields(condition: Condition, renames: Mapping[str, str]) -> Condition:
+def rename_fields(
+    condition: Condition, renames: Mapping[str, MeasureRename]
+) -> Condition:
     """The condition with every field whose key is in ``renames`` renamed.
 
     Each reference is looked up once, so chained renames (A to B, B to C)
@@ -90,11 +92,11 @@ def rename_fields(condition: Condition, renames: Mapping[str, str]) -> Condition
     assert_never(condition)
 
 
-def _renamed(field: FieldRef, renames: Mapping[str, str]) -> FieldRef:
-    new_key = renames.get(field.key)
-    if new_key is None:
+def _renamed(field: FieldRef, renames: Mapping[str, MeasureRename]) -> FieldRef:
+    rename = renames.get(field.key)
+    if rename is None:
         return field
-    update = {"table": field_table(new_key), "name": field_name(new_key)}
+    update = {"table": rename.new_table, "name": rename.new_name}
     return field.model_copy(update=update)
 
 
