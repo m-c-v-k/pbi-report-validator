@@ -126,6 +126,8 @@ def _renamed(table: str, old: Measure, new: Measure) -> Finding:
         message=f"Measure {table}[{old.name}] renamed to {table}[{new.name}]",
         old=old.name,
         new=new.name,
+        old_location=old.location,
+        new_location=new.location,
     )
 
 
@@ -136,6 +138,7 @@ def _removed(table: str, measure: Measure) -> Finding:
         path=_path(table, measure.name),
         message=f"Measure {table}[{measure.name}] removed",
         old=measure.expression,
+        old_location=measure.location,
     )
 
 
@@ -146,6 +149,7 @@ def _added(table: str, measure: Measure) -> Finding:
         path=_path(table, measure.name),
         message=f"Measure {table}[{measure.name}] added",
         new=measure.expression,
+        new_location=measure.location,
     )
 
 
@@ -157,4 +161,6 @@ def _modified(table: str, old: Measure, new: Measure) -> Finding:
         message=f"Expression of measure {table}[{old.name}] changed",
         old=old.expression,
         new=new.expression,
+        old_location=old.location,
+        new_location=new.location,
     )

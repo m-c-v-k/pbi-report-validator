@@ -77,6 +77,7 @@ def _page_added(page: Page) -> Finding:
         path=page.name,
         message=f"Page '{page.display_name}' added with {_visual_count_text(page)}",
         new=page.display_name,
+        new_location=page.location,
     )
 
 
@@ -87,6 +88,7 @@ def _page_removed(page: Page) -> Finding:
         path=page.name,
         message=f"Page '{page.display_name}' removed with {_visual_count_text(page)}",
         old=page.display_name,
+        old_location=page.location,
     )
 
 
@@ -111,6 +113,8 @@ def _reordered_pages(pages: tuple[PageMatch, ...]) -> list[Finding]:
             f"{old_rank[m.old.name] + 1} to {new_rank[m.old.name] + 1}",
             old=str(old_rank[m.old.name] + 1),
             new=str(new_rank[m.old.name] + 1),
+            old_location=m.old.location,
+            new_location=m.new.location,
         )
         for m in pages
         if old_rank[m.old.name] != new_rank[m.old.name]
@@ -129,6 +133,8 @@ def _page_changes(match: PageMatch) -> list[Finding]:
                 f"to '{match.new.display_name}'",
                 old=match.old.display_name,
                 new=match.new.display_name,
+                old_location=match.old.location,
+                new_location=match.new.location,
             )
         )
     if match.old.name != match.new.name:
@@ -141,6 +147,8 @@ def _page_changes(match: PageMatch) -> list[Finding]:
                 "matched by display name",
                 old=match.old.name,
                 new=match.new.name,
+                old_location=match.old.location,
+                new_location=match.new.location,
             )
         )
     page = match.old.name
@@ -158,6 +166,7 @@ def _visual_added(page: str, visual: Visual) -> Finding:
         path=visual_path(page, visual.name),
         message=f"{_describe(visual)} added",
         new=visual.visual_type,
+        new_location=visual.location,
     )
 
 
@@ -168,6 +177,7 @@ def _visual_removed(page: str, visual: Visual) -> Finding:
         path=visual_path(page, visual.name),
         message=f"{_describe(visual)} removed",
         old=visual.visual_type,
+        old_location=visual.location,
     )
 
 
@@ -193,6 +203,8 @@ def _new_id(path: str, match: VisualMatch) -> Finding | None:
         f"({match.score:.2f})",
         old=match.old.name,
         new=match.new.name,
+        old_location=match.old.location,
+        new_location=match.new.location,
     )
 
 
@@ -206,6 +218,8 @@ def _retyped(path: str, old: Visual, new: Visual) -> Finding | None:
         message=f"{_describe(old)} changed type to {new.visual_type}",
         old=old.visual_type,
         new=new.visual_type,
+        old_location=old.location,
+        new_location=new.location,
     )
 
 
@@ -219,6 +233,8 @@ def _retitled(path: str, old: Visual, new: Visual) -> Finding | None:
         message=f"Title of {old.visual_type} '{old.name}' changed",
         old=old.title,
         new=new.title,
+        old_location=old.location,
+        new_location=new.location,
     )
 
 
@@ -233,6 +249,8 @@ def _moved(path: str, old: Visual, new: Visual) -> Finding | None:
         message=f"{_describe(new)} {movement}",
         old=_format_position(old.position),
         new=_format_position(new.position),
+        old_location=old.location,
+        new_location=new.location,
     )
 
 
