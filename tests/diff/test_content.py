@@ -239,6 +239,25 @@ def test_filters_added_removed_and_changed_at_each_level() -> None:
     ]
 
 
+def test_unnamed_filters_are_all_compared() -> None:
+    old = report(visual(filters=(flt("", "A"), flt("", "B"))))
+    new = report(visual(filters=(flt("", "A"), flt("", "B2"))))
+
+    assert content(old, new) == [
+        ("p/v/filters/#2", Category.FILTER, ChangeKind.MODIFIED, "B", "B2"),
+    ]
+
+
+def test_repeated_filter_names_are_all_compared() -> None:
+    old = report(visual(filters=(flt("f", "A"), flt("f", "B"), flt("g", "C"))))
+    new = report(visual(filters=(flt("f", "A2"), flt("g", "C"))))
+
+    assert content(old, new) == [
+        ("p/v/filters/f", Category.FILTER, ChangeKind.MODIFIED, "A", "A2"),
+        ("p/v/filters/f#2", Category.FILTER, ChangeKind.REMOVED, "B", None),
+    ]
+
+
 def test_slicer_cleared_is_reported() -> None:
     old = report(visual(slicer=SlicerState(condition="Date[Year] in (2025)")))
     new = report(visual(slicer=SlicerState(condition=None)))

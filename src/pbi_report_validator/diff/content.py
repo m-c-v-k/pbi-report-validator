@@ -8,6 +8,7 @@ never rewritten: a new visual that still uses a measure's old name is a
 broken reference and is reported.
 """
 
+from collections import Counter
 from collections.abc import Mapping
 
 from pbi_report_validator.diff.severity import make_finding
@@ -168,8 +169,7 @@ def _diff_filters(
     new: tuple[Filter, ...],
     renames: Mapping[str, str],
 ) -> list[Finding]:
-    old_by_name = {f.name: f for f in old}
-    new_by_name = {f.name: f for f in new}
+    old_by_name, new_by_name = _by_label(old), _by_label(new)
     findings = []
     for name in sorted(old_by_name.keys() | new_by_name.keys()):
         path = f"{owner}/filters/{name}"
@@ -178,6 +178,22 @@ def _diff_filters(
         if finding is not None:
             findings.append(finding)
     return findings
+
+
+def _by_label(filters: tuple[Filter, ...]) -> dict[str, Filter]:
+    """Filters by name; repeats get ``name#2``, ``name#3``, unnamed ``#1``, ``#2``.
+
+    Every filter keeps its own entry, so a repeated or missing name does not
+    hide the others from the diff.
+    """
+    labelled: dict[str, Filter] = {}
+    seen: Counter[str] = Counter()
+    for item in filters:
+        seen[item.name] += 1
+        count = seen[item.name]
+        label = item.name if count == 1 and item.name else f"{item.name}#{count}"
+        labelled[label] = item
+    return labelled
 
 
 def _filter_finding(
