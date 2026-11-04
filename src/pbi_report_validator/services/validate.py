@@ -32,7 +32,7 @@ from pbi_report_validator.integrations.anthropic_client import LlmClient
 from pbi_report_validator.integrations.files import load_project, write_text
 from pbi_report_validator.integrations.templates import read_template
 from pbi_report_validator.matching.matcher import match_reports
-from pbi_report_validator.parsers.pbir import parse_report
+from pbi_report_validator.parsers.pbir import parse_report, with_issues_by_name
 from pbi_report_validator.parsers.tmdl import parse_semantic_model
 from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
 from pbi_report_validator.reporting.json_out import to_json
@@ -84,6 +84,10 @@ def validate(
     old_project, new_project = load_project(old_path), load_project(new_path)
     old_report, old_model = _parse(old_project)
     new_report, new_model = _parse(new_project)
+    old_report, new_report = (
+        with_issues_by_name(old_report, new_report),
+        with_issues_by_name(new_report, old_report),
+    )
     measures = diff_measures(old_model, new_model)
     match = match_reports(old_report.pages, new_report.pages, renames=measures.renames)
     new_issues = on_old_pages(new_report.issues, match)
