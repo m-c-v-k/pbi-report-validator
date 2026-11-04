@@ -6,6 +6,7 @@ condition, so a key is only replaced where it really is a field reference.
 """
 
 from collections.abc import Mapping
+from decimal import Decimal, InvalidOperation
 from typing import assert_never
 
 from pbi_report_validator.domain.helpers import field_name
@@ -98,11 +99,39 @@ def _renamed(field: FieldRef, renames: Mapping[str, str]) -> FieldRef:
 
 
 def _render_in(condition: InCondition) -> str:
+    """Render ``in`` with its rows sorted, since the order selects nothing.
+
+    PBIR keeps values in the order they were picked, so the same selection
+    picked in another order must render the same.
+    """
     fields = [f.aggregated_key for f in condition.fields]
-    values = [", ".join(render_literal(v) for v in row) for row in condition.rows]
+    rows = sorted(set(condition.rows), key=_row_sort_key)
+    values = [", ".join(render_literal(v) for v in row) for row in rows]
     target = fields[0] if len(fields) == 1 else f"({', '.join(fields)})"
     rendered = values if len(fields) == 1 else [f"({v})" for v in values]
     return f"{target} in ({', '.join(rendered)})"
+
+
+def _row_sort_key(
+    row: tuple[LiteralValue, ...],
+) -> tuple[tuple[str, Decimal, str], ...]:
+    return tuple(_literal_sort_key(v) for v in row)
+
+
+def _literal_sort_key(literal: LiteralValue) -> tuple[str, Decimal, str]:
+    """Kind first, then numbers by value and everything else by text."""
+    is_number = literal.kind == LiteralKind.NUMBER
+    number = _decimal_or_zero(literal.value) if is_number else Decimal(0)
+    return (literal.kind.value, number, literal.value)
+
+
+def _decimal_or_zero(value: str) -> Decimal:
+    """The number, or zero when it is not a finite decimal (sorts by text)."""
+    try:
+        number = Decimal(value)
+    except InvalidOperation:
+        return Decimal(0)
+    return number if number.is_finite() else Decimal(0)
 
 
 def _render_top_n(condition: TopNCondition) -> str:

@@ -304,3 +304,13 @@ def test_same_field_in_two_roles() -> None:
             "Tooltips, Values",
         )
     ]
+
+
+def test_same_filter_values_in_another_order_are_not_reported() -> None:
+    old_raw = load_project(FIXTURES / "sales_v1").report
+    new_raw = load_project(FIXTURES / "sales_v1").report
+    year_filter = new_raw.report.content["filterConfig"]["filters"][0]
+    year_filter["filter"]["Where"][0]["Condition"]["In"]["Values"].reverse()
+    old, new = parse_report(old_raw), parse_report(new_raw)
+
+    assert diff_content(old, new, match_reports(old.pages, new.pages), {}) == []
