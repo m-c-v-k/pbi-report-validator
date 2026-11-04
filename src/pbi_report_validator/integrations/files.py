@@ -155,10 +155,7 @@ def _find_model_dir(report_dir: Path, root: Path) -> tuple[Path | None, str | No
 
 
 def _empty_model_reason(model_dir: Path, root: Path) -> str:
-    folder = _relative(model_dir, root)
-    if (model_dir / "model.bim").is_file():
-        return f"{folder} is saved as model.bim (TMSL), which is not read"
-    return f"{folder} has no .tmdl files"
+    return f"{_relative(model_dir, root)} has no .tmdl files and no model.bim"
 
 
 def _require_inside(path: Path, root: Path, source: str) -> None:
@@ -205,20 +202,25 @@ def _load_page(page_dir: Path, root: Path) -> RawPage:
 
 
 def _load_semantic_model(model_dir: Path, root: Path) -> RawSemanticModel | None:
-    """The model's TMDL files, or ``None`` if it has none."""
+    """The model's TMDL files, else its ``model.bim``; ``None`` if neither."""
     definition = model_dir / "definition"
-    if not definition.is_dir():
-        return None
-    files = sorted(
-        _list(definition, lambda: definition.rglob("*.tmdl")),
-        key=lambda p: p.relative_to(definition),
+    files = (
+        sorted(
+            _list(definition, lambda: definition.rglob("*.tmdl")),
+            key=lambda p: p.relative_to(definition),
+        )
+        if definition.is_dir()
+        else []
     )
-    if not files:
-        return None
-    return RawSemanticModel(
-        path=_relative(model_dir, root),
-        files=tuple(_read_text(f, root) for f in files),
-    )
+    path = _relative(model_dir, root)
+    if files:
+        return RawSemanticModel(
+            path=path, files=tuple(_read_text(f, root) for f in files)
+        )
+    bim = model_dir / "model.bim"
+    if bim.is_file():
+        return RawSemanticModel(path=path, bim=_read_json(bim, root))
+    return None
 
 
 def _read_text(path: Path, root: Path) -> RawTextFile:

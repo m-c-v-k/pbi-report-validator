@@ -197,16 +197,37 @@ def test_non_utf8_tmdl_is_kept_with_error(project_copy: Path) -> None:
     assert sales.text == ""
 
 
-def test_model_bim_gives_no_model_with_reason(project_copy: Path) -> None:
+def test_model_bim_is_loaded_when_there_is_no_tmdl(project_copy: Path) -> None:
     model_dir = project_copy / "Sales.SemanticModel"
     shutil.rmtree(model_dir / "definition")
-    (model_dir / "model.bim").write_text("{}")
+    (model_dir / "model.bim").write_text('{"model": {"tables": []}}')
+
+    project = load_project(project_copy)
+
+    assert project.model_missing is None
+    assert project.semantic_model is not None
+    assert project.semantic_model.files == ()
+    assert project.semantic_model.bim is not None
+    assert project.semantic_model.bim.path == "Sales.SemanticModel/model.bim"
+    assert project.semantic_model.bim.content == {"model": {"tables": []}}
+
+
+def test_tmdl_wins_over_model_bim(project_copy: Path) -> None:
+    (project_copy / "Sales.SemanticModel" / "model.bim").write_text("{}")
+
+    model = load_project(project_copy).semantic_model
+
+    assert model is not None and model.bim is None and model.files
+
+
+def test_model_without_tmdl_or_bim_gives_no_model(project_copy: Path) -> None:
+    shutil.rmtree(project_copy / "Sales.SemanticModel" / "definition")
 
     project = load_project(project_copy)
 
     assert project.semantic_model is None
     assert project.model_missing == (
-        "Sales.SemanticModel is saved as model.bim (TMSL), which is not read"
+        "Sales.SemanticModel has no .tmdl files and no model.bim"
     )
 
 
