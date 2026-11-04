@@ -27,7 +27,7 @@ class Table(DomainModel):
 
 
 class SemanticModel(DomainModel):
-    """A parsed semantic model (TMDL)."""
+    """A parsed semantic model (TMDL or TMSL ``model.bim``)."""
 
     tables: tuple[Table, ...] = ()
     issues: tuple[ParseIssue, ...] = ()

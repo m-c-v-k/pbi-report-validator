@@ -53,10 +53,16 @@ class RawTextFile(RawModel):
 
 
 class RawSemanticModel(RawModel):
-    """The ``.tmdl`` files of a ``<Name>.SemanticModel/definition`` folder."""
+    """A ``<Name>.SemanticModel`` folder.
+
+    ``files`` are the ``.tmdl`` files of its ``definition`` folder. A model
+    saved in the older TMSL format has none, and ``bim`` is its
+    ``model.bim`` instead.
+    """
 
     path: str
     files: tuple[RawTextFile, ...] = ()
+    bim: RawJsonFile | None = None
 
 
 class RawProject(RawModel):

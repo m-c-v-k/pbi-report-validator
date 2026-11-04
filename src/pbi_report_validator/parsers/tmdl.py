@@ -25,6 +25,7 @@ from pbi_report_validator.domain.models import (
 )
 from pbi_report_validator.domain.raw import RawSemanticModel
 from pbi_report_validator.parsers.quoting import unquote
+from pbi_report_validator.parsers.tmsl import parse_bim
 
 SPACES_PER_LEVEL = 4
 EXPRESSION_DEPTH = 3  # table (0) > measure (1) > properties (2) > expression
@@ -46,15 +47,18 @@ class _Line:
 
 
 def parse_semantic_model(raw: RawSemanticModel) -> SemanticModel:
-    """Parse all ``.tmdl`` files of a semantic model.
+    """Parse all ``.tmdl`` files of a semantic model, or its ``model.bim``.
 
     Args:
-        raw: The model's TMDL files as read by ``integrations.files``.
+        raw: The model's TMDL files (or ``model.bim``, for a model saved in
+            TMSL) as read by ``integrations.files``.
 
     Returns:
         Tables with their columns and measures, in file order, plus a parse
         issue for every file or object that could not be read.
     """
+    if raw.bim is not None:
+        return parse_bim(raw.bim)
     tables: list[Table] = []
     issues: list[ParseIssue] = []
     for file in raw.files:

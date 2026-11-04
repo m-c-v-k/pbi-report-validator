@@ -175,11 +175,12 @@ fully validated.
 - Visuals: added, removed, moved/resized, type changed, title changed
 - Fields per visual, including role and aggregation
 - Filters at report, page and visual level; slicer selections
-- Measures in the semantic model (TMDL): added, removed, expression changed,
-  renamed (detected by identical expression). When a version has no TMDL
-  model to read (a report connected to a published model, a missing model
-  folder, or a model saved as `model.bim`), a warning says measures were not
-  compared and why.
+- Measures in the semantic model (TMDL, or `model.bim` for models saved
+  without the TMDL format): added, removed, expression changed, renamed
+  (detected by identical expression). When a version has no model to read
+  (a report connected to a published model with no model folder next to
+  it, or a missing model folder), a warning says measures were not compared
+  and why.
 - Files that cannot be parsed, `.tmdl` files included, are reported as
   findings instead of stopping the run
 
@@ -453,7 +454,7 @@ works with the AI layer switched off.
 src/pbi_report_validator/
 ├── cli/           # Typer commands: parse arguments, call services, print
 ├── services/      # One validation run, data validation, AI steps, fail-on rules
-├── parsers/       # PBIR report definition and TMDL semantic model → domain models
+├── parsers/       # PBIR report definition and TMDL / model.bim semantic model → domain models
 ├── matching/      # Pair old and new pages and visuals (deterministic, AI suggestions)
 ├── diff/          # Findings: structure, fields, filters, measures, query results
 ├── dax/           # A visual and its filter context → DAX query
