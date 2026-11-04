@@ -177,10 +177,10 @@ fully validated.
 - Filters at report, page and visual level; slicer selections
 - Measures in the semantic model (TMDL, or `model.bim` for models saved
   without the TMDL format): added, removed, expression changed, renamed
-  (detected by identical expression). When a version has no model to read
-  (a report connected to a published model with no model folder next to
-  it, or a missing model folder), a warning says measures were not compared
-  and why.
+  (detected by identical expression) and moved to another table (same name
+  and expression). When a version has no model to read (a report connected
+  to a published model with no model folder next to it, or a missing model
+  folder), a warning says measures were not compared and why.
 - Files that cannot be parsed, `.tmdl` files included, are reported as
   findings instead of stopping the run
 
