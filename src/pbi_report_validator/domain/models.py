@@ -8,7 +8,7 @@ live in ``report``, ``semantic``, ``data_validation``, ``diff``, ``ai`` and
 
 from pbi_report_validator.domain.ai import AiMode, AiSettings
 from pbi_report_validator.domain.ai_payload import AiDataSummary, AiFinding, AiPayload
-from pbi_report_validator.domain.base import DomainModel
+from pbi_report_validator.domain.base import DomainModel, Located, SourceLocation
 from pbi_report_validator.domain.data_validation import (
     Attribution,
     CellValue,
@@ -105,6 +105,7 @@ __all__ = [
     "ItemStatus",
     "LiteralKind",
     "LiteralValue",
+    "Located",
     "MatchMethod",
     "Measure",
     "MeasureDiff",
@@ -123,6 +124,7 @@ __all__ = [
     "Severity",
     "SeverityCounts",
     "SlicerState",
+    "SourceLocation",
     "Table",
     "Tolerance",
     "TopNCondition",

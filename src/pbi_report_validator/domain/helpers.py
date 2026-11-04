@@ -5,8 +5,13 @@ fields by a DAX-style ``Table[Name]`` key. Building and reading them here
 keeps the format in one place.
 """
 
+import re
 from collections import Counter
 from collections.abc import Callable, Sequence
+
+from pbi_report_validator.domain.base import SourceLocation
+
+PLAIN_TMDL_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 def visual_path(page: str, visual: str) -> str:
@@ -32,6 +37,36 @@ def field_key(table: str, name: str) -> str:
 def aggregated(key: str, aggregation: str | None) -> str:
     """A field key with its aggregation, e.g. ``Sum(Sales[Amount])``."""
     return f"{aggregation}({key})" if aggregation else key
+
+
+def json_pointer(*parts: str | int) -> str:
+    """An RFC 6901 JSON Pointer, e.g. ``/filterConfig/filters/0``."""
+    escaped = (str(p).replace("~", "~0").replace("/", "~1") for p in parts)
+    return "".join(f"/{part}" for part in escaped)
+
+
+def json_location(file: str | None, *parts: str | int) -> SourceLocation | None:
+    """The location of ``parts`` in a JSON ``file``; ``None`` without a file."""
+    if file is None:
+        return None
+    return SourceLocation(file=file, pointer=json_pointer(*parts))
+
+
+def tmdl_reference(table: str, measure: str) -> str:
+    """A TMDL object reference, e.g. ``table Sales / measure 'Total Sales'``."""
+    return f"table {_tmdl_name(table)} / measure {_tmdl_name(measure)}"
+
+
+def _tmdl_name(name: str) -> str:
+    """The name as TMDL writes it: quoted unless it is a plain identifier."""
+    if PLAIN_TMDL_NAME.fullmatch(name):
+        return name
+    return "'" + name.replace("'", "''") + "'"
+
+
+def field_table(key: str) -> str:
+    """The table part of a field key: ``Sales[Margin %]`` -> ``Sales``."""
+    return key.partition("[")[0]
 
 
 def field_name(key: str) -> str:

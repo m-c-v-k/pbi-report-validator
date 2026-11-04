@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from pbi_report_validator.domain.base import DomainModel
+from pbi_report_validator.domain.base import DomainModel, Located
 from pbi_report_validator.domain.helpers import aggregated, field_key
 
 
@@ -38,7 +38,7 @@ class FieldRef(DomainModel):
         return aggregated(self.key, self.aggregation)
 
 
-class Projection(DomainModel):
+class Projection(Located):
     """A field placed in a visual role (e.g. ``Category``, ``Y``, ``Values``)."""
 
     role: str
@@ -136,7 +136,7 @@ Condition = Annotated[
 ]
 
 
-class Filter(DomainModel):
+class Filter(Located):
     """A filter card on the report, a page or a visual.
 
     ``condition`` is a normalised, human-readable form of the filter
@@ -157,7 +157,7 @@ class Filter(DomainModel):
     unread: str | None = None
 
 
-class SlicerState(DomainModel):
+class SlicerState(Located):
     """The selection of a slicer visual, normalised like a filter condition."""
 
     field: FieldRef | None = None
@@ -176,7 +176,7 @@ class Position(DomainModel):
     height: float = Field(ge=0)
 
 
-class Visual(DomainModel):
+class Visual(Located):
     """A visual on a page."""
 
     name: str
@@ -188,7 +188,7 @@ class Visual(DomainModel):
     slicer: SlicerState | None = None
 
 
-class Page(DomainModel):
+class Page(Located):
     """A report page with its visuals, in display order."""
 
     name: str

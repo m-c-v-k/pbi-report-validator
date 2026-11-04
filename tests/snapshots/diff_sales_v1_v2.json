@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.8",
+  "schema_version": "1.9",
   "old_source": "tests/fixtures/sales_v1",
   "new_source": "tests/fixtures/sales_v2",
   "findings": [
@@ -10,7 +10,15 @@
       "path": "details/chart_sales_by_region",
       "message": "clusteredBarChart 'Sales by region' (chart_sales_by_region) moved",
       "old": "x=840, y=40, width=400, height=320",
-      "new": "x=840, y=360, width=400, height=320"
+      "new": "x=840, y=360, width=400, height=320",
+      "old_location": {
+        "file": "Sales.Report/definition/pages/details/visuals/chart_sales_by_region/visual.json",
+        "pointer": ""
+      },
+      "new_location": {
+        "file": "Sales.Report/definition/pages/details/visuals/chart_sales_by_region/visual.json",
+        "pointer": ""
+      }
     },
     {
       "category": "filter",
@@ -19,7 +27,12 @@
       "path": "details/table_product_sales/filters/visual_filter_category",
       "message": "Filter visual_filter_category removed",
       "old": "Product[Category] in ('Bikes', 'Clothing')",
-      "new": null
+      "new": null,
+      "old_location": {
+        "file": "Sales.Report/definition/pages/details/visuals/table_product_sales/visual.json",
+        "pointer": "/filterConfig/filters/0"
+      },
+      "new_location": null
     },
     {
       "category": "measure",
@@ -28,7 +41,15 @@
       "path": "model/Sales/Margin %",
       "message": "Measure Sales[Margin %] renamed to Sales[Gross Margin %]",
       "old": "Margin %",
-      "new": "Gross Margin %"
+      "new": "Gross Margin %",
+      "old_location": {
+        "file": "Sales.SemanticModel/definition/tables/Sales.tmdl",
+        "pointer": "table Sales / measure 'Margin %'"
+      },
+      "new_location": {
+        "file": "Sales.SemanticModel/definition/tables/Sales.tmdl",
+        "pointer": "table Sales / measure 'Gross Margin %'"
+      }
     },
     {
       "category": "measure",
@@ -37,7 +58,15 @@
       "path": "model/Sales/Total Sales",
       "message": "Expression of measure Sales[Total Sales] changed",
       "old": "SUM(Sales[Amount])",
-      "new": "CALCULATE(SUM(Sales[Amount]), Sales[Amount] > 0)"
+      "new": "CALCULATE(SUM(Sales[Amount]), Sales[Amount] > 0)",
+      "old_location": {
+        "file": "Sales.SemanticModel/definition/tables/Sales.tmdl",
+        "pointer": "table Sales / measure 'Total Sales'"
+      },
+      "new_location": {
+        "file": "Sales.SemanticModel/definition/tables/Sales.tmdl",
+        "pointer": "table Sales / measure 'Total Sales'"
+      }
     },
     {
       "category": "visual",
@@ -46,7 +75,15 @@
       "path": "overview/chart_sales_by_month",
       "message": "clusteredColumnChart 'Sales by month' (chart_sales_by_month) changed type to lineChart",
       "old": "clusteredColumnChart",
-      "new": "lineChart"
+      "new": "lineChart",
+      "old_location": {
+        "file": "Sales.Report/definition/pages/overview/visuals/chart_sales_by_month/visual.json",
+        "pointer": ""
+      },
+      "new_location": {
+        "file": "Sales.Report/definition/pages/overview/visuals/chart_sales_by_month/visual.json",
+        "pointer": ""
+      }
     },
     {
       "category": "slicer",
@@ -55,7 +92,15 @@
       "path": "overview/slicer_year",
       "message": "Slicer selection changed",
       "old": "Date[Year] in (2025)",
-      "new": "Date[Year] in (2024)"
+      "new": "Date[Year] in (2024)",
+      "old_location": {
+        "file": "Sales.Report/definition/pages/overview/visuals/slicer_year/visual.json",
+        "pointer": "/visual/objects/general/0/properties/filter"
+      },
+      "new_location": {
+        "file": "Sales.Report/definition/pages/overview/visuals/slicer_year/visual.json",
+        "pointer": "/visual/objects/general/0/properties/filter"
+      }
     },
     {
       "category": "page",
@@ -64,7 +109,12 @@
       "path": "trends",
       "message": "Page 'Trends' added with 1 visual",
       "old": null,
-      "new": "Trends"
+      "new": "Trends",
+      "old_location": null,
+      "new_location": {
+        "file": "Sales.Report/definition/pages/trends/page.json",
+        "pointer": ""
+      }
     }
   ],
   "severity_counts": {

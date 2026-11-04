@@ -14,16 +14,18 @@ they are kept as part of the DAX.
 import re
 from dataclasses import dataclass
 
-from pbi_report_validator.domain.helpers import field_key
+from pbi_report_validator.domain.helpers import field_key, tmdl_reference
 from pbi_report_validator.domain.models import (
     Column,
     Measure,
     ParseIssue,
     SemanticModel,
+    SourceLocation,
     Table,
 )
 from pbi_report_validator.domain.raw import RawSemanticModel
 from pbi_report_validator.parsers.quoting import unquote
+from pbi_report_validator.parsers.tmsl import parse_bim
 
 SPACES_PER_LEVEL = 4
 EXPRESSION_DEPTH = 3  # table (0) > measure (1) > properties (2) > expression
@@ -45,15 +47,18 @@ class _Line:
 
 
 def parse_semantic_model(raw: RawSemanticModel) -> SemanticModel:
-    """Parse all ``.tmdl`` files of a semantic model.
+    """Parse all ``.tmdl`` files of a semantic model, or its ``model.bim``.
 
     Args:
-        raw: The model's TMDL files as read by ``integrations.files``.
+        raw: The model's TMDL files (or ``model.bim``, for a model saved in
+            TMSL) as read by ``integrations.files``.
 
     Returns:
         Tables with their columns and measures, in file order, plus a parse
         issue for every file or object that could not be read.
     """
+    if raw.bim is not None:
+        return parse_bim(raw.bim)
     tables: list[Table] = []
     issues: list[ParseIssue] = []
     for file in raw.files:
@@ -101,7 +106,9 @@ def _read_table(
         if match and match["kind"] == "column":
             columns.append(_read_column(match, header, body))
         elif match and match["kind"] == "measure":
-            measure = _read_measure(match, header, body)
+            reference = tmdl_reference(name, unquote(match["name"]))
+            location = SourceLocation(file=path, pointer=reference)
+            measure = _read_measure(match, header, body, location)
             if measure is None:
                 key = field_key(name, unquote(match["name"]))
                 issues.append(
@@ -118,7 +125,10 @@ def _read_table(
 
 
 def _read_measure(
-    match: re.Match[str], header: _Line, body: list[_Line]
+    match: re.Match[str],
+    header: _Line,
+    body: list[_Line],
+    location: SourceLocation,
 ) -> Measure | None:
     """The measure, or ``None`` if it has no expression."""
     expression = (
@@ -126,7 +136,9 @@ def _read_measure(
     )
     if not expression:
         return None
-    return Measure(name=unquote(match["name"]), expression=expression)
+    return Measure(
+        name=unquote(match["name"]), expression=expression, location=location
+    )
 
 
 def _read_column(match: re.Match[str], header: _Line, body: list[_Line]) -> Column:

@@ -73,8 +73,9 @@ def load_project(path: Path) -> RawProject:
 
     Returns:
         The raw report contents and, if the report references its semantic
-        model by path, the model's TMDL files (an unreadable one is kept with
-        its error); otherwise why there is no model to read.
+        model by path (or is ``byConnection`` with a ``<Name>.SemanticModel``
+        folder next to it), the model's TMDL files (an unreadable one is
+        kept with its error); otherwise why there is no model to read.
 
     Raises:
         ProjectNotFoundError: No single ``.Report`` folder was found.
@@ -130,8 +131,16 @@ def _find_report_dir(path: Path) -> Path:
 
 
 def _find_model_dir(report_dir: Path, root: Path) -> tuple[Path | None, str | None]:
-    """The semantic model folder, or ``None`` and why there is none."""
+    """The semantic model folder, or ``None`` and why there is none.
+
+    A ``byConnection`` report (one connected to a published model) still
+    uses the sibling ``<Name>.SemanticModel`` folder when there is one, so
+    a published report saved next to its model compares its measures.
+    """
     pbir = report_dir / "definition.pbir"
+    sibling = report_dir.with_name(
+        report_dir.name.removesuffix(REPORT_SUFFIX) + MODEL_SUFFIX
+    )
     if pbir.is_file():
         reference = _read_required_json(pbir, report_dir.parent)
         dataset = reference.content.get("datasetReference")
@@ -144,21 +153,19 @@ def _find_model_dir(report_dir: Path, root: Path) -> tuple[Path | None, str | No
                 return candidate, None
             logger.warning("%s points to missing folder %s", pbir.name, candidate)
             return None, f"{pbir.name} points to a folder that does not exist"
+        by_connection = isinstance(dataset, dict) and "byConnection" in dataset
+        if by_connection and sibling.is_dir():
+            logger.info("%s uses byConnection; reading %s", pbir.name, sibling.name)
+            return sibling, None
         logger.info("%s has no byPath dataset reference", pbir.name)
         return None, "the report uses a published semantic model (byConnection)"
-    sibling = report_dir.with_name(
-        report_dir.name.removesuffix(REPORT_SUFFIX) + MODEL_SUFFIX
-    )
     if sibling.is_dir():
         return sibling, None
     return None, f"no {sibling.name} folder next to {_relative(report_dir, root)}"
 
 
 def _empty_model_reason(model_dir: Path, root: Path) -> str:
-    folder = _relative(model_dir, root)
-    if (model_dir / "model.bim").is_file():
-        return f"{folder} is saved as model.bim (TMSL), which is not read"
-    return f"{folder} has no .tmdl files"
+    return f"{_relative(model_dir, root)} has no .tmdl files and no model.bim"
 
 
 def _require_inside(path: Path, root: Path, source: str) -> None:
@@ -205,20 +212,25 @@ def _load_page(page_dir: Path, root: Path) -> RawPage:
 
 
 def _load_semantic_model(model_dir: Path, root: Path) -> RawSemanticModel | None:
-    """The model's TMDL files, or ``None`` if it has none."""
+    """The model's TMDL files, else its ``model.bim``; ``None`` if neither."""
     definition = model_dir / "definition"
-    if not definition.is_dir():
-        return None
-    files = sorted(
-        _list(definition, lambda: definition.rglob("*.tmdl")),
-        key=lambda p: p.relative_to(definition),
+    files = (
+        sorted(
+            _list(definition, lambda: definition.rglob("*.tmdl")),
+            key=lambda p: p.relative_to(definition),
+        )
+        if definition.is_dir()
+        else []
     )
-    if not files:
-        return None
-    return RawSemanticModel(
-        path=_relative(model_dir, root),
-        files=tuple(_read_text(f, root) for f in files),
-    )
+    path = _relative(model_dir, root)
+    if files:
+        return RawSemanticModel(
+            path=path, files=tuple(_read_text(f, root) for f in files)
+        )
+    bim = model_dir / "model.bim"
+    if bim.is_file():
+        return RawSemanticModel(path=path, bim=_read_json(bim, root))
+    return None
 
 
 def _read_text(path: Path, root: Path) -> RawTextFile:

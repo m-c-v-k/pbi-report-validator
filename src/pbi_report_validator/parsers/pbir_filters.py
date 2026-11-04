@@ -15,6 +15,7 @@ import re
 from typing import Any, Literal, NamedTuple, cast
 
 from pbi_report_validator.domain.conditions import render
+from pbi_report_validator.domain.helpers import json_location
 from pbi_report_validator.domain.models import (
     AllCondition,
     BinaryCondition,
@@ -28,6 +29,7 @@ from pbi_report_validator.domain.models import (
     LiteralValue,
     NotCondition,
     SlicerState,
+    SourceLocation,
     TopNCondition,
 )
 from pbi_report_validator.parsers.pbir_fields import parse_field
@@ -58,13 +60,15 @@ class _Sources(NamedTuple):
 
 
 def parse_filters(
-    container: Any, level: FilterLevel
+    container: Any, level: FilterLevel, file: str | None = None
 ) -> tuple[tuple[Filter, ...], list[str]]:
     """Parse the ``filterConfig`` of a report, page or visual.
 
     Args:
         container: The JSON object that may hold ``filterConfig``.
         level: Where the filters are defined.
+        file: The file ``container`` is the root of, recorded as each
+            filter's location; ``None`` records no location.
 
     Returns:
         The filters in file order, and a message for each filter that could
@@ -75,16 +79,17 @@ def parse_filters(
     entries = config.get("filters", []) if isinstance(config, dict) else []
     filters: list[Filter] = []
     problems: list[str] = []
-    for entry in entries if isinstance(entries, list) else []:
+    for index, entry in enumerate(entries if isinstance(entries, list) else []):
         if isinstance(entry, dict):
-            parsed, problem = _parse_filter(entry, level)
+            location = json_location(file, "filterConfig", "filters", index)
+            parsed, problem = _parse_filter(entry, level, location)
             filters.append(parsed)
             problems += [problem] if problem else []
     return tuple(filters), problems
 
 
 def parse_slicer_state(
-    body: dict[str, Any], field_hint: FieldRef | None
+    body: dict[str, Any], field_hint: FieldRef | None, file: str | None = None
 ) -> tuple[SlicerState | None, list[str]]:
     """Parse the selection stored in a slicer's ``objects.general`` filter.
 
@@ -96,16 +101,22 @@ def parse_slicer_state(
         body: The ``visual`` object of a slicer.
         field_hint: The slicer's field, used when the selection itself names
             no field.
+        file: The ``visual.json`` the body is in, recorded as the location
+            of the selection (or of the visual if it has none).
 
     Returns:
         The slicer state (``None`` if the visual is not a slicer), and a
         message if the selection could not be parsed.
     """
-    query = _slicer_query(body)
+    query, entry = _slicer_query(body)
     if query is None and body.get("visualType") not in SLICER_TYPES:
         return None, []
     expression, problem = _parse_or_problem(query, "slicer selection")
+    where: tuple[str | int, ...] = ("visual",)
+    if entry is not None:
+        where += ("objects", "general", entry, "properties", "filter")
     state = SlicerState(
+        location=json_location(file, *where),
         field=field_hint,
         condition=render(expression) if expression else None,
         expression=expression,
@@ -169,12 +180,13 @@ def parse_literal(raw: str) -> LiteralValue:
 
 
 def _parse_filter(
-    entry: dict[str, Any], level: FilterLevel
+    entry: dict[str, Any], level: FilterLevel, location: SourceLocation | None
 ) -> tuple[Filter, str | None]:
     name = str(entry.get("name", ""))
     query = entry.get("filter")
     expression, problem = _parse_or_problem(query, f"filter {name}")
     parsed = Filter(
+        location=location,
         name=name,
         level=level,
         field=parse_field(entry.get("field")),
@@ -228,16 +240,20 @@ def _canonical_source(reference: Any, sources: _Sources) -> Any:
     return reference
 
 
-def _slicer_query(body: dict[str, Any]) -> Any:
-    """The selection in the first ``objects.general`` entry that has one."""
+def _slicer_query(body: dict[str, Any]) -> tuple[Any, int | None]:
+    """The selection in the first ``objects.general`` entry that has one.
+
+    Returns:
+        The selection query and the index of its entry, or ``(None, None)``.
+    """
     objects = body.get("objects")
     general = objects.get("general") if isinstance(objects, dict) else None
-    for entry in general if isinstance(general, list) else []:
+    for index, entry in enumerate(general if isinstance(general, list) else []):
         properties = entry.get("properties") if isinstance(entry, dict) else None
         stored = properties.get("filter") if isinstance(properties, dict) else None
         if isinstance(stored, dict) and stored.get("filter") is not None:
-            return stored["filter"]
-    return None
+            return stored["filter"], index
+    return None, None
 
 
 def _aliases(sources: Any) -> dict[str, str]:

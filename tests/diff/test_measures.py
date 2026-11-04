@@ -126,3 +126,65 @@ def test_rename_with_expression_edit_is_removed_plus_added() -> None:
         ChangeKind.REMOVED,
     ]
     assert result.renames == {}
+
+
+def tables(**measures: tuple[Measure, ...]) -> SemanticModel:
+    return SemanticModel(
+        tables=tuple(Table(name=name, measures=ms) for name, ms in measures.items())
+    )
+
+
+def test_measure_moved_to_another_table_is_one_finding() -> None:
+    old = tables(Sales=(m("Margin %", "DIVIDE(1, 2)"),), Measures=())
+    new = tables(Sales=(), Measures=(m("Margin %", "DIVIDE(1, 2)"),))
+
+    result = diff_measures(old, new)
+
+    assert [(f.path, f.change, f.old, f.new, f.message) for f in result.findings] == [
+        (
+            "model/Sales/Margin %",
+            ChangeKind.MOVED,
+            "Sales",
+            "Measures",
+            "Measure Sales[Margin %] moved to Measures[Margin %]",
+        )
+    ]
+    assert result.renames == {"Sales[Margin %]": "Measures[Margin %]"}
+
+
+def test_moved_measure_with_an_edited_expression_is_removed_plus_added() -> None:
+    old = tables(Sales=(m("X", "1"),), Measures=())
+    new = tables(Sales=(), Measures=(m("X", "2"),))
+
+    result = diff_measures(old, new)
+
+    assert sorted((f.path, f.change) for f in result.findings) == [
+        ("model/Measures/X", ChangeKind.ADDED),
+        ("model/Sales/X", ChangeKind.REMOVED),
+    ]
+    assert result.renames == {}
+
+
+def test_ambiguous_moves_are_not_paired() -> None:
+    old = tables(A=(m("X", "1"),), B=(m("X", "1"),), C=())
+    new = tables(A=(), B=(), C=(m("X", "1"),))
+
+    result = diff_measures(old, new)
+
+    assert sorted((f.path, f.change) for f in result.findings) == [
+        ("model/A/X", ChangeKind.REMOVED),
+        ("model/B/X", ChangeKind.REMOVED),
+        ("model/C/X", ChangeKind.ADDED),
+    ]
+
+
+def test_rename_within_a_table_is_paired_before_moves() -> None:
+    old = tables(Sales=(m("Old", "1"),), Measures=())
+    new = tables(Sales=(m("New", "1"),), Measures=(m("Old", "1"),))
+
+    result = diff_measures(old, new)
+
+    assert [(f.path, f.change) for f in result.findings] == [
+        ("model/Sales/Old", ChangeKind.RENAMED),
+        ("model/Measures/Old", ChangeKind.ADDED),
+    ]

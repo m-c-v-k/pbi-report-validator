@@ -18,6 +18,8 @@ from pbi_report_validator.domain.models import (
     Finding,
 )
 
+SOURCE_LOCATIONS: set[str] = {"old_location", "new_location"}
+
 
 def build_payload(result: DiffResult, allow_data: bool) -> AiPayload:
     """The findings and data summaries of ``result`` that may leave the machine.
@@ -37,7 +39,9 @@ def build_payload(result: DiffResult, allow_data: bool) -> AiPayload:
 
 
 def _finding(finding: Finding, allow_data: bool) -> AiFinding:
-    payload = AiFinding.model_validate(finding.model_dump())
+    # Source locations are file paths in the project; the model needs none.
+    fields = finding.model_dump(exclude=SOURCE_LOCATIONS)
+    payload = AiFinding.model_validate(fields)
     if allow_data or finding.category is not Category.DATA:
         return payload
     return payload.model_copy(

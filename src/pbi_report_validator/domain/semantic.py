@@ -1,6 +1,6 @@
 """Semantic model side: tables, columns and measures."""
 
-from pbi_report_validator.domain.base import DomainModel
+from pbi_report_validator.domain.base import DomainModel, Located
 from pbi_report_validator.domain.report import ParseIssue
 
 
@@ -11,7 +11,7 @@ class Column(DomainModel):
     data_type: str | None = None
 
 
-class Measure(DomainModel):
+class Measure(Located):
     """A DAX measure with its full expression."""
 
     name: str
@@ -27,7 +27,7 @@ class Table(DomainModel):
 
 
 class SemanticModel(DomainModel):
-    """A parsed semantic model (TMDL)."""
+    """A parsed semantic model (TMDL or TMSL ``model.bim``)."""
 
     tables: tuple[Table, ...] = ()
     issues: tuple[ParseIssue, ...] = ()

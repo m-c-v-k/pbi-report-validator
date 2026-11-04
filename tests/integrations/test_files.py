@@ -113,9 +113,16 @@ def test_broken_visual_json_is_kept_with_error(project_copy: Path) -> None:
     assert broken.content == {}
 
 
-def test_model_is_none_without_dataset_path(project_copy: Path) -> None:
-    pbir = project_copy / "Sales.Report" / "definition.pbir"
-    pbir.write_text('{"datasetReference": {"byConnection": {}}}')
+BY_CONNECTION = json.dumps(
+    {"datasetReference": {"byConnection": {"connectionString": "Data Source=x"}}}
+)
+
+
+def test_by_connection_without_sibling_model_gives_no_model(
+    project_copy: Path,
+) -> None:
+    (project_copy / "Sales.Report" / "definition.pbir").write_text(BY_CONNECTION)
+    shutil.rmtree(project_copy / "Sales.SemanticModel")
 
     project = load_project(project_copy)
 
@@ -123,6 +130,17 @@ def test_model_is_none_without_dataset_path(project_copy: Path) -> None:
     assert project.model_missing == (
         "the report uses a published semantic model (byConnection)"
     )
+
+
+def test_by_connection_uses_the_sibling_model(project_copy: Path) -> None:
+    (project_copy / "Sales.Report" / "definition.pbir").write_text(BY_CONNECTION)
+
+    project = load_project(project_copy)
+
+    assert project.model_missing is None
+    assert project.semantic_model is not None
+    assert project.semantic_model.path == "Sales.SemanticModel"
+    assert project.semantic_model == load_project(FIXTURES / "sales_v1").semantic_model
 
 
 @pytest.mark.parametrize("reference", ["null", '"x"', '{"byPath": null}'])
@@ -197,16 +215,37 @@ def test_non_utf8_tmdl_is_kept_with_error(project_copy: Path) -> None:
     assert sales.text == ""
 
 
-def test_model_bim_gives_no_model_with_reason(project_copy: Path) -> None:
+def test_model_bim_is_loaded_when_there_is_no_tmdl(project_copy: Path) -> None:
     model_dir = project_copy / "Sales.SemanticModel"
     shutil.rmtree(model_dir / "definition")
-    (model_dir / "model.bim").write_text("{}")
+    (model_dir / "model.bim").write_text('{"model": {"tables": []}}')
+
+    project = load_project(project_copy)
+
+    assert project.model_missing is None
+    assert project.semantic_model is not None
+    assert project.semantic_model.files == ()
+    assert project.semantic_model.bim is not None
+    assert project.semantic_model.bim.path == "Sales.SemanticModel/model.bim"
+    assert project.semantic_model.bim.content == {"model": {"tables": []}}
+
+
+def test_tmdl_wins_over_model_bim(project_copy: Path) -> None:
+    (project_copy / "Sales.SemanticModel" / "model.bim").write_text("{}")
+
+    model = load_project(project_copy).semantic_model
+
+    assert model is not None and model.bim is None and model.files
+
+
+def test_model_without_tmdl_or_bim_gives_no_model(project_copy: Path) -> None:
+    shutil.rmtree(project_copy / "Sales.SemanticModel" / "definition")
 
     project = load_project(project_copy)
 
     assert project.semantic_model is None
     assert project.model_missing == (
-        "Sales.SemanticModel is saved as model.bim (TMSL), which is not read"
+        "Sales.SemanticModel has no .tmdl files and no model.bim"
     )
 
 

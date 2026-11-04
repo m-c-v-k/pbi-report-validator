@@ -43,6 +43,7 @@ def test_missing_semantic_model_is_reported_not_compared(tmp_path: Path) -> None
     (new / "Sales.Report/definition.pbir").write_text(
         '{"datasetReference": {"byConnection": {}}}'
     )
+    shutil.rmtree(new / "Sales.SemanticModel")
 
     result = validate(FIXTURES / "sales_v1", new)
 

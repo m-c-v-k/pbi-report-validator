@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from decimal import Decimal, InvalidOperation
 from typing import assert_never
 
-from pbi_report_validator.domain.helpers import field_name
+from pbi_report_validator.domain.helpers import field_name, field_table
 from pbi_report_validator.domain.report import (
     AllCondition,
     BinaryCondition,
@@ -61,8 +61,7 @@ def rename_fields(condition: Condition, renames: Mapping[str, str]) -> Condition
     """The condition with every field whose key is in ``renames`` renamed.
 
     Each reference is looked up once, so chained renames (A to B, B to C)
-    are not applied twice. Renames stay within a table, so only the name
-    changes.
+    are not applied twice. A measure moved to another table changes table.
     """
     if isinstance(condition, InCondition):
         fields = tuple(_renamed(f, renames) for f in condition.fields)
@@ -95,7 +94,8 @@ def _renamed(field: FieldRef, renames: Mapping[str, str]) -> FieldRef:
     new_key = renames.get(field.key)
     if new_key is None:
         return field
-    return field.model_copy(update={"name": field_name(new_key)})
+    update = {"table": field_table(new_key), "name": field_name(new_key)}
+    return field.model_copy(update=update)
 
 
 def _render_in(condition: InCondition) -> str:

@@ -7,7 +7,7 @@
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
 
-**Status:** v0.4.0 – structural diff and data validation (`--data`, values masked by default, `--attribute` tells report changes from model changes), JSON, Markdown and HTML reports, a GitHub Action with PR comments and `--fail-on`, and an optional AI layer (`--ai api`). See the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
+**Status:** v0.5.0 – structural diff and data validation (`--data`, values masked by default, `--attribute` tells report changes from model changes), JSON, Markdown and HTML reports (JSON and HTML say in which file and where each change is), a GitHub Action with PR comments and `--fail-on`, and an optional AI layer (`--ai api`). See the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
 
 **Live:** [demo report](https://m-c-v-k.github.io/pbi-report-validator/report.html) for the sample reports in this repository · [latest release](https://github.com/m-c-v-k/pbi-report-validator/releases/latest)
 
@@ -42,13 +42,13 @@ credentials or network access once installed.
 Install the latest release as a command-line tool:
 
 ```bash
-uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.4.0
+uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.5.0
 ```
 
 Or run it once without installing:
 
 ```bash
-uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.4.0 pbi-validate --help
+uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.5.0 pbi-validate --help
 ```
 
 Each [GitHub release](https://github.com/m-c-v-k/pbi-report-validator/releases)
@@ -123,9 +123,9 @@ or the `.Report` folder itself. The terminal always shows a summary; add any of:
 
 | Option | Output |
 |---|---|
-| `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
+| `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual that shows the file (and JSON Pointer) where each finding is defined. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
 | `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
-| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.8) |
+| `--json PATH` | Every finding with old and new values and where the object is defined in each version (`old_location` / `new_location`: the file in the project and a JSON Pointer, or the TMDL object for measures), plus every page and visual with its status, and counts per severity (`schema_version` 1.9) |
 
 Running it on the sample reports in this repository gives:
 
@@ -175,11 +175,12 @@ fully validated.
 - Visuals: added, removed, moved/resized, type changed, title changed
 - Fields per visual, including role and aggregation
 - Filters at report, page and visual level; slicer selections
-- Measures in the semantic model (TMDL): added, removed, expression changed,
-  renamed (detected by identical expression). When a version has no TMDL
-  model to read (a report connected to a published model, a missing model
-  folder, or a model saved as `model.bim`), a warning says measures were not
-  compared and why.
+- Measures in the semantic model (TMDL, or `model.bim` for models saved
+  without the TMDL format): added, removed, expression changed, renamed
+  (detected by identical expression) and moved to another table (same name
+  and expression). When a version has no model to read (a report connected
+  to a published model with no model folder next to it, or a missing model
+  folder), a warning says measures were not compared and why.
 - Files that cannot be parsed, `.tmdl` files included, are reported as
   findings instead of stopping the run
 
@@ -300,7 +301,7 @@ the features below each need their own flag, and they can be combined.
 Setup for `api`:
 
 ```bash
-uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator@v0.4.0"
+uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator@v0.5.0"
 export ANTHROPIC_API_KEY=...
 pbi-validate diff ./old ./new --ai api
 ```
@@ -338,7 +339,7 @@ from v0.2.0:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: m-c-v-k/pbi-report-validator@v0.4.0
+- uses: m-c-v-k/pbi-report-validator@v0.5.0
   with:
     old: reports/v1        # paths relative to the workspace
     new: reports/v2
@@ -392,7 +393,7 @@ are passed on too, so `PBI_VALIDATE_AI: disabled` (for example from an
 organisation variable) blocks `ai: api`:
 
 ```yaml
-- uses: m-c-v-k/pbi-report-validator@v0.4.0
+- uses: m-c-v-k/pbi-report-validator@v0.5.0
   env:
     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   with:
@@ -416,7 +417,7 @@ The action needs a Linux runner with Docker (such as `ubuntu-latest`) and
 cannot run inside a job `container:`. Input and output paths must be
 relative to the workspace or lie inside it or `$RUNNER_TEMP`.
 
-**Versions.** Pin a full version tag such as `@v0.4.0`; it runs the
+**Versions.** Pin a full version tag such as `@v0.5.0`; it runs the
 published image of that version. Before 1.0, minor versions can change the
 output, so there is no moving `@v0` tag. Dependabot (`package-ecosystem:
 github-actions`) can keep the tag up to date. Organisations that require it
@@ -453,7 +454,7 @@ works with the AI layer switched off.
 src/pbi_report_validator/
 ├── cli/           # Typer commands: parse arguments, call services, print
 ├── services/      # One validation run, data validation, AI steps, fail-on rules
-├── parsers/       # PBIR report definition and TMDL semantic model → domain models
+├── parsers/       # PBIR report definition and TMDL / model.bim semantic model → domain models
 ├── matching/      # Pair old and new pages and visuals (deterministic, AI suggestions)
 ├── diff/          # Findings: structure, fields, filters, measures, query results
 ├── dax/           # A visual and its filter context → DAX query
@@ -489,10 +490,10 @@ tests/             # Mirrors src/, plus sample reports in fixtures/ and expected
   [its own limitations](#data-validation-optional---data)
 - Comparing published reports needs local copies, saved as `.pbip` from Power
   BI Desktop ([#232](https://github.com/m-c-v-k/pbi-report-validator/issues/232)
-  would fetch them through the API). Reports with a `byConnection` reference
-  in `definition.pbir` skip the measure comparison, and with `--data` a
-  renamed measure then can't be paired, even with the model folder next to
-  the report ([#233](https://github.com/m-c-v-k/pbi-report-validator/issues/233))
+  would fetch them through the API). A report with a `byConnection` reference
+  in `definition.pbir` uses the `<Name>.SemanticModel` folder next to it;
+  without one, measures are not compared (the run says so), and with
+  `--data` a renamed measure can't be paired
 - A visual moved to a different page shows as removed on one page and added
   on the other
 - Filters the parser cannot read (such as relative date or "contains") are

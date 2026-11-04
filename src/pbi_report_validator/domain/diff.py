@@ -14,7 +14,7 @@ from pydantic import (
 )
 
 from pbi_report_validator.domain.ai import AiMode
-from pbi_report_validator.domain.base import DomainModel
+from pbi_report_validator.domain.base import DomainModel, SourceLocation
 from pbi_report_validator.domain.data_validation import DataSummary
 from pbi_report_validator.domain.report import (
     Page,
@@ -22,7 +22,7 @@ from pbi_report_validator.domain.report import (
     Visual,
 )
 
-SCHEMA_VERSION: Final = "1.8"
+SCHEMA_VERSION: Final = "1.9"
 
 
 class MatchMethod(StrEnum):
@@ -113,7 +113,9 @@ class Finding(DomainModel):
     visual_filter_category`` or ``model/Sales/Total Sales``. ``severity`` is
     required; ``diff.severity.make_finding`` sets the usual level.
     ``explanation`` is set only with ``--ai-explain`` and left out of the JSON
-    otherwise.
+    otherwise. ``old_location`` and ``new_location`` say where the object is
+    defined in each version; ``None`` on a side where it does not exist,
+    and for findings without a single source (data, AI, parse issues).
     """
 
     category: Category
@@ -123,6 +125,8 @@ class Finding(DomainModel):
     message: str
     old: str | None = None
     new: str | None = None
+    old_location: SourceLocation | None = None
+    new_location: SourceLocation | None = None
     # The ``page/visual`` a parse issue belongs to. Used to show the issue on
     # its visual in the HTML report; not part of the JSON output (schema
     # unchanged), since it is already implied by ``path``.
@@ -249,11 +253,12 @@ class DiffResult(DomainModel):
     1.5 added the ``ai`` category, ``ai_mode`` and ``ai_model``; 1.6 added
     ``ai_suggestions`` (``--ai-match``); 1.7 added the optional
     ``explanation`` on findings (``--ai-explain``); 1.8 added ``attribution``
-    and ``attribution_reason`` on data summaries (``--attribute``).
+    and ``attribution_reason`` on data summaries (``--attribute``); 1.9
+    added ``old_location`` and ``new_location`` on findings.
     """
 
     # Keep the Literal in sync with SCHEMA_VERSION (enforced by a test).
-    schema_version: Literal["1.8"] = SCHEMA_VERSION
+    schema_version: Literal["1.9"] = SCHEMA_VERSION
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()
