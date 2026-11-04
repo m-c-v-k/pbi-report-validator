@@ -2,7 +2,13 @@ import json
 
 import pytest
 
-from pbi_report_validator.domain.models import AiFinding, Category, ChangeKind, Severity
+from pbi_report_validator.domain.models import (
+    AiFinding,
+    Category,
+    ChangeKind,
+    FindingScope,
+    Severity,
+)
 from pbi_report_validator.reporting.ai_explain import (
     MAX_TEXT,
     InvalidAiExplanationError,
@@ -19,6 +25,7 @@ FINDINGS = (
         path="overview/chart/filters/region",
         message="Filter on Region removed",
         old="Region in (Nordics)",
+        scope=FindingScope.PAGE,
     ),
     AiFinding(
         category=Category.PAGE,
@@ -26,6 +33,7 @@ FINDINGS = (
         severity=Severity.INFO,
         path="trends",
         message="Page 'Trends' added",
+        scope=FindingScope.PAGE,
     ),
 )
 

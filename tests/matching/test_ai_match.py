@@ -7,6 +7,7 @@ from pbi_report_validator.domain.models import (
     AiSuggestion,
     Category,
     ChangeKind,
+    FindingScope,
     Severity,
 )
 from pbi_report_validator.matching.ai_match import (
@@ -28,6 +29,7 @@ def finding(category: Category, change: ChangeKind, path: str) -> AiFinding:
         severity=Severity.INFO,
         path=path,
         message=f"{path} {change.value}",
+        scope=FindingScope.MODEL if category == C.MEASURE else FindingScope.PAGE,
     )
 
 

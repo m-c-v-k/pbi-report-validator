@@ -2,7 +2,12 @@
 
 from pbi_report_validator.domain.base import DomainModel
 from pbi_report_validator.domain.data_validation import Attribution, DataStatus
-from pbi_report_validator.domain.diff import Category, ChangeKind, Severity
+from pbi_report_validator.domain.diff import (
+    Category,
+    ChangeKind,
+    FindingScope,
+    Severity,
+)
 
 
 class AiFinding(DomainModel):
@@ -18,6 +23,7 @@ class AiFinding(DomainModel):
     message: str
     old: str | None = None
     new: str | None = None
+    scope: FindingScope
 
 
 class AiDataSummary(DomainModel):

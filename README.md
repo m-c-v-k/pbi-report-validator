@@ -125,7 +125,7 @@ or the `.Report` folder itself. The terminal always shows a summary; add any of:
 |---|---|
 | `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual that shows the file (and JSON Pointer) where each finding is defined. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
 | `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
-| `--json PATH` | Every finding with old and new values and where the object is defined in each version (`old_location` / `new_location`: the file in the project and a JSON Pointer, or the TMDL object for measures), plus every page and visual with its status, and counts per severity (`schema_version` 1.9) |
+| `--json PATH` | Every finding with old and new values and where the object is defined in each version (`old_location` / `new_location`: the file in the project and a JSON Pointer, or the TMDL object for measures), plus every page and visual with its status, and counts per severity. Each finding's `scope` (`report`, `page`, `model`, `parse` or `ai`) says where its `path` starts, so a page named `report` or `model` can't be mistaken for those (`schema_version` 1.10) |
 
 Running it on the sample reports in this repository gives:
 
