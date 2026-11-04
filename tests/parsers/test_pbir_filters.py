@@ -2,12 +2,14 @@ from typing import Any
 
 import pytest
 
+from pbi_report_validator.dax.builder import literal
 from pbi_report_validator.domain.models import FieldKind, FieldRef, FilterLevel
 from pbi_report_validator.domain.raw import RawJsonFile, RawReport
 from pbi_report_validator.parsers.pbir import parse_report
 from pbi_report_validator.parsers.pbir_filters import (
     UnsupportedConditionError,
     parse_filters,
+    parse_literal,
     parse_slicer_state,
     render_condition,
 )
@@ -260,6 +262,14 @@ def test_missing_filter_config_gives_no_filters(container: Any) -> None:
     [
         ("12L", "12"),
         ("-3.5D", "-3.5"),
+        ("1.50D", "1.5"),
+        ("100D", "100"),
+        ("1E+3D", "1000"),
+        ("2.5e-2D", "0.025"),
+        (".5D", "0.5"),
+        ("7.D", "7"),
+        ("-0.0D", "0"),
+        ("1E+999D", "1E+999D"),
         ("infD", "infD"),
         ("nanL", "nanL"),
         ("1_0L", "1_0L"),
@@ -272,6 +282,11 @@ def test_literal_rendering(value: str, expected: str) -> None:
     condition = {"In": {"Expressions": [col("s", "A")], "Values": [[lit(value)]]}}
 
     assert render_condition(query(condition)) == f"Sales[A] in ({expected})"
+
+
+@pytest.mark.parametrize(("raw", "dax"), [("1.50D", "1.5"), ("1E+3D", "1000")])
+def test_number_literals_become_plain_dax_numbers(raw: str, dax: str) -> None:
+    assert literal(parse_literal(raw)) == dax
 
 
 def test_not_combined_with_and_is_unambiguous() -> None:
