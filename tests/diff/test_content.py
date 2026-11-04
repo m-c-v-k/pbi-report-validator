@@ -258,6 +258,24 @@ def test_repeated_filter_names_are_all_compared() -> None:
     ]
 
 
+def test_only_report_filters_are_marked_report_level() -> None:
+    old = factories.report(
+        factories.page("report", visual(), filters=(flt("p", "A", FilterLevel.PAGE),)),
+        filters=(flt("r", "X", FilterLevel.REPORT),),
+    )
+    new = factories.report(
+        factories.page("report", visual(), filters=(flt("p", "B", FilterLevel.PAGE),)),
+        filters=(flt("r", "Y", FilterLevel.REPORT),),
+    )
+
+    findings = diff_content(old, new, match_reports(old.pages, new.pages), {})
+
+    assert sorted((f.path, f.new, f.report_level) for f in findings) == [
+        ("report/filters/p", "B", False),
+        ("report/filters/r", "Y", True),
+    ]
+
+
 def test_slicer_cleared_is_reported() -> None:
     old = report(visual(slicer=SlicerState(condition="Date[Year] in (2025)")))
     new = report(visual(slicer=SlicerState(condition=None)))

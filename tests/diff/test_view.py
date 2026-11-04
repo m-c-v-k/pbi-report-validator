@@ -4,8 +4,12 @@ from pathlib import Path
 from pbi_report_validator.diff.structural import diff_pages_and_visuals
 from pbi_report_validator.diff.view import build_page_views
 from pbi_report_validator.domain.models import (
+    Category,
+    ChangeKind,
+    Finding,
     ItemStatus,
     Page,
+    Severity,
     Visual,
 )
 from pbi_report_validator.matching.matcher import match_reports
@@ -152,3 +156,44 @@ def test_unparseable_page_is_modified_not_removed(tmp_path: Path) -> None:
     details = next(p for p in result.pages if p.name == "details")
     assert details.status == ItemStatus.MODIFIED
     assert {v.status for v in details.visuals} == {ItemStatus.MODIFIED}
+
+
+def finding(category: Category, path: str, report_level: bool = False) -> Finding:
+    return Finding(
+        category=category,
+        change=ChangeKind.MODIFIED,
+        severity=Severity.WARNING,
+        path=path,
+        message="m",
+        report_level=report_level,
+    )
+
+
+def test_pages_named_like_fixed_prefixes_ignore_findings_outside_pages() -> None:
+    pages = [
+        page(name, i, visual("v"))
+        for i, name in enumerate(("model", "report", "old", "ai"))
+    ]
+    match = match_reports(pages, pages, threshold=1.0)
+    findings = [
+        finding(Category.MEASURE, "model/v/Total Sales"),
+        finding(Category.FILTER, "report/filters/f", report_level=True),
+        finding(Category.PARSE_ISSUE, "old/v/visual.json"),
+        finding(Category.AI, "ai/explanations"),
+    ]
+
+    views = build_page_views(match, findings)
+
+    assert {(p.name, p.status) for p in views} == {
+        (name, ItemStatus.UNCHANGED) for name in ("model", "report", "old", "ai")
+    }
+    assert all(v.status == ItemStatus.UNCHANGED for p in views for v in p.visuals)
+
+
+def test_filter_on_a_page_named_report_still_marks_the_page() -> None:
+    pages = [page("report", 0, visual("v"))]
+    match = match_reports(pages, pages, threshold=1.0)
+
+    views = build_page_views(match, [finding(Category.FILTER, "report/filters/f")])
+
+    assert views[0].status == ItemStatus.MODIFIED

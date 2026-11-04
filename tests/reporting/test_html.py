@@ -299,6 +299,18 @@ def test_visual_key(path: str, visual: str | None, expected: str | None) -> None
     assert visual_key(finding, keys) == expected
 
 
+def test_measure_finding_is_not_put_on_a_page_named_model() -> None:
+    finding = Finding(
+        category=Category.MEASURE,
+        change=ChangeKind.MODIFIED,
+        severity=Severity.WARNING,
+        path="model/Sales/Total Sales",
+        message="m",
+    )
+
+    assert visual_key(finding, {"model/Sales"}) is None
+
+
 def test_severity_counts_and_column() -> None:
     html = fixture_html()
 

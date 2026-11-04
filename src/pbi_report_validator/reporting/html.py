@@ -92,7 +92,12 @@ def visual_key(finding: Finding, keys: set[str]) -> str | None:
     """The ``page/visual`` a finding belongs to, if any.
 
     Parse issues name their visual; other findings point into it with a path
-    that starts with ``page/visual``.
+    that starts with ``page/visual``. Findings outside any page (measures,
+    report filters) belong to no visual.
     """
-    candidate = finding.visual_path or visual_path_of(finding.path)
+    if finding.visual_path is not None:
+        return finding.visual_path if finding.visual_path in keys else None
+    if finding.page_path is None:
+        return None
+    candidate = visual_path_of(finding.page_path)
     return candidate if candidate in keys else None
