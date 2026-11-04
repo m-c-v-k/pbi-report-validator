@@ -88,6 +88,26 @@ def test_unparseable_visual_in_old_version_is_not_reported_added(
     ]
 
 
+def test_unparseable_visual_on_page_with_new_id_is_not_reported_removed(
+    tmp_path: Path,
+) -> None:
+    new = tmp_path / "new"
+    shutil.copytree(FIXTURES / "sales_v1", new)
+    pages = new / "Sales.Report/definition/pages"
+    (pages / "overview").rename(pages / "overview_2")
+    for file in (pages / "pages.json", pages / "overview_2/page.json"):
+        text = file.read_text(encoding="utf-8")
+        file.write_text(text.replace('"overview"', '"overview_2"'), encoding="utf-8")
+    (pages / "overview_2/visuals/card_margin/visual.json").write_text("{")
+
+    result = validate(FIXTURES / "sales_v1", new)
+
+    removed = [f for f in result.findings if f.change == ChangeKind.REMOVED]
+    issues = [f for f in result.findings if f.category == Category.PARSE_ISSUE]
+    assert removed == []
+    assert [f.visual_path for f in issues] == ["overview/card_margin"]
+
+
 def test_tmdl_issues_become_findings(tmp_path: Path) -> None:
     new = tmp_path / "new"
     shutil.copytree(FIXTURES / "sales_v1", new)

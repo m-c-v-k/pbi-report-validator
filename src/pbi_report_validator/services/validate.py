@@ -1,6 +1,7 @@
 """Orchestrate a structural validation run: load, parse, match, diff."""
 
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 
 from pbi_report_validator.diff.content import diff_content
@@ -9,6 +10,7 @@ from pbi_report_validator.diff.results import not_fully_validated
 from pbi_report_validator.diff.severity import at_least, make_finding
 from pbi_report_validator.diff.structural import (
     diff_pages_and_visuals,
+    on_old_pages,
     without_unparseable,
 )
 from pbi_report_validator.diff.view import build_page_views
@@ -84,15 +86,16 @@ def validate(
     new_report, new_model = _parse(new_project)
     measures = diff_measures(old_model, new_model)
     match = match_reports(old_report.pages, new_report.pages, renames=measures.renames)
+    new_issues = on_old_pages(new_report.issues, match)
     structural = without_unparseable(
-        diff_pages_and_visuals(match), old_report.issues, new_report.issues
+        diff_pages_and_visuals(match), old_report.issues, new_issues
     )
     findings = [
         *structural,
         *measures.findings,
         *diff_content(old_report, new_report, match, measures.renames),
-        *_issue_findings("old", old_report, old_model),
-        *_issue_findings("new", new_report, new_model),
+        *_issue_findings("old", old_report.issues, old_model),
+        *_issue_findings("new", new_issues, new_model),
         *_missing_model_findings("old", old_project),
         *_missing_model_findings("new", new_project),
     ]
@@ -199,9 +202,9 @@ def _missing_model_findings(side: str, project: RawProject) -> list[Finding]:
 
 
 def _issue_findings(
-    side: str, report: Report, model: SemanticModel | None
+    side: str, report_issues: Sequence[ParseIssue], model: SemanticModel | None
 ) -> list[Finding]:
-    issues: list[ParseIssue] = [*report.issues, *(model.issues if model else ())]
+    issues = [*report_issues, *(model.issues if model else ())]
     return [
         make_finding(
             Category.PARSE_ISSUE,

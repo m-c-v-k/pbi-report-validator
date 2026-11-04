@@ -65,6 +65,28 @@ def without_unparseable(
     ]
 
 
+def on_old_pages(issues: Sequence[ParseIssue], match: ReportMatch) -> list[ParseIssue]:
+    """New-version issues with each visual's page named as its old page.
+
+    Findings locate a matched page by its old name. A page that got a new
+    id and was matched by display name would otherwise put a new visual's
+    parse issue on a page the findings do not know.
+    """
+    old_names = {m.new.name: m.old.name for m in match.pages}
+    return [_on_old_page(issue, old_names) for issue in issues]
+
+
+def _on_old_page(issue: ParseIssue, old_names: dict[str, str]) -> ParseIssue:
+    if issue.visual_path is None:
+        return issue
+    page, _, visual = issue.visual_path.partition("/")
+    if page not in old_names:
+        return issue
+    return issue.model_copy(
+        update={"visual_path": visual_path(old_names[page], visual)}
+    )
+
+
 def _broken(issues: Sequence[ParseIssue]) -> set[str]:
     """Paths (``page`` or ``page/visual``) that failed to parse."""
     return {key for i in issues for key in (i.page, i.visual_path) if key}

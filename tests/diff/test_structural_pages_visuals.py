@@ -1,5 +1,6 @@
 from pbi_report_validator.diff.structural import (
     diff_pages_and_visuals,
+    on_old_pages,
     without_unparseable,
 )
 from pbi_report_validator.domain.models import (
@@ -200,6 +201,26 @@ def test_unparseable_visuals_are_not_reported_added_or_removed() -> None:
 
     assert without_unparseable(findings, [], [issue]) == []
     assert without_unparseable(findings, [issue], []) == findings
+
+
+def test_new_issues_are_put_on_the_matched_old_page() -> None:
+    match = match_reports(
+        [page("old_id", 0, visual("a"), visual("b", x=500), display="Sales")],
+        [page("new_id", 0, visual("a"), display="Sales")],
+    )
+    issue = ParseIssue(
+        path="pages/new_id/visuals/b/visual.json",
+        message="boom",
+        visual_path="new_id/b",
+    )
+    elsewhere = ParseIssue(path="x", message="boom", visual_path="gone/c")
+
+    moved = on_old_pages([issue, elsewhere], match)
+
+    assert [i.visual_path for i in moved] == ["old_id/b", "gone/c"]
+    assert without_unparseable(diff_pages_and_visuals(match), [], moved) == [
+        f for f in diff_pages_and_visuals(match) if f.change != ChangeKind.REMOVED
+    ]
 
 
 def test_unparseable_pages_are_not_reported_added_or_removed() -> None:
