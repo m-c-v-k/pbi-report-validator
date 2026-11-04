@@ -13,6 +13,7 @@ from pbi_report_validator.domain.models import (
     Filter,
     FilterLevel,
     Finding,
+    FindingScope,
     Measure,
     Page,
     ParseIssue,
@@ -216,3 +217,29 @@ def test_severity_counts_do_not_depend_on_field_order() -> None:
 
     assert result.severity_counts == SeverityCounts(critical=1)
     assert DiffResult.model_validate_json(result.model_dump_json()) == result
+
+
+@pytest.mark.parametrize(
+    ("category", "scope"),
+    [
+        (Category.PAGE, FindingScope.PAGE),
+        (Category.FILTER, FindingScope.PAGE),
+        (Category.DATA, FindingScope.PAGE),
+        (Category.MEASURE, FindingScope.MODEL),
+        (Category.PARSE_ISSUE, FindingScope.PARSE),
+        (Category.AI, FindingScope.AI),
+    ],
+)
+def test_scope_follows_category_unless_given(
+    category: Category, scope: FindingScope
+) -> None:
+    finding = Finding(
+        category=category,
+        change=ChangeKind.MODIFIED,
+        severity=Severity.INFO,
+        path="p",
+        message="m",
+    )
+
+    assert finding.scope == scope
+    assert finding.model_copy(update={"scope": FindingScope.REPORT}).page_path is None

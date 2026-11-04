@@ -1,3 +1,5 @@
+import json
+
 from pbi_report_validator.diff.content import diff_content
 from pbi_report_validator.diff.measures import diff_measures
 from pbi_report_validator.diff.structural import diff_pages_and_visuals
@@ -7,10 +9,12 @@ from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
     ComparisonCondition,
+    DiffResult,
     FieldKind,
     FieldRef,
     Filter,
     FilterLevel,
+    FindingScope,
     LiteralKind,
     LiteralValue,
     Measure,
@@ -262,7 +266,7 @@ def test_repeated_filter_names_are_all_compared() -> None:
     ]
 
 
-def test_only_report_filters_are_marked_report_level() -> None:
+def test_only_report_filters_have_report_scope() -> None:
     old = factories.report(
         factories.page("report", visual(), filters=(flt("p", "A", FilterLevel.PAGE),)),
         filters=(flt("r", "X", FilterLevel.REPORT),),
@@ -274,10 +278,31 @@ def test_only_report_filters_are_marked_report_level() -> None:
 
     findings = diff_content(old, new, match_reports(old.pages, new.pages), {})
 
-    assert sorted((f.path, f.new, f.report_level) for f in findings) == [
-        ("report/filters/p", "B", False),
-        ("report/filters/r", "Y", True),
+    assert sorted((f.path, f.new, f.scope) for f in findings) == [
+        ("report/filters/p", "B", FindingScope.PAGE),
+        ("report/filters/r", "Y", FindingScope.REPORT),
     ]
+
+
+def test_same_named_report_and_page_filter_differ_by_scope_in_the_json() -> None:
+    old = factories.report(
+        factories.page("report", visual(), filters=(flt("f", "A", FilterLevel.PAGE),)),
+        filters=(flt("f", "X", FilterLevel.REPORT),),
+    )
+    new = factories.report(
+        factories.page("report", visual(), filters=(flt("f", "B", FilterLevel.PAGE),)),
+        filters=(flt("f", "Y", FilterLevel.REPORT),),
+    )
+    findings = diff_content(old, new, match_reports(old.pages, new.pages), {})
+    result = DiffResult(old_source="old", new_source="new", findings=tuple(findings))
+
+    dumped = json.loads(result.model_dump_json())["findings"]
+
+    assert sorted((f["path"], f["scope"], f["new"]) for f in dumped) == [
+        ("report/filters/f", "page", "B"),
+        ("report/filters/f", "report", "Y"),
+    ]
+    assert DiffResult.model_validate_json(result.model_dump_json()) == result
 
 
 def test_slicer_cleared_is_reported() -> None:

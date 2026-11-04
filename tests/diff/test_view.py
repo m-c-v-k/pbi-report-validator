@@ -7,6 +7,7 @@ from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
     Finding,
+    FindingScope,
     ItemStatus,
     Page,
     Severity,
@@ -158,14 +159,16 @@ def test_unparseable_page_is_modified_not_removed(tmp_path: Path) -> None:
     assert {v.status for v in details.visuals} == {ItemStatus.MODIFIED}
 
 
-def finding(category: Category, path: str, report_level: bool = False) -> Finding:
+def finding(
+    category: Category, path: str, scope: FindingScope | None = None
+) -> Finding:
     return Finding(
         category=category,
         change=ChangeKind.MODIFIED,
         severity=Severity.WARNING,
         path=path,
         message="m",
-        report_level=report_level,
+        **({"scope": scope} if scope else {}),
     )
 
 
@@ -177,7 +180,7 @@ def test_pages_named_like_fixed_prefixes_ignore_findings_outside_pages() -> None
     match = match_reports(pages, pages, threshold=1.0)
     findings = [
         finding(Category.MEASURE, "model/v/Total Sales"),
-        finding(Category.FILTER, "report/filters/f", report_level=True),
+        finding(Category.FILTER, "report/filters/f", FindingScope.REPORT),
         finding(Category.PARSE_ISSUE, "old/v/visual.json"),
         finding(Category.AI, "ai/explanations"),
     ]
