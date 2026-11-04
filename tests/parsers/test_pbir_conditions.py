@@ -177,3 +177,36 @@ def test_literals_render_back_to_their_text(raw: str) -> None:
 def test_malformed_in_is_unsupported(condition: dict[str, Any]) -> None:
     with pytest.raises(UnsupportedConditionError):
         parse_condition(query(condition))
+
+
+def number(value: str) -> LiteralValue:
+    return LiteralValue(kind=LiteralKind.NUMBER, value=value)
+
+
+def text(value: str) -> LiteralValue:
+    return LiteralValue(kind=LiteralKind.TEXT, value=value)
+
+
+def test_in_values_render_the_same_in_any_order() -> None:
+    picked = InCondition(fields=(AMOUNT,), rows=((number("2025"),), (number("2024"),)))
+    reversed_ = InCondition(fields=(AMOUNT,), rows=(picked.rows[1], picked.rows[0]))
+
+    assert render(picked) == render(reversed_) == "Sales[Amount] in (2024, 2025)"
+
+
+def test_in_numbers_sort_by_value_and_duplicates_render_once() -> None:
+    rows = ((number("10"),), (number("-1.5"),), (number("9"),), (number("10"),))
+
+    rendered = render(InCondition(fields=(AMOUNT,), rows=rows))
+
+    assert rendered == "Sales[Amount] in (-1.5, 9, 10)"
+
+
+def test_in_rows_of_several_fields_sort_as_tuples() -> None:
+    year = FieldRef(table="Date", name="Year", kind=FieldKind.COLUMN)
+    rows = ((text("Bikes"), number("2025")), (text("Bikes"), number("2024")))
+
+    rendered = render(InCondition(fields=(AMOUNT, year), rows=rows))
+
+    expected = "(Sales[Amount], Date[Year]) in (('Bikes', 2024), ('Bikes', 2025))"
+    assert rendered == expected
