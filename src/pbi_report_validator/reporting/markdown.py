@@ -11,11 +11,13 @@ from collections import Counter
 
 from pbi_report_validator.domain.models import Category, DiffResult, Finding
 from pbi_report_validator.reporting.labels import (
+    ATTRIBUTION_HEADING,
     CATEGORY_LABELS,
     UNMASKED_WARNING,
     ai_explanation,
     ai_notes,
     ai_overview,
+    attribution_lines,
     data_overview,
     severity_overview,
 )
@@ -85,6 +87,10 @@ def _header(result: DiffResult) -> str:
     for overview in (data_overview(result), ai_overview(result)):
         if overview:
             lines += [overview, ""]
+    if causes := attribution_lines(result):
+        lines += [ATTRIBUTION_HEADING, ""]
+        lines += [f"- `{_code(p)}`: {_unmentionable(c)}" for p, c in causes]
+        lines.append("")
     if result.findings:
         lines += ["| Category | Findings |", "|---|---:|"]
         lines += [

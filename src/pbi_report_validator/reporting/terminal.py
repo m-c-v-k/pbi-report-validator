@@ -4,8 +4,10 @@ from collections import Counter
 
 from pbi_report_validator.domain.models import Category, DiffResult, Severity
 from pbi_report_validator.reporting.labels import (
+    ATTRIBUTION_HEADING,
     UNMASKED_WARNING,
     ai_overview,
+    attribution_lines,
     data_overview,
     severity_overview,
 )
@@ -27,6 +29,9 @@ def format_summary(result: DiffResult, limit: int = DEFAULT_LIMIT) -> str:
     for overview in (data_overview(result), ai_overview(result)):
         if overview:
             header += "\n" + overview
+    if causes := attribution_lines(result):
+        header += "\n" + ATTRIBUTION_HEADING
+        header += "".join(f"\n  {path}: {cause}" for path, cause in causes)
     if not result.findings:
         return f"{header}\nNo differences found."
     counts = Counter(f.category for f in result.findings)

@@ -20,6 +20,7 @@ from pbi_report_validator.reporting.labels import (
     ai_explanation,
     ai_notes,
     ai_overview,
+    attribution_label,
     data_overview,
 )
 
@@ -53,6 +54,7 @@ def to_html(result: DiffResult, template_source: str, tool_version: str) -> str:
         ai_notes=ai_notes(result),
         ai_explanation=ai_explanation,
         data_by_path={s.path: s for s in result.data},
+        attribution_label=attribution_label,
         details=visual_findings(result.findings, keys),
         visual_key=lambda finding: visual_key(finding, keys),
         result=result,

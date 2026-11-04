@@ -10,6 +10,7 @@ from pbi_report_validator.domain.ai import AiMode, AiSettings
 from pbi_report_validator.domain.ai_payload import AiDataSummary, AiFinding, AiPayload
 from pbi_report_validator.domain.base import DomainModel
 from pbi_report_validator.domain.data_validation import (
+    Attribution,
     CellValue,
     DataSettings,
     DataStatus,
@@ -80,6 +81,7 @@ __all__ = [
     "AiSettings",
     "AiSuggestion",
     "AllCondition",
+    "Attribution",
     "BinaryCondition",
     "Category",
     "CellValue",

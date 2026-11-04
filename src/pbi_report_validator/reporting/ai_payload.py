@@ -54,4 +54,5 @@ def _summary(summary: DataSummary, allow_data: bool) -> AiDataSummary:
     payload = AiDataSummary.model_validate(summary.model_dump())
     if allow_data:
         return payload
-    return payload.model_copy(update={"max_abs_delta": None, "reason": None})
+    withheld = {"max_abs_delta": None, "reason": None, "attribution_reason": None}
+    return payload.model_copy(update=withheld)

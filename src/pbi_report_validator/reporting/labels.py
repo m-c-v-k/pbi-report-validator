@@ -4,8 +4,10 @@ from collections import Counter
 
 from pbi_report_validator.domain.models import (
     AiMode,
+    Attribution,
     Category,
     DataStatus,
+    DataSummary,
     DiffResult,
     Finding,
     ItemStatus,
@@ -36,6 +38,14 @@ STATUS_MARKS = {
     ItemStatus.UNCHANGED: "",
 }
 
+ATTRIBUTION_LABELS = {
+    Attribution.REPORT: "report change",
+    Attribution.MODEL: "semantic model change",
+    Attribution.BOTH: "report and semantic model change",
+    Attribution.UNKNOWN: "unknown",
+}
+ATTRIBUTION_HEADING = "Cause of the data differences (--attribute):"
+
 # Shown in every report when row-level data was not masked (--show-data-values).
 UNMASKED_WARNING = (
     "This report contains unmasked row-level data: the keys and values of the "
@@ -64,6 +74,24 @@ def data_overview(result: DiffResult) -> str | None:
         f"{counts[DataStatus.SAME]} same, {counts[DataStatus.DIFFERENT]} different, "
         f"{counts[DataStatus.NOT_VALIDATED]} not validated"
     )
+
+
+def attribution_label(summary: DataSummary) -> str | None:
+    """What caused a visual's data difference, or ``None`` if not attributed."""
+    if summary.attribution is None:
+        return None
+    label = ATTRIBUTION_LABELS[summary.attribution]
+    reason = summary.attribution_reason
+    return f"{label} ({reason})" if reason else label
+
+
+def attribution_lines(result: DiffResult) -> list[tuple[str, str]]:
+    """``(visual path, cause)`` for every attributed visual, in path order."""
+    return [
+        (summary.path, label)
+        for summary in result.data
+        if (label := attribution_label(summary))
+    ]
 
 
 def ai_overview(result: DiffResult) -> str | None:
