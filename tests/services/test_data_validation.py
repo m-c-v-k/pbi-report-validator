@@ -1,5 +1,7 @@
 import logging
 import re
+import shutil
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -162,6 +164,23 @@ def test_visual_lost_in_one_version_is_not_validated() -> None:
     new = with_issues(report(page("p")), issue("p/card"))
 
     assert data_of(old, new) == ([("p/card", LOST_VISUAL.format(side="new"))], 0)
+
+
+def test_lost_visual_whose_folder_differs_from_its_name_is_not_validated(
+    tmp_path: Path,
+) -> None:
+    old, new = tmp_path / "old", tmp_path / "new"
+    for project in (old, new):
+        shutil.copytree(FIXTURES / "sales_v1", project)
+        visuals = project / "Sales.Report/definition/pages/overview/visuals"
+        (visuals / "card_margin").rename(visuals / "folder_x")
+    broken = new / "Sales.Report/definition/pages/overview/visuals/folder_x"
+    (broken / "visual.json").write_text("{")
+
+    result = validate(old, new, SETTINGS, FakeRunner())
+
+    reasons = {s.path: s.reason for s in result.data}
+    assert reasons["overview/card_margin"] == LOST_VISUAL.format(side="new")
 
 
 def test_page_lost_in_one_version_is_not_validated() -> None:

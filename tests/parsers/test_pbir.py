@@ -1,9 +1,22 @@
 import pytest
 
-from pbi_report_validator.domain.models import FieldKind, FieldRef, Position, Projection
+from pbi_report_validator.domain.models import (
+    FieldKind,
+    FieldRef,
+    ParseIssue,
+    Position,
+    Projection,
+    Report,
+    SourceLocation,
+)
 from pbi_report_validator.domain.raw import RawJsonFile, RawPage, RawReport
 from pbi_report_validator.integrations.files import load_project
-from pbi_report_validator.parsers.pbir import parse_report, parse_visual
+from pbi_report_validator.parsers.pbir import (
+    parse_report,
+    parse_visual,
+    with_issues_by_name,
+)
+from tests import factories
 from tests.factories import FIXTURES
 
 TOTAL_SALES = FieldRef(table="Sales", name="Total Sales", kind=FieldKind.MEASURE)
@@ -376,3 +389,49 @@ def test_unparseable_page_issues_name_their_page() -> None:
         ("bad", "pages/bad/page.json"),
         ("neg", "pages/neg/page.json"),
     ]
+
+
+VISUAL_FILE = "S.Report/definition/pages/p/visuals/folder_x/visual.json"
+
+
+def located_report(page_name: str, visual_name: str) -> Report:
+    v = factories.visual(visual_name).model_copy(
+        update={"location": SourceLocation(file=VISUAL_FILE, pointer="")}
+    )
+    page_file = "S.Report/definition/pages/p/page.json"
+    p = factories.page(page_name, v).model_copy(
+        update={"location": SourceLocation(file=page_file, pointer="")}
+    )
+    return factories.report(p)
+
+
+def issue(path: str, visual: str | None = None, page: str | None = None) -> ParseIssue:
+    return ParseIssue(path=path, message="m", visual_path=visual, page=page)
+
+
+def test_issues_are_keyed_by_the_name_in_the_same_folder() -> None:
+    parsed = located_report("p_id", "card")
+    broken_visual = issue(VISUAL_FILE, visual="p_id/folder_x")
+    broken_page = issue("S.Report/definition/pages/p/page.json", page="p")
+    report_level = issue("S.Report/definition/report.json")
+    elsewhere = issue("S.Report/definition/pages/q/page.json", page="q")
+    with_problems = Report(issues=(broken_visual, broken_page, report_level, elsewhere))
+
+    renamed = with_issues_by_name(with_problems, parsed).issues
+
+    assert [(i.page, i.visual_path) for i in renamed] == [
+        (None, "p_id/card"),
+        ("p_id", None),
+        (None, None),
+        ("q", None),
+    ]
+
+
+def test_own_parsed_visual_wins_over_the_other_version() -> None:
+    own = located_report("p_id", "card_new").model_copy(
+        update={"issues": (issue(VISUAL_FILE, visual="p_id/folder_x"),)}
+    )
+
+    renamed = with_issues_by_name(own, located_report("p_id", "card_old")).issues
+
+    assert [i.visual_path for i in renamed] == ["p_id/card_new"]
