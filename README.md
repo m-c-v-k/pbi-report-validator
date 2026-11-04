@@ -489,10 +489,10 @@ tests/             # Mirrors src/, plus sample reports in fixtures/ and expected
   [its own limitations](#data-validation-optional---data)
 - Comparing published reports needs local copies, saved as `.pbip` from Power
   BI Desktop ([#232](https://github.com/m-c-v-k/pbi-report-validator/issues/232)
-  would fetch them through the API). Reports with a `byConnection` reference
-  in `definition.pbir` skip the measure comparison, and with `--data` a
-  renamed measure then can't be paired, even with the model folder next to
-  the report ([#233](https://github.com/m-c-v-k/pbi-report-validator/issues/233))
+  would fetch them through the API). A report with a `byConnection` reference
+  in `definition.pbir` uses the `<Name>.SemanticModel` folder next to it;
+  without one, measures are not compared (the run says so), and with
+  `--data` a renamed measure can't be paired
 - A visual moved to a different page shows as removed on one page and added
   on the other
 - Filters the parser cannot read (such as relative date or "contains") are

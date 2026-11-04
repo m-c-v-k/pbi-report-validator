@@ -113,9 +113,16 @@ def test_broken_visual_json_is_kept_with_error(project_copy: Path) -> None:
     assert broken.content == {}
 
 
-def test_model_is_none_without_dataset_path(project_copy: Path) -> None:
-    pbir = project_copy / "Sales.Report" / "definition.pbir"
-    pbir.write_text('{"datasetReference": {"byConnection": {}}}')
+BY_CONNECTION = json.dumps(
+    {"datasetReference": {"byConnection": {"connectionString": "Data Source=x"}}}
+)
+
+
+def test_by_connection_without_sibling_model_gives_no_model(
+    project_copy: Path,
+) -> None:
+    (project_copy / "Sales.Report" / "definition.pbir").write_text(BY_CONNECTION)
+    shutil.rmtree(project_copy / "Sales.SemanticModel")
 
     project = load_project(project_copy)
 
@@ -123,6 +130,17 @@ def test_model_is_none_without_dataset_path(project_copy: Path) -> None:
     assert project.model_missing == (
         "the report uses a published semantic model (byConnection)"
     )
+
+
+def test_by_connection_uses_the_sibling_model(project_copy: Path) -> None:
+    (project_copy / "Sales.Report" / "definition.pbir").write_text(BY_CONNECTION)
+
+    project = load_project(project_copy)
+
+    assert project.model_missing is None
+    assert project.semantic_model is not None
+    assert project.semantic_model.path == "Sales.SemanticModel"
+    assert project.semantic_model == load_project(FIXTURES / "sales_v1").semantic_model
 
 
 @pytest.mark.parametrize("reference", ["null", '"x"', '{"byPath": null}'])
