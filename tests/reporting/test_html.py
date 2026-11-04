@@ -322,3 +322,27 @@ def test_ai_mode_is_stated_only_when_on() -> None:
 
     assert "ai-overview" not in render(off)
     assert '<p class="ai-overview">AI: api (claude-x).' in render(on)
+
+
+def test_drill_down_shows_where_each_finding_is_defined() -> None:
+    html = render(validate(FIXTURES / "sales_v1", FIXTURES / "sales_v3"))
+    detail = html.split('id="details/table_product_sales"', 1)[1].split("</details>")[0]
+    visual = "Sales.Report/definition/pages/details/visuals/table_product_sales"
+
+    assert (
+        f'<div class="source">Old: <code>{visual}/visual.json</code> '
+        "<code>/filterConfig/filters/0</code></div>"
+    ) in detail
+    assert (
+        f'<div class="source">New: <code>{visual}/visual.json</code> '
+        "<code>/visual/query/queryState/Values/projections/2</code></div>"
+    ) in detail
+
+
+def test_drill_down_shows_one_file_when_both_versions_agree() -> None:
+    html = fixture_html()
+    visual = "Sales.Report/definition/pages/details/visuals/chart_sales_by_region"
+
+    assert (
+        f'<div class="source">Defined in: <code>{visual}/visual.json</code></div>'
+    ) in html

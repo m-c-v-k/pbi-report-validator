@@ -1,10 +1,14 @@
 from pbi_report_validator.domain.models import (
     AiMode,
     Category,
+    ChangeKind,
     DataStatus,
     DataSummary,
     DiffResult,
+    Finding,
     ItemStatus,
+    Severity,
+    SourceLocation,
 )
 from pbi_report_validator.reporting.labels import (
     CATEGORY_LABELS,
@@ -12,6 +16,7 @@ from pbi_report_validator.reporting.labels import (
     STATUS_MARKS,
     ai_overview,
     data_overview,
+    source_locations,
 )
 
 
@@ -49,3 +54,27 @@ def test_ai_overview_only_when_ai_was_on() -> None:
         "AI: api (claude-x). AI output is labelled 'AI-generated'; "
         "the findings themselves are not."
     )
+
+
+HERE = SourceLocation(file="a/visual.json", pointer="/filterConfig/filters/0")
+THERE = SourceLocation(file="b/visual.json", pointer="")
+
+
+def located(old: SourceLocation | None, new: SourceLocation | None) -> Finding:
+    return Finding(
+        category=Category.FILTER,
+        change=ChangeKind.MODIFIED,
+        severity=Severity.CRITICAL,
+        path="p/v/filters/f",
+        message="Filter f changed",
+        old_location=old,
+        new_location=new,
+    )
+
+
+def test_source_locations_are_merged_when_both_sides_agree() -> None:
+    assert source_locations(located(HERE, HERE)) == [("Defined in", HERE)]
+    assert source_locations(located(HERE, THERE)) == [("Old", HERE), ("New", THERE)]
+    assert source_locations(located(None, THERE)) == [("New", THERE)]
+    assert source_locations(located(HERE, None)) == [("Old", HERE)]
+    assert source_locations(located(None, None)) == []
