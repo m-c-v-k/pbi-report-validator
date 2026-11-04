@@ -1,7 +1,9 @@
 """Entry point for the ``pbi-validate`` command line interface."""
 
+import io
 import logging
 import os
+import sys
 from enum import StrEnum
 from importlib.metadata import version
 from pathlib import Path
@@ -85,6 +87,18 @@ def main(
     ] = False,
 ) -> None:
     """Compare two versions of a Power BI report and report what changed."""
+    _replace_unencodable_output()
+
+
+def _replace_unencodable_output() -> None:
+    """Print ``?`` for characters the console encoding cannot represent.
+
+    Redirected output on Windows uses the ANSI code page with strict errors,
+    so an emoji in a page name would otherwise crash the summary.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(errors="replace")
 
 
 @app.command()

@@ -218,6 +218,9 @@ def _projections(body: dict[str, Any]) -> tuple[tuple[Projection, ...], list[str
     problems = []
     for role, state in query_state.items():
         items = state.get("projections", []) if isinstance(state, dict) else []
+        if not isinstance(items, list):
+            problems.append(f"projections in role {role} are not a list, skipped")
+            continue
         for item in items:
             raw = item.get("field") if isinstance(item, dict) else None
             field = parse_field(raw) or unknown_field(raw)
