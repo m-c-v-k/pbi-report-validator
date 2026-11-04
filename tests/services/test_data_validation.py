@@ -5,14 +5,18 @@ import pytest
 from typer.testing import CliRunner
 
 from pbi_report_validator.cli.main import app
+from pbi_report_validator.dax.builder import column as dax_column
 from pbi_report_validator.dax.builder import result_column
 from pbi_report_validator.diff.results import compare_results, not_fully_validated
+from pbi_report_validator.domain.helpers import field_key
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
     DataSettings,
     DataStatus,
     DaxQuery,
+    FieldKind,
+    FieldRef,
     ParseIssue,
     QueryResult,
     Report,
@@ -363,10 +367,32 @@ def test_cli_authentication_failure_exits_with_error(
 
 @pytest.mark.parametrize(
     ("reference", "expected"),
-    [("'Date'[Month]", "Date[Month]"), ("'Bob''s Orders'[Net]", "Bob's Orders[Net]")],
+    [
+        ("'Date'[Month]", "Date[Month]"),
+        ("'Bob''s Orders'[Net]", "Bob's Orders[Net]"),
+        ("'Sales [EUR]'[Amount]", "Sales [EUR][Amount]"),
+        ("'Sales'[Amount [net]]]", "Sales[Amount [net]]"),
+        ("'Sales'[Qty]]]", "Sales[Qty]]"),
+        ("'It''s [x]'''[a]]b]", "It's [x]'[a]b]"),
+    ],
 )
 def test_result_column(reference: str, expected: str) -> None:
     assert result_column(reference) == expected
+
+
+@pytest.mark.parametrize(
+    ("table", "name"),
+    [("Sales [EUR]", "Amount"), ("Sales", "Amount [net]"), ("O'Brien]", "[q]'")],
+)
+def test_result_column_undoes_column(table: str, name: str) -> None:
+    field = FieldRef(table=table, name=name, kind=FieldKind.COLUMN)
+
+    assert result_column(dax_column(field)) == field_key(table, name)
+
+
+def test_result_column_rejects_other_text() -> None:
+    with pytest.raises(ValueError, match="not a column reference"):
+        result_column("Sales[Amount]")
 
 
 def test_measure_only_in_one_version_is_noted_not_hidden() -> None:

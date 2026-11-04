@@ -82,6 +82,7 @@ AGGREGATIONS = {
 }
 INDENT = "    "
 PLAIN_NUMBER = re.compile(r"-?[0-9]+(?:[.][0-9]+)?")
+COLUMN_REFERENCE = re.compile(r"'((?:[^']|'')*)'\[(.*)\]", re.DOTALL)
 
 
 class UnsupportedError(ValueError):
@@ -270,13 +271,16 @@ def result_column(reference: str) -> str:
     """The column name ``executeQueries`` returns for a ``column()`` reference.
 
     For example ``'Date'[Month]`` -> ``Date[Month]``: the table loses its
-    DAX quoting.
+    DAX quoting and the column its ``]]`` escape.
+
+    Raises:
+        ValueError: ``reference`` is not a ``column()`` reference.
     """
-    table, _, name = reference.partition("[")
-    return field_key(
-        table.removeprefix("'").removesuffix("'").replace("''", "'"),
-        name.removesuffix("]"),
-    )
+    parts = COLUMN_REFERENCE.fullmatch(reference)
+    if parts is None:
+        raise ValueError(f"not a column reference: {reference}")
+    table, name = parts.groups()
+    return field_key(table.replace("''", "'"), name.replace("]]", "]"))
 
 
 def text(value: str) -> str:
