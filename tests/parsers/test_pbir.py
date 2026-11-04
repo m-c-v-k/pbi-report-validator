@@ -257,6 +257,42 @@ def test_unreadable_projections_are_reported_and_unknown_fields_kept() -> None:
     assert problems == ["unrecognised field in role Values was skipped"]
 
 
+@pytest.mark.parametrize("projections", [None, 5, True, "Sales[Amount]", {}])
+def test_non_list_projections_skip_the_role(projections: object) -> None:
+    source = {"SourceRef": {"Entity": "Sales"}}
+    amount = {"Column": {"Expression": source, "Property": "Amount"}}
+    body = {
+        "visualType": "table",
+        "query": {
+            "queryState": {
+                "Values": {"projections": projections},
+                "Rows": {"projections": [{"field": amount}]},
+            }
+        },
+    }
+    visual, problems = parse_visual({"name": "v", "position": POSITION, "visual": body})
+
+    assert [p.role for p in visual.projections] == ["Rows"]
+    assert problems == ["projections in role Values are not a list, skipped"]
+
+
+def test_non_list_projections_do_not_stop_the_run() -> None:
+    raw = load_project(FIXTURES / "sales_v1").report
+    target = next(
+        v for p in raw.pages for v in p.visuals if "table_product_sales" in v.path
+    )
+    target.content["visual"]["query"]["queryState"]["Values"]["projections"] = None
+
+    report = parse_report(raw)
+
+    assert [i.message for i in report.issues] == [
+        "projections in role Values are not a list, skipped"
+    ]
+    assert sum(len(page.visuals) for page in report.pages) == sum(
+        len(page.visuals) for page in raw.pages
+    )
+
+
 def test_non_dict_query_state_gives_no_projections() -> None:
     body = {"visualType": "table", "query": {"queryState": []}}
 
