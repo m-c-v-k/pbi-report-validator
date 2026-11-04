@@ -7,9 +7,9 @@ the same pairing.
 """
 
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
-from pbi_report_validator.domain.helpers import unique_by
+from pbi_report_validator.domain.helpers import aggregated, unique_by
 from pbi_report_validator.domain.models import (
     MatchMethod,
     Page,
@@ -30,6 +30,7 @@ def match_reports(
     old_pages: Sequence[Page],
     new_pages: Sequence[Page],
     threshold: float = DEFAULT_THRESHOLD,
+    renames: Mapping[str, str] | None = None,
 ) -> ReportMatch:
     """Match the pages of two report versions and the visuals on each page.
 
@@ -38,6 +39,8 @@ def match_reports(
         new_pages: Pages of the new report.
         threshold: Minimum similarity (0-1) for pairing visuals whose ids
             differ.
+        renames: Old to new field key of renamed measures; old visuals'
+            fields are compared under their new names.
 
     Returns:
         Matched pages (ordered by the old page order) and the pages only in
@@ -55,16 +58,24 @@ def match_reports(
     pairs += [(o, n, MatchMethod.DISPLAY_NAME) for o, n in by_display]
     pairs.sort(key=lambda pair: pair[0].ordinal)
     return ReportMatch(
-        pages=tuple(_match_page(o, n, method, threshold) for o, n, method in pairs),
+        pages=tuple(
+            _match_page(o, n, method, threshold, renames or {})
+            for o, n, method in pairs
+        ),
         removed_pages=tuple(sorted(old_left, key=lambda p: p.ordinal)),
         added_pages=tuple(sorted(new_left, key=lambda p: p.ordinal)),
     )
 
 
 def match_visuals(
-    old: Page, new: Page, threshold: float = DEFAULT_THRESHOLD
+    old: Page,
+    new: Page,
+    threshold: float = DEFAULT_THRESHOLD,
+    renames: Mapping[str, str] | None = None,
 ) -> tuple[list[VisualMatch], list[Visual], list[Visual]]:
     """Match the visuals of two versions of a page.
+
+    ``renames`` maps old to new field keys of renamed measures.
 
     Returns:
         Matched visuals, visuals only on the old page and visuals only on
@@ -80,7 +91,9 @@ def match_visuals(
     matches = [
         VisualMatch(old=o, new=n, method=MatchMethod.ID, score=1.0) for o, n in by_id
     ]
-    candidates = _similarity_candidates(old_left, new_left, old, new, threshold)
+    candidates = _similarity_candidates(
+        old_left, new_left, old, new, threshold, renames or {}
+    )
     used_old: set[int] = set()
     used_new: set[int] = set()
     for score, i, j in candidates:
@@ -111,6 +124,7 @@ def _similarity_candidates(
     old_page: Page,
     new_page: Page,
     threshold: float,
+    renames: Mapping[str, str],
 ) -> list[tuple[float, int, int]]:
     """``(score, old index, new index)`` pairs above the threshold, best first.
 
@@ -122,23 +136,31 @@ def _similarity_candidates(
             (score, o.name, n.name, i, j)
             for i, o in enumerate(old_left)
             for j, n in enumerate(new_left)
-            if (score := similarity(o, n, old_page, new_page)) >= threshold
+            if (score := similarity(o, n, old_page, new_page, renames)) >= threshold
         ),
         key=lambda c: (-c[0], c[1], c[2], c[3], c[4]),
     )
     return [(score, i, j) for score, _, _, i, j in scored]
 
 
-def similarity(old: Visual, new: Visual, old_page: Page, new_page: Page) -> float:
+def similarity(
+    old: Visual,
+    new: Visual,
+    old_page: Page,
+    new_page: Page,
+    renames: Mapping[str, str] | None = None,
+) -> float:
     """Score (0-1) how likely two visuals are the same visual.
 
     Two untitled visuals count as having the same title, and two visuals
     without fields as having the same fields: absence on both sides is
-    agreement, not missing evidence.
+    agreement, not missing evidence. The old visual's fields are compared
+    under their new names when ``renames`` renames them.
     """
+    old_keys = _field_keys(old, renames or {})
     score = TYPE_WEIGHT * (old.visual_type == new.visual_type)
     score += TITLE_WEIGHT * (old.title == new.title)
-    score += FIELDS_WEIGHT * _jaccard(_field_keys(old), _field_keys(new))
+    score += FIELDS_WEIGHT * _jaccard(old_keys, _field_keys(new, {}))
     score += POSITION_WEIGHT * _position_closeness(old, new, old_page, new_page)
     return round(score, 6)
 
@@ -149,9 +171,13 @@ def _check_threshold(threshold: float) -> None:
 
 
 def _match_page(
-    old: Page, new: Page, method: MatchMethod, threshold: float
+    old: Page,
+    new: Page,
+    method: MatchMethod,
+    threshold: float,
+    renames: Mapping[str, str],
 ) -> PageMatch:
-    visuals, removed, added = match_visuals(old, new, threshold)
+    visuals, removed, added = match_visuals(old, new, threshold, renames)
     return PageMatch(
         old=old,
         new=new,
@@ -175,8 +201,11 @@ def _match_by_key[T: (Page, Visual)](
     return pairs, old_left, new_left
 
 
-def _field_keys(visual: Visual) -> set[str]:
-    return {p.field.key for p in visual.projections}
+def _field_keys(visual: Visual, renames: Mapping[str, str]) -> set[str]:
+    return {
+        aggregated(renames.get(p.field.key, p.field.key), p.field.aggregation)
+        for p in visual.projections
+    }
 
 
 def _jaccard(a: set[str], b: set[str]) -> float:

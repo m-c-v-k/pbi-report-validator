@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 from pbi_report_validator.diff.content import diff_content
-from pbi_report_validator.diff.measures import diff_measures
+from pbi_report_validator.diff.measures import MODEL_PATH, diff_measures
 from pbi_report_validator.diff.results import not_fully_validated
 from pbi_report_validator.diff.severity import at_least, make_finding
 from pbi_report_validator.diff.structural import (
@@ -79,10 +79,11 @@ def validate(
     """
     if (settings is None) != (runner is None):
         raise InvalidDataOptionsError("data validation needs settings and a runner")
-    old_report, old_model = _parse(load_project(old_path))
-    new_report, new_model = _parse(load_project(new_path))
-    match = match_reports(old_report.pages, new_report.pages)
+    old_project, new_project = load_project(old_path), load_project(new_path)
+    old_report, old_model = _parse(old_project)
+    new_report, new_model = _parse(new_project)
     measures = diff_measures(old_model, new_model)
+    match = match_reports(old_report.pages, new_report.pages, renames=measures.renames)
     structural = without_unparseable(
         diff_pages_and_visuals(match), old_report.issues, new_report.issues
     )
@@ -92,6 +93,8 @@ def validate(
         *diff_content(old_report, new_report, match, measures.renames),
         *_issue_findings("old", old_report, old_model),
         *_issue_findings("new", new_report, new_model),
+        *_missing_model_findings("old", old_project),
+        *_missing_model_findings("new", new_project),
     ]
     comparisons = []
     if settings is not None and runner is not None:
@@ -178,6 +181,21 @@ def _parse(project: RawProject) -> tuple[Report, SemanticModel | None]:
         parse_semantic_model(project.semantic_model) if project.semantic_model else None
     )
     return report, model
+
+
+def _missing_model_findings(side: str, project: RawProject) -> list[Finding]:
+    """A warning that measures were not compared, if ``side`` has no model."""
+    if project.semantic_model is not None:
+        return []
+    reason = project.model_missing or "no semantic model was found"
+    return [
+        make_finding(
+            Category.PARSE_ISSUE,
+            ChangeKind.ERROR,
+            path=f"{side}/{MODEL_PATH}",
+            message=f"Measures were not compared: in the {side} version, {reason}",
+        )
+    ]
 
 
 def _issue_findings(

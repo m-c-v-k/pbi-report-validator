@@ -10,7 +10,6 @@ from pbi_report_validator.integrations.files import (
     MissingDefinitionError,
     ModelOutsideProjectError,
     ProjectNotFoundError,
-    UnreadableFileError,
     UnreadableFolderError,
     load_project,
 )
@@ -121,6 +120,9 @@ def test_model_is_none_without_dataset_path(project_copy: Path) -> None:
     project = load_project(project_copy)
 
     assert project.semantic_model is None
+    assert project.model_missing == (
+        "the report uses a published semantic model (byConnection)"
+    )
 
 
 @pytest.mark.parametrize("reference", ["null", '"x"', '{"byPath": null}'])
@@ -183,12 +185,29 @@ def test_non_utf8_visual_is_kept_with_error(project_copy: Path) -> None:
     assert visual.error is not None
 
 
-def test_non_utf8_tmdl_raises(project_copy: Path) -> None:
+def test_non_utf8_tmdl_is_kept_with_error(project_copy: Path) -> None:
     tmdl = project_copy / "Sales.SemanticModel/definition/tables/Sales.tmdl"
     tmdl.write_bytes(b"table \xff")
 
-    with pytest.raises(UnreadableFileError):
-        load_project(project_copy)
+    model = load_project(project_copy).semantic_model
+
+    assert model is not None
+    sales = next(f for f in model.files if f.path.endswith("Sales.tmdl"))
+    assert sales.error is not None
+    assert sales.text == ""
+
+
+def test_model_bim_gives_no_model_with_reason(project_copy: Path) -> None:
+    model_dir = project_copy / "Sales.SemanticModel"
+    shutil.rmtree(model_dir / "definition")
+    (model_dir / "model.bim").write_text("{}")
+
+    project = load_project(project_copy)
+
+    assert project.semantic_model is None
+    assert project.model_missing == (
+        "Sales.SemanticModel is saved as model.bim (TMSL), which is not read"
+    )
 
 
 def test_json_with_bom_is_read(project_copy: Path) -> None:
@@ -218,6 +237,10 @@ def test_model_path_to_missing_folder_gives_no_model(project_copy: Path) -> None
     project = load_project(project_copy)
 
     assert project.semantic_model is None
+    assert (
+        project.model_missing
+        == "definition.pbir points to a folder that does not exist"
+    )
 
 
 def write_model_path(project_copy: Path, model_path: str) -> None:

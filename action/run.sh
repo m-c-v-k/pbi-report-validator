@@ -64,6 +64,19 @@ boolean allow_data_to_llm allow-data-to-llm "$IN_ALLOW_DATA_TO_LLM"
 if [[ "$allow_data_to_llm" == true && "$ai" != api ]]; then
   fail_usage "Input allow-data-to-llm needs ai: api"
 fi
+boolean ai_match ai-match "$IN_AI_MATCH"
+boolean ai_explain ai-explain "$IN_AI_EXPLAIN"
+case "${IN_AI_EXPLAIN_FROM,,}" in
+  "") ai_explain_from="" ;;
+  info | warning | critical) ai_explain_from="${IN_AI_EXPLAIN_FROM,,}" ;;
+  *) fail_usage "Input ai-explain-from must be info, warning or critical, not '$IN_AI_EXPLAIN_FROM'" ;;
+esac
+if [[ ("$ai_match" == true || "$ai_explain" == true || -n "$ai_explain_from") && "$ai" != api ]]; then
+  fail_usage "Inputs ai-match, ai-explain and ai-explain-from need ai: api"
+fi
+if [[ -n "$ai_explain_from" && "$ai_explain" != true ]]; then
+  fail_usage "Input ai-explain-from needs ai-explain: true"
+fi
 
 # A folder per step, so a second run in the same job never reads the first
 # run's results.
@@ -99,6 +112,9 @@ if [[ "$allow_data_to_llm" == true ]]; then
   args+=(--allow-data-to-llm)
   echo "::warning::allow-data-to-llm is on: row-level values may be sent to the Anthropic API."
 fi
+if [[ "$ai_match" == true ]]; then args+=(--ai-match); fi
+if [[ "$ai_explain" == true ]]; then args+=(--ai-explain); fi
+add --ai-explain-from "$ai_explain_from"
 
 # Same paths inside the container as on the runner, and the runner's user,
 # so relative paths work and written files are owned by the workflow.

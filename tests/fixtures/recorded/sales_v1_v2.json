@@ -1,0 +1,248 @@
+{
+  "exchanges": [
+    {
+      "dataset": "00000000-0000-0000-0000-000000000001",
+      "query": "EVALUATE\nSUMMARIZECOLUMNS(\n    TREATAS({2024, 2025}, 'Date'[Year]),\n    FILTER(ALL('Product'[Category]), NOT('Product'[Category] IN {\"Accessories\"})),\n    TREATAS({2025}, 'Date'[Year]),\n    \"Margin %\", [Margin %]\n)",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "[Margin %]": 0.34375
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000002",
+      "query": "EVALUATE\nSUMMARIZECOLUMNS(\n    TREATAS({2024, 2025}, 'Date'[Year]),\n    FILTER(ALL('Product'[Category]), NOT('Product'[Category] IN {\"Accessories\"})),\n    TREATAS({2024}, 'Date'[Year]),\n    \"Gross Margin %\", [Gross Margin %]\n)",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "[Gross Margin %]": 0.3090909090909091
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000001",
+      "query": "EVALUATE\nSUMMARIZECOLUMNS(\n    TREATAS({2024, 2025}, 'Date'[Year]),\n    FILTER(ALL('Product'[Category]), NOT('Product'[Category] IN {\"Accessories\"})),\n    TREATAS({2025}, 'Date'[Year]),\n    \"Total Sales\", [Total Sales]\n)",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "[Total Sales]": 1280.0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000002",
+      "query": "EVALUATE\nSUMMARIZECOLUMNS(\n    TREATAS({2024, 2025}, 'Date'[Year]),\n    FILTER(ALL('Product'[Category]), NOT('Product'[Category] IN {\"Accessories\"})),\n    TREATAS({2024}, 'Date'[Year]),\n    \"Total Sales\", [Total Sales]\n)",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "[Total Sales]": 1100.0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000001",
+      "query": "EVALUATE\nSUMMARIZECOLUMNS(\n    'Date'[Month],\n    TREATAS({2024, 2025}, 'Date'[Year]),\n    FILTER(ALL('Product'[Category]), NOT('Product'[Category] IN {\"Accessories\"})),\n    TREATAS({2025}, 'Date'[Year]),\n    \"Total Sales\", [Total Sales]\n)\nORDER BY 'Date'[Month]",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "Date[Month]": "2025-01",
+                    "[Total Sales]": 1280.0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000002",
+      "query": "EVALUATE\nSUMMARIZECOLUMNS(\n    'Date'[Month],\n    TREATAS({2024, 2025}, 'Date'[Year]),\n    FILTER(ALL('Product'[Category]), NOT('Product'[Category] IN {\"Accessories\"})),\n    TREATAS({2024}, 'Date'[Year]),\n    \"Total Sales\", [Total Sales]\n)\nORDER BY 'Date'[Month]",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "Date[Month]": "2024-03",
+                    "[Total Sales]": 1100.0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000001",
+      "query": "EVALUATE\nSUMMARIZECOLUMNS(\n    'Sales'[Region],\n    TREATAS({2024, 2025}, 'Date'[Year]),\n    \"Total Sales\", [Total Sales]\n)\nORDER BY 'Sales'[Region]",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "Sales[Region]": "North",
+                    "[Total Sales]": 1245.0
+                  },
+                  {
+                    "Sales[Region]": "South",
+                    "[Total Sales]": 80.0
+                  },
+                  {
+                    "Sales[Region]": "West",
+                    "[Total Sales]": 1100.0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000002",
+      "query": "EVALUATE\nSUMMARIZECOLUMNS(\n    'Sales'[Region],\n    TREATAS({2024, 2025}, 'Date'[Year]),\n    \"Total Sales\", [Total Sales]\n)\nORDER BY 'Sales'[Region]",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "Sales[Region]": "North",
+                    "[Total Sales]": 1245.0
+                  },
+                  {
+                    "Sales[Region]": "South",
+                    "[Total Sales]": 80.0
+                  },
+                  {
+                    "Sales[Region]": "West",
+                    "[Total Sales]": 1100.0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000001",
+      "query": "EVALUATE\nSUMMARIZECOLUMNS(\n    'Product'[Category],\n    'Product'[Product],\n    TREATAS({2024, 2025}, 'Date'[Year]),\n    TREATAS({\"Bikes\", \"Clothing\"}, 'Product'[Category]),\n    \"Total Sales\", [Total Sales],\n    \"Margin %\", [Margin %]\n)\nORDER BY 'Product'[Category], 'Product'[Product]",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "Product[Category]": "Bikes",
+                    "Product[Product]": "Road Bike",
+                    "[Total Sales]": 2300.0,
+                    "[Margin %]": 0.3217391304347826
+                  },
+                  {
+                    "Product[Category]": "Clothing",
+                    "Product[Product]": "Jersey",
+                    "[Total Sales]": 80.0,
+                    "[Margin %]": 0.5
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "dataset": "00000000-0000-0000-0000-000000000002",
+      "query": "EVALUATE\nSUMMARIZECOLUMNS(\n    'Product'[Category],\n    'Product'[Product],\n    TREATAS({2024, 2025}, 'Date'[Year]),\n    \"Total Sales\", [Total Sales],\n    \"Gross Margin %\", [Gross Margin %]\n)\nORDER BY 'Product'[Category], 'Product'[Product]",
+      "status": 200,
+      "body": {
+        "results": [
+          {
+            "tables": [
+              {
+                "rows": [
+                  {
+                    "Product[Category]": "Accessories",
+                    "Product[Product]": "Bottle",
+                    "[Total Sales]": 45.0,
+                    "[Gross Margin %]": 0.5555555555555556
+                  },
+                  {
+                    "Product[Category]": "Bikes",
+                    "Product[Product]": "Road Bike",
+                    "[Total Sales]": 2300.0,
+                    "[Gross Margin %]": 0.3217391304347826
+                  },
+                  {
+                    "Product[Category]": "Clothing",
+                    "Product[Product]": "Jersey",
+                    "[Total Sales]": 80.0,
+                    "[Gross Margin %]": 0.5
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

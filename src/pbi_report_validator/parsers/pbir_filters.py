@@ -12,8 +12,9 @@ compared.
 
 import json
 import re
-from typing import Any, Literal, NamedTuple, assert_never, cast
+from typing import Any, Literal, NamedTuple, cast
 
+from pbi_report_validator.domain.conditions import render
 from pbi_report_validator.domain.models import (
     AllCondition,
     BinaryCondition,
@@ -41,6 +42,8 @@ TOP_N_DIRECTIONS: dict[int, Direction] = {1: "bottom", 2: "top"}
 # literals do not need it, and the text form never showed it.
 NUMBER_LITERAL = re.compile(r"^(-?\d+(?:\.\d+)?)[LDM]?$")
 DATETIME_LITERAL = re.compile(r"^datetime'(?P<value>[^']*)'$")
+# Built-in slicers: the classic one and the newer list, button and text slicers.
+SLICER_TYPES = frozenset({"slicer", "listSlicer", "advancedSlicerVisual", "textSlicer"})
 
 
 class UnsupportedConditionError(ValueError):
@@ -85,6 +88,10 @@ def parse_slicer_state(
 ) -> tuple[SlicerState | None, list[str]]:
     """Parse the selection stored in a slicer's ``objects.general`` filter.
 
+    A visual is a slicer if its type is one of ``SLICER_TYPES`` or if it
+    stores a selection the way the filter API does, in the ``filter``
+    property of an ``objects.general`` entry (custom slicers included).
+
     Args:
         body: The ``visual`` object of a slicer.
         field_hint: The slicer's field, used when the selection itself names
@@ -94,9 +101,9 @@ def parse_slicer_state(
         The slicer state (``None`` if the visual is not a slicer), and a
         message if the selection could not be parsed.
     """
-    if body.get("visualType") != "slicer":
-        return None, []
     query = _slicer_query(body)
+    if query is None and body.get("visualType") not in SLICER_TYPES:
+        return None, []
     expression, problem = _parse_or_problem(query, "slicer selection")
     state = SlicerState(
         field=field_hint,
@@ -144,39 +151,6 @@ def parse_condition(query: Any) -> Condition | None:
     return items[0] if len(items) == 1 else AllCondition(items=items)
 
 
-def render(condition: Condition) -> str:
-    """Render a structured condition as normalised text."""
-    if isinstance(condition, InCondition):
-        return _render_in(condition)
-    if isinstance(condition, ComparisonCondition):
-        value = render_literal(condition.value)
-        return f"{condition.field.key} {condition.operator} {value}"
-    if isinstance(condition, TopNCondition):
-        return _render_top_n(condition)
-    if isinstance(condition, NotCondition):
-        return f"not ({render(condition.operand)})"
-    if isinstance(condition, BinaryCondition):
-        left, right = render(condition.left), render(condition.right)
-        return f"({left}) {condition.kind} ({right})"
-    if isinstance(condition, AllCondition):
-        return " and ".join(
-            f"({render(item)})" if isinstance(item, BinaryCondition) else render(item)
-            for item in condition.items
-        )
-    assert_never(condition)
-
-
-def render_literal(literal: LiteralValue) -> str:
-    """Render a literal the way it appears in a normalised condition."""
-    if literal.kind == LiteralKind.TEXT:
-        return "'" + literal.value.replace("'", "''") + "'"
-    if literal.kind == LiteralKind.DATETIME:
-        return f"datetime'{literal.value}'"
-    if literal.kind == LiteralKind.NULL:
-        return "null"
-    return literal.value
-
-
 def parse_literal(raw: str) -> LiteralValue:
     """Classify a raw PBIR literal such as ``2025L``, ``'Bikes'`` or ``true``."""
     number = NUMBER_LITERAL.match(raw)
@@ -192,21 +166,6 @@ def parse_literal(raw: str) -> LiteralValue:
     if datetime:
         return LiteralValue(kind=LiteralKind.DATETIME, value=datetime["value"])
     return LiteralValue(kind=LiteralKind.OTHER, value=raw)
-
-
-def _render_in(condition: InCondition) -> str:
-    fields = [f.key for f in condition.fields]
-    values = [", ".join(render_literal(v) for v in row) for row in condition.rows]
-    target = fields[0] if len(fields) == 1 else f"({', '.join(fields)})"
-    rendered = values if len(fields) == 1 else [f"({v})" for v in values]
-    return f"{target} in ({', '.join(rendered)})"
-
-
-def _render_top_n(condition: TopNCondition) -> str:
-    order = condition.order_by
-    by = f"{order.aggregation}({order.key})" if order.aggregation else order.key
-    limit = f"{condition.direction} {condition.count}"
-    return f"{condition.field.key} {limit} by {by}"
 
 
 def _parse_filter(
@@ -270,10 +229,15 @@ def _canonical_source(reference: Any, sources: _Sources) -> Any:
 
 
 def _slicer_query(body: dict[str, Any]) -> Any:
-    try:
-        return body["objects"]["general"][0]["properties"]["filter"]["filter"]
-    except (KeyError, IndexError, TypeError):
-        return None
+    """The selection in the first ``objects.general`` entry that has one."""
+    objects = body.get("objects")
+    general = objects.get("general") if isinstance(objects, dict) else None
+    for entry in general if isinstance(general, list) else []:
+        properties = entry.get("properties") if isinstance(entry, dict) else None
+        stored = properties.get("filter") if isinstance(properties, dict) else None
+        if isinstance(stored, dict) and stored.get("filter") is not None:
+            return stored["filter"]
+    return None
 
 
 def _aliases(sources: Any) -> dict[str, str]:

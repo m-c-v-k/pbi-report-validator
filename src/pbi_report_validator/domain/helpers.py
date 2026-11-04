@@ -29,6 +29,11 @@ def field_key(table: str, name: str) -> str:
     return f"{table}[{name}]"
 
 
+def aggregated(key: str, aggregation: str | None) -> str:
+    """A field key with its aggregation, e.g. ``Sum(Sales[Amount])``."""
+    return f"{aggregation}({key})" if aggregation else key
+
+
 def field_name(key: str) -> str:
     """The name part of a field key: ``Sales[Margin %]`` -> ``Margin %``."""
     return key.partition("[")[2].removesuffix("]")

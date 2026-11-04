@@ -14,11 +14,14 @@ class QueryResult(DomainModel):
 
     ``columns`` keeps the column names in the order the API returned them
     (e.g. ``Date[Month]``, ``[Total Sales]``); each row has one value per
-    column, ``None`` for blanks.
+    column, ``None`` for blanks. ``response_bytes`` is the size of the API
+    response the result came from (0 when unknown), used to spot results the
+    API cut off at its size limit without saying so.
     """
 
     columns: tuple[str, ...] = ()
     rows: tuple[tuple[CellValue, ...], ...] = ()
+    response_bytes: int = Field(default=0, ge=0)
 
 
 class DaxQuery(DomainModel):
@@ -48,11 +51,28 @@ class DataStatus(StrEnum):
     NOT_VALIDATED = "not_validated"
 
 
+class Attribution(StrEnum):
+    """Where a data difference comes from (``--attribute``).
+
+    Found by running the new report's query against the old dataset too:
+    ``report`` if that already differs from the old version and matches
+    the new one, ``model`` the other way round, ``both`` if it differs from
+    each, and ``unknown`` if it could not be told (``attribution_reason``).
+    """
+
+    REPORT = "report"
+    MODEL = "model"
+    BOTH = "both"
+    UNKNOWN = "unknown"
+
+
 class DataSummary(DomainModel):
     """Data comparison result for one visual (``page/visual``).
 
     ``max_abs_delta`` is the largest numeric difference among matched rows,
     including differences within the tolerance (so small drift is visible).
+    ``attribution`` is set only with ``--attribute``, on ``different``
+    visuals.
     """
 
     path: str
@@ -65,6 +85,8 @@ class DataSummary(DomainModel):
     rows_only_new: int = Field(default=0, ge=0)
     max_abs_delta: float | None = None
     reason: str | None = None
+    attribution: Attribution | None = None
+    attribution_reason: str | None = None
 
 
 class Tolerance(DomainModel):
@@ -83,13 +105,15 @@ class DataSettings(DomainModel):
     """What ``--data`` compares against.
 
     ``show_values`` puts row keys and values in the findings; by default
-    they are masked.
+    they are masked. ``attribute`` runs one more query per differing visual
+    to tell report changes from model changes.
     """
 
     old_dataset: str
     new_dataset: str
     tolerance: Tolerance = Tolerance()
     show_values: bool = False
+    attribute: bool = False
 
 
 class ValuePairing(DomainModel):

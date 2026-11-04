@@ -1,5 +1,11 @@
 from pbi_report_validator.diff.measures import diff_measures
-from pbi_report_validator.domain.models import ChangeKind, Measure, SemanticModel, Table
+from pbi_report_validator.domain.models import (
+    ChangeKind,
+    Measure,
+    ParseIssue,
+    SemanticModel,
+    Table,
+)
 
 
 def model(*measures: Measure, table: str = "Sales") -> SemanticModel:
@@ -58,6 +64,30 @@ def test_same_name_in_another_table_is_not_a_rename() -> None:
         ("model/A/X", ChangeKind.REMOVED),
         ("model/B/Y", ChangeKind.ADDED),
     ]
+
+
+def test_table_declared_in_several_files_is_compared_as_one() -> None:
+    def split(extra: str) -> SemanticModel:
+        return SemanticModel(
+            tables=(
+                Table(name="Sales", measures=(m("Total", "1"),)),
+                Table(name="Sales", measures=(m("Extra", extra),)),
+            )
+        )
+
+    result = diff_measures(split("SUM(Amount)"), split("SUM(Cost)"))
+
+    assert [(f.change, f.path) for f in result.findings] == [
+        (ChangeKind.MODIFIED, "model/Sales/Extra")
+    ]
+
+
+def test_measure_that_failed_to_parse_is_not_reported_removed() -> None:
+    old = model(m("Total", "1"), m("Margin", "2"))
+    issue = ParseIssue(path="t.tmdl:3", message="m", measure="Sales[Margin]")
+    new = model(m("Total", "1")).model_copy(update={"issues": (issue,)})
+
+    assert diff_measures(old, new).findings == ()
 
 
 def test_missing_model_compares_nothing() -> None:

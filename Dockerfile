@@ -14,7 +14,7 @@ COPY src ./src
 RUN uv sync --locked --no-dev --no-editable ${EXTRAS:+--extra "$EXTRAS"}
 
 # Runtime stage: only Python and the venv, run as a non-root user.
-FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+FROM python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
 LABEL org.opencontainers.image.source="https://github.com/m-c-v-k/pbi-report-validator" \
       org.opencontainers.image.description="Compare two versions of a Power BI report (PBIP) and report what changed." \
       org.opencontainers.image.licenses="MIT"

@@ -7,7 +7,9 @@
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
 
-**Status:** v0.3.0 – structural diff and data validation (`--data`, values masked by default), JSON, Markdown and HTML reports, a GitHub Action with PR comments and `--fail-on`, and an optional AI layer (`--ai api`). See the [live demo report](https://m-c-v-k.github.io/pbi-report-validator/) and the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
+**Status:** v0.4.0 – structural diff and data validation (`--data`, values masked by default, `--attribute` tells report changes from model changes), JSON, Markdown and HTML reports, a GitHub Action with PR comments and `--fail-on`, and an optional AI layer (`--ai api`). See the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
+
+**Live:** [demo report](https://m-c-v-k.github.io/pbi-report-validator/report.html) for the sample reports in this repository · [latest release](https://github.com/m-c-v-k/pbi-report-validator/releases/latest)
 
 ## Why
 
@@ -22,19 +24,31 @@ old and new versions side by side and clicking through every page and slicer.
   page wireframes coloured by status
 - **Explanations (optional)** – AI-written summaries of why numbers differ
 
+## Requirements
+
+What you need depends on what you run. The structural diff needs no account,
+credentials or network access once installed.
+
+| To run | You need |
+|---|---|
+| The diff (`pbi-validate diff`) | [uv](https://docs.astral.sh/uv/), which installs Python 3.12 for you, or Docker |
+| Input reports | Power BI Desktop to save both versions as Power BI Projects (`.pbip`) in the PBIR format ([Quick start](#quick-start)) |
+| Data validation (`--data`) | A Microsoft Entra service principal with access to both published semantic models through the Power BI REST API ([setup](#data-validation-optional---data)) |
+| AI options (`--ai api`) | An Anthropic API key, and the `ai` extra or the `-ai` Docker image ([setup](#ai-options-optional---ai)) |
+| The GitHub Action | A Linux runner with Docker, such as `ubuntu-latest` ([GitHub Action](#github-action)) |
+
 ## Install
 
-Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 for you).
 Install the latest release as a command-line tool:
 
 ```bash
-uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.3.0
+uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.4.0
 ```
 
 Or run it once without installing:
 
 ```bash
-uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.3.0 pbi-validate --help
+uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.4.0 pbi-validate --help
 ```
 
 Each [GitHub release](https://github.com/m-c-v-k/pbi-report-validator/releases)
@@ -57,6 +71,41 @@ The image does not include the optional AI extra. From v0.3.0, releases also
 publish a variant with it, tagged with the suffix `-ai` (`<version>-ai` and
 `latest-ai`); see [AI options](#ai-options-optional---ai).
 
+## Configuration
+
+The diff needs no configuration. Data validation and the AI options read
+their settings from environment variables only; there are no config files.
+[`.env.example`](.env.example) lists every variable:
+
+| Variable | Used by |
+|---|---|
+| `PBI_TENANT_ID`, `PBI_CLIENT_ID`, `PBI_CLIENT_SECRET` | `--data`: the service principal |
+| `ANTHROPIC_API_KEY` | `--ai api` |
+| `PBI_VALIDATE_AI` | Default for `--ai` (`off` or `api`); `disabled` blocks AI |
+| `PBI_VALIDATE_AI_MODEL` | Overrides the Claude model |
+
+Copy it to `.env` (which git ignores) and fill in what you need:
+
+```bash
+cp .env.example .env
+```
+
+The tool does not read `.env` by itself, so load it into your shell before
+running `pbi-validate`. In bash or zsh:
+
+```bash
+set -a; . ./.env; set +a
+```
+
+In PowerShell:
+
+```powershell
+Get-Content .env | Where-Object { $_ -match '^\s*[^#\s][^=]*=' } | ForEach-Object { $name, $value = $_ -split '=', 2; Set-Item "env:$($name.Trim())" $value }
+```
+
+In CI, set the same variables from secrets, as shown under
+[GitHub Action](#github-action). Never commit `.env`.
+
 ## Quick start
 
 1. Save both report versions as Power BI Projects (*File → Save as → Power BI
@@ -76,7 +125,7 @@ or the `.Report` folder itself. The terminal always shows a summary; add any of:
 |---|---|
 | `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
 | `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
-| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.7) |
+| `--json PATH` | Every finding with old and new values, plus every page and visual with its status, and counts per severity (`schema_version` 1.8) |
 
 Running it on the sample reports in this repository gives:
 
@@ -127,9 +176,12 @@ fully validated.
 - Fields per visual, including role and aggregation
 - Filters at report, page and visual level; slicer selections
 - Measures in the semantic model (TMDL): added, removed, expression changed,
-  renamed (detected by identical expression)
-- Files that cannot be parsed are reported as findings instead of stopping
-  the run
+  renamed (detected by identical expression). When a version has no TMDL
+  model to read (a report connected to a published model, a missing model
+  folder, or a model saved as `model.bim`), a warning says measures were not
+  compared and why.
+- Files that cannot be parsed, `.tmdl` files included, are reported as
+  findings instead of stopping the run
 
 Every finding has a severity:
 
@@ -138,20 +190,6 @@ Every finding has a severity:
 | `critical` | Data differences, removed pages and visuals, added/removed/changed filters and slicer selections, changed measure expressions |
 | `warning` | Changed visual type, changed fields, renamed or removed measures, parse issues, visuals whose data could not be validated |
 | `info` | Added pages, visuals and measures, moved or reordered pages and visuals, renamed pages, changed titles, filters that only changed type |
-
-### Limitations
-
-- Only the PBIR report format; the legacy `report.json` and `.pbix` files are
-  not supported (save as `.pbip` with PBIR enabled)
-- Data validation (`--data`) is new and not yet verified against a live
-  workspace; see its own limitations below
-- A visual moved to a different page shows as removed on one page and added
-  on the other
-- Filters the parser cannot read (such as relative date or "contains") are
-  compared on their raw definition, so findings show JSON, and a renamed
-  measure inside one shows as a change. With `--data`, every visual such a
-  filter applies to is `not_validated`: one at report level covers the whole
-  report, and fails the run with `--fail-on warning`
 
 ### Data validation (optional, `--data`)
 
@@ -181,18 +219,39 @@ pbi-validate diff ./old ./new --data \
   everyone who can read the output may see the data.
 - Visuals whose query cannot be built faithfully (custom visuals, hierarchy
   levels, filters on measures, ...) or fails are reported as
-  "not validated" with the reason. Slicers are skipped: they only filter.
+  "not validated" with the reason. Slicers are skipped: they only filter. So are
+  visuals without fields in either version (text boxes, images, shapes,
+  buttons, groups), since they show no data.
+- Also "not validated": visuals that could not be fully parsed, visuals on a
+  page where another visual could not be parsed (it may have been a slicer),
+  visuals or pages that could not be parsed in one version, and visuals that
+  are a slicer in only one version. All of these count for
+  `--fail-on-data-error`.
+- `--attribute` tells you, for each visual whose numbers differ, whether the
+  **report** or the **semantic model** caused it. The new report's query is
+  also run against the old model (one extra query per differing visual,
+  nothing is written or rebound). If that already gives the new numbers, the
+  report changed; if it still gives the old numbers, the model changed; if
+  it gives neither, both did. When this cannot be told (for example the new
+  query uses a measure the old model does not have), the cause is `unknown`
+  with the reason. The cause is listed under the data summary in the
+  terminal and Markdown, in the HTML drill-down, and as `attribution` /
+  `attribution_reason` on each `data` summary in the JSON (schema 1.8).
 
 **Setup (one time).** Data validation signs in as a Microsoft Entra
 service principal and uses the Power BI REST API `executeQueries` endpoint,
 so it runs in CI without Windows-only drivers:
 
 1. Register an app in Microsoft Entra ID and create a client secret.
-2. In the Power BI admin portal, enable *Allow service principals to use
-   Power BI APIs* and *Dataset Execute Queries REST API* (for the app or a
-   security group that contains it).
+2. In the Power BI admin portal, enable *Service principals can call Fabric
+   public APIs* (Developer settings) and *Semantic Model Execute Queries REST
+   API* (Integration settings). Older portals call them *Allow service
+   principals to use Power BI APIs* and *Dataset Execute Queries REST API*.
+   If you limit a setting to a security group, the service principal itself
+   must be a member of that group. Changes can take about 15 minutes to apply.
 3. Add the app to the workspace(s) that hold both semantic models, with at
-   least Contributor rights (it needs read and build permission).
+   least Contributor rights (it needs read and build permission). This can't
+   be *My workspace*, because an app can't be added to it.
 4. Provide the credentials as environment variables (`.env.example` lists
    them; never commit them):
 
@@ -201,15 +260,26 @@ so it runs in CI without Windows-only drivers:
    ```
 
 The dataset id is the GUID in the semantic model's URL in the Power BI
-service (`.../datasets/<id>/...`).
+service: `.../datasets/<id>/...`, `.../modeling/<id>/...` or
+`.../dataset/<id>/overview`.
 
 If sign-in fails or a dataset id is wrong, the run stops with exit code 1
-and no output files are written; fix the setup and run it again.
+and no output files are written; fix the setup and run it again. A `401
+Unauthorized` after a successful sign-in usually means the tenant setting
+from step 2 blocks the app: the setting is off, it hasn't applied yet, or
+the app is not in the allowed group. The API then sends
+`ServicePrincipalIsNotAllowedByTenantAdminSwitch` in the
+`x-powerbi-error-info` response header, which the tool doesn't show yet
+([#231](https://github.com/m-c-v-k/pbi-report-validator/issues/231)).
 
 Limitations: models with row-level security can't be queried by a service
 principal; slicer interactions edited in Power BI and slicers synced from
 other pages are not taken into account; the API allows about 120 queries a
-minute (40 on Pro/PPU), and each visual needs two.
+minute (40 on Pro/PPU), and each visual needs two; a query returns at most
+100,000 rows, 1,000,000 values or 15 MB. Over a limit the API still answers
+with HTTP 200 and partial rows, with the error inside the response, so a
+visual whose result reaches a limit (or comes within 10% of 15 MB), or whose
+response carries an error, is reported as "not validated".
 
 ### AI options (optional, `--ai`)
 
@@ -230,7 +300,7 @@ the features below each need their own flag, and they can be combined.
 Setup for `api`:
 
 ```bash
-uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator@v0.3.0"
+uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator@v0.4.0"
 export ANTHROPIC_API_KEY=...
 pbi-validate diff ./old ./new --ai api
 ```
@@ -268,7 +338,7 @@ from v0.2.0:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: m-c-v-k/pbi-report-validator@v0.3.0
+- uses: m-c-v-k/pbi-report-validator@v0.4.0
   with:
     old: reports/v1        # paths relative to the workspace
     new: reports/v2
@@ -322,14 +392,21 @@ are passed on too, so `PBI_VALIDATE_AI: disabled` (for example from an
 organisation variable) blocks `ai: api`:
 
 ```yaml
-- uses: m-c-v-k/pbi-report-validator@v0.3.0
+- uses: m-c-v-k/pbi-report-validator@v0.4.0
   env:
     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   with:
     old: reports/v1
     new: reports/v2
     ai: api
+    ai-match: true
+    ai-explain: true
+    ai-explain-from: warning
 ```
+
+The `ai-match`, `ai-explain` and `ai-explain-from` inputs map to the matching
+CLI options and require `ai: api`. `ai-explain-from` accepts `info`, `warning`
+or `critical`, and only applies when `ai-explain: true`.
 
 Outputs: `json`, `html` and `markdown` (paths), `findings`, and the counts
 `critical`, `warning` and `info`. All inputs are listed in
@@ -339,7 +416,7 @@ The action needs a Linux runner with Docker (such as `ubuntu-latest`) and
 cannot run inside a job `container:`. Input and output paths must be
 relative to the workspace or lie inside it or `$RUNNER_TEMP`.
 
-**Versions.** Pin a full version tag such as `@v0.3.0`; it runs the
+**Versions.** Pin a full version tag such as `@v0.4.0`; it runs the
 published image of that version. Before 1.0, minor versions can change the
 output, so there is no moving `@v0` tag. Dependabot (`package-ecosystem:
 github-actions`) can keep the tag up to date. Organisations that require it
@@ -361,6 +438,71 @@ commit, which takes about a minute longer.
   `--allow-data-to-llm` (action input `allow-data-to-llm: true`).
   `PBI_VALIDATE_AI=disabled` blocks AI entirely.
 
+## Architecture
+
+The tool is a layered Python package in which dependencies only point
+inwards. `cli/` parses the arguments and hands over to `services/`, which
+runs one comparison: load both projects, parse them, pair old and new
+pages and visuals, diff them, optionally query the data, and render the
+reports. Parsing, matching, diffing, DAX building and rendering are pure
+functions on Pydantic models in `domain/`. All file, network and API access
+sits in `integrations/`, so the core is tested without credentials and
+works with the AI layer switched off.
+
+```text
+src/pbi_report_validator/
+├── cli/           # Typer commands: parse arguments, call services, print
+├── services/      # One validation run, data validation, AI steps, fail-on rules
+├── parsers/       # PBIR report definition and TMDL semantic model → domain models
+├── matching/      # Pair old and new pages and visuals (deterministic, AI suggestions)
+├── diff/          # Findings: structure, fields, filters, measures, query results
+├── dax/           # A visual and its filter context → DAX query
+├── reporting/     # JSON, Markdown, HTML and terminal output
+├── domain/        # Pydantic models and pure helpers; no I/O
+└── integrations/  # Files, Power BI REST API, Anthropic API, environment
+tests/             # Mirrors src/, plus sample reports in fixtures/ and expected output in snapshots/
+```
+
+[CLAUDE.md](CLAUDE.md) has the full rules for each layer.
+
+## Tech stack
+
+| Component | Choice | Why |
+|---|---|---|
+| Language | Python 3.12 | Strong data tooling, and the Power BI/Fabric ecosystem is Python-first |
+| Packaging | uv, hatchling | Fast and reproducible; installs with `uv tool` or `uvx` |
+| CLI | Typer | Typed commands with little boilerplate |
+| Domain models | Pydantic v2 | Validated, serialisable models of reports and findings |
+| Data comparison | pandas | Tabular diffs with tolerances, familiar to BI developers |
+| HTML report | Jinja2 | One self-contained file that works offline, as a CI artifact and on GitHub Pages |
+| Power BI access | httpx, MSAL | REST `executeQueries` with a service principal, so it runs in CI without Windows-only drivers |
+| AI layer (optional) | Anthropic SDK | Rename suggestions and explanations; the tool works without it |
+| Quality | pytest, ruff, mypy `--strict`, gitleaks | Fast feedback on every pull request |
+| Distribution | GitHub Releases, GHCR, GitHub Action, GitHub Pages | Install, run in Docker or CI, or look at the demo without installing |
+
+## Limitations
+
+- Only the PBIR report format; the legacy `report.json` and `.pbix` files are
+  not supported (save as `.pbip` with PBIR enabled)
+- Data validation (`--data`) has been run against live published models with
+  the sample reports, and CI replays the recorded API responses. See
+  [its own limitations](#data-validation-optional---data)
+- Comparing published reports needs local copies, saved as `.pbip` from Power
+  BI Desktop ([#232](https://github.com/m-c-v-k/pbi-report-validator/issues/232)
+  would fetch them through the API). Reports with a `byConnection` reference
+  in `definition.pbir` skip the measure comparison, and with `--data` a
+  renamed measure then can't be paired, even with the model folder next to
+  the report ([#233](https://github.com/m-c-v-k/pbi-report-validator/issues/233))
+- A visual moved to a different page shows as removed on one page and added
+  on the other
+- Filters the parser cannot read (such as relative date or "contains") are
+  compared on their raw definition, so findings show JSON, and a renamed
+  measure inside one shows as a change. With `--data`, every visual such a
+  filter applies to is `not_validated`: one at report level covers the whole
+  report, and fails the run with `--fail-on warning`
+- The GitHub Action has no input for `--attribute` yet; use the CLI or the
+  Docker image for it
+
 ## Development
 
 Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 for you).
@@ -378,9 +520,8 @@ and attaches the HTML coverage report. The coverage report of the latest
 release is on the [demo site](https://m-c-v-k.github.io/pbi-report-validator/coverage/);
 CI fails if coverage drops below 95%.
 
-Built with Python, uv, Typer, Pydantic and Jinja2. See [CLAUDE.md](CLAUDE.md) for
-architecture and contribution rules, and [docs/PROJECT.md](docs/PROJECT.md) for
-scope and milestones.
+See [CLAUDE.md](CLAUDE.md) for contribution rules and
+[docs/PROJECT.md](docs/PROJECT.md) for scope and milestones.
 
 ## Branching
 
@@ -392,7 +533,10 @@ scope and milestones.
 - Both branches are protected: changes go through pull requests and need
   green CI.
 
-## Working with Claude
+## Built with Claude Code
+
+This project was developed with Claude Code (agent-driven development) as
+part of the course *Next-Generation Software Development with AI*.
 
 Issues and pull requests can be handed to [Claude Code](https://github.com/anthropics/claude-code-action):
 

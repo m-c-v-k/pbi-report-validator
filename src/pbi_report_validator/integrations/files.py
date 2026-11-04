@@ -51,15 +51,6 @@ class InvalidJsonError(ProjectLoadError):
         self.path = path
 
 
-class UnreadableFileError(ProjectLoadError):
-    """A semantic model file could not be read as UTF-8 text."""
-
-    def __init__(self, path: str, reason: str) -> None:
-        """Create the error for ``path`` with the underlying ``reason``."""
-        super().__init__(f"{path}: could not read file ({reason})")
-        self.path = path
-
-
 class UnreadableFolderError(ProjectLoadError):
     """A folder in the project could not be listed."""
 
@@ -82,14 +73,14 @@ def load_project(path: Path) -> RawProject:
 
     Returns:
         The raw report contents and, if the report references its semantic
-        model by path, the model's TMDL files.
+        model by path, the model's TMDL files (an unreadable one is kept with
+        its error); otherwise why there is no model to read.
 
     Raises:
         ProjectNotFoundError: No single ``.Report`` folder was found.
         MissingDefinitionError: The report is not in PBIR format.
         InvalidJsonError: ``report.json``, ``pages.json`` or ``definition.pbir``
             is unreadable or not valid JSON.
-        UnreadableFileError: A ``.tmdl`` file could not be read.
         UnreadableFolderError: A project folder could not be listed.
         ModelOutsideProjectError: ``definition.pbir`` points to a semantic
             model outside the project folder.
@@ -97,11 +88,15 @@ def load_project(path: Path) -> RawProject:
     report_dir = _find_report_dir(path)
     root = report_dir.parent
     name = report_dir.name.removesuffix(REPORT_SUFFIX)
-    model_dir = _find_model_dir(report_dir)
+    model_dir, missing = _find_model_dir(report_dir, root)
+    model = _load_semantic_model(model_dir, root) if model_dir else None
+    if model_dir and model is None:
+        missing = _empty_model_reason(model_dir, root)
     return RawProject(
         name=name,
         report=_load_report(report_dir, root),
-        semantic_model=_load_semantic_model(model_dir, root) if model_dir else None,
+        semantic_model=model,
+        model_missing=missing,
     )
 
 
@@ -134,7 +129,8 @@ def _find_report_dir(path: Path) -> Path:
     return candidates[0]
 
 
-def _find_model_dir(report_dir: Path) -> Path | None:
+def _find_model_dir(report_dir: Path, root: Path) -> tuple[Path | None, str | None]:
+    """The semantic model folder, or ``None`` and why there is none."""
     pbir = report_dir / "definition.pbir"
     if pbir.is_file():
         reference = _read_required_json(pbir, report_dir.parent)
@@ -145,15 +141,24 @@ def _find_model_dir(report_dir: Path) -> Path | None:
             candidate = (report_dir / model_path).resolve()
             _require_inside(candidate, report_dir.parent.resolve(), pbir.name)
             if candidate.is_dir():
-                return candidate
+                return candidate, None
             logger.warning("%s points to missing folder %s", pbir.name, candidate)
-            return None
+            return None, f"{pbir.name} points to a folder that does not exist"
         logger.info("%s has no byPath dataset reference", pbir.name)
-        return None
+        return None, "the report uses a published semantic model (byConnection)"
     sibling = report_dir.with_name(
         report_dir.name.removesuffix(REPORT_SUFFIX) + MODEL_SUFFIX
     )
-    return sibling if sibling.is_dir() else None
+    if sibling.is_dir():
+        return sibling, None
+    return None, f"no {sibling.name} folder next to {_relative(report_dir, root)}"
+
+
+def _empty_model_reason(model_dir: Path, root: Path) -> str:
+    folder = _relative(model_dir, root)
+    if (model_dir / "model.bim").is_file():
+        return f"{folder} is saved as model.bim (TMSL), which is not read"
+    return f"{folder} has no .tmdl files"
 
 
 def _require_inside(path: Path, root: Path, source: str) -> None:
@@ -199,12 +204,17 @@ def _load_page(page_dir: Path, root: Path) -> RawPage:
     )
 
 
-def _load_semantic_model(model_dir: Path, root: Path) -> RawSemanticModel:
+def _load_semantic_model(model_dir: Path, root: Path) -> RawSemanticModel | None:
+    """The model's TMDL files, or ``None`` if it has none."""
     definition = model_dir / "definition"
+    if not definition.is_dir():
+        return None
     files = sorted(
         _list(definition, lambda: definition.rglob("*.tmdl")),
         key=lambda p: p.relative_to(definition),
     )
+    if not files:
+        return None
     return RawSemanticModel(
         path=_relative(model_dir, root),
         files=tuple(_read_text(f, root) for f in files),
@@ -216,7 +226,8 @@ def _read_text(path: Path, root: Path) -> RawTextFile:
     try:
         return RawTextFile(path=relative, text=path.read_text(encoding="utf-8-sig"))
     except (OSError, UnicodeDecodeError) as exc:
-        raise UnreadableFileError(relative, str(exc)) from exc
+        logger.warning("Could not read %s: %s", relative, exc)
+        return RawTextFile(path=relative, error=str(exc))
 
 
 def _read_required_json(path: Path, root: Path) -> RawJsonFile:

@@ -1,7 +1,9 @@
 """Entry point for the ``pbi-validate`` command line interface."""
 
+import io
 import logging
 import os
+import sys
 from enum import StrEnum
 from importlib.metadata import version
 from pathlib import Path
@@ -85,6 +87,18 @@ def main(
     ] = False,
 ) -> None:
     """Compare two versions of a Power BI report and report what changed."""
+    _replace_unencodable_output()
+
+
+def _replace_unencodable_output() -> None:
+    """Print ``?`` for characters the console encoding cannot represent.
+
+    Redirected output on Windows uses the ANSI code page with strict errors,
+    so an emoji in a page name would otherwise crash the summary.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(errors="replace")
 
 
 @app.command()
@@ -151,6 +165,15 @@ def diff(
             "masking them. The reports then contain row-level data.",
         ),
     ] = False,
+    attribute: Annotated[
+        bool,
+        typer.Option(
+            "--attribute",
+            help="With --data, tell for each visual whose numbers differ whether "
+            "the report or the semantic model caused it (runs the new query "
+            "against the old dataset too).",
+        ),
+    ] = False,
     ai: Annotated[
         AiMode | None,
         typer.Option(
@@ -202,8 +225,12 @@ def diff(
         _fail("--fail-on-data-error needs --data", EXIT_USAGE)
     if show_data_values and not compare_data:
         _fail("--show-data-values needs --data", EXIT_USAGE)
+    if attribute and not compare_data:
+        _fail("--attribute needs --data", EXIT_USAGE)
     settings = (
-        _settings_or_exit(old_dataset, new_dataset, abs_tol, rel_tol, show_data_values)
+        _settings_or_exit(
+            old_dataset, new_dataset, (abs_tol, rel_tol), show_data_values, attribute
+        )
         if compare_data
         else None
     )
@@ -243,12 +270,15 @@ def _fail(message: str, code: int) -> NoReturn:
 def _settings_or_exit(
     old_dataset: str | None,
     new_dataset: str | None,
-    abs_tol: float,
-    rel_tol: float,
+    tolerances: tuple[float, float],
     show_values: bool,
+    attribute: bool,
 ) -> DataSettings:
+    absolute, relative = tolerances
     try:
-        return data_settings(old_dataset, new_dataset, abs_tol, rel_tol, show_values)
+        return data_settings(
+            old_dataset, new_dataset, absolute, relative, show_values, attribute
+        )
     except InvalidDataOptionsError as exc:
         _fail(str(exc), EXIT_USAGE)
 

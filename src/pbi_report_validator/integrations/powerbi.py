@@ -25,8 +25,16 @@ SCOPE = "https://analysis.windows.net/powerbi/api/.default"
 DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_MAX_RETRIES = 3
 MAX_RETRY_AFTER_SECONDS = 60.0
+MAX_RESULT_ROWS = 100_000
+MAX_RESULT_VALUES = 1_000_000
+# Over 15 MB of data the API answers with partial rows and an error in the
+# result. Results from 90% of that on also count as possibly cut off, since
+# the size of the response is not the size the API counts.
+NEAR_RESULT_SIZE_LIMIT_BYTES = 13_500_000
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+UNEXPECTED_RESPONSE = "unexpected executeQueries response"
 GUID = re.compile(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}")
+OII_TAGS = re.compile(r"</?oii>")
 
 
 class PowerBIError(Exception):
@@ -145,7 +153,8 @@ class PowerBIClient:
             InvalidDatasetIdError: ``dataset_id`` is not a GUID.
             AuthenticationError: Sign-in failed or access was denied.
             DatasetNotFoundError: The dataset is unknown or not visible.
-            QueryError: The query is invalid or failed in the engine.
+            QueryError: The query is invalid, failed in the engine, or the
+                response carries an error next to (possibly partial) rows.
             RateLimitError: Still rate limited after all retries.
             ServiceError: Server errors, timeouts or unreadable responses.
         """
@@ -158,7 +167,8 @@ class PowerBIClient:
             "serializerSettings": {"includeNulls": True},
         }
         response = self._post(f"datasets/{dataset_id}/executeQueries", body)
-        return _parse_result(_json(response))
+        result = _parse_result(_json(response))
+        return result.model_copy(update={"response_bytes": len(response.content)})
 
     def _post(self, path: str, body: dict[str, Any]) -> httpx.Response:
         for attempt in range(self._max_retries + 1):
@@ -234,27 +244,46 @@ def _json(response: httpx.Response) -> Any:
 
 
 def _parse_result(payload: Any) -> QueryResult:
-    try:
-        result = payload["results"][0]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise ServiceError("unexpected executeQueries response") from exc
-    if isinstance(result, dict) and "error" in result:
-        raise QueryError(_message_from(result["error"]))
-    tables = result.get("tables") if isinstance(result, dict) else None
-    rows = tables[0].get("rows", []) if isinstance(tables, list) and tables else []
-    return _table(rows if isinstance(rows, list) else [])
+    """The first table of the first result.
+
+    An ``error`` can sit on the response, the result or the table; the API
+    also returns one with HTTP 200 alongside partial rows (for example over
+    the row limit), so any of them means the result cannot be trusted.
+
+    Raises:
+        QueryError: The response, result or table carries an error.
+        ServiceError: The response does not have the documented shape.
+    """
+    response = _object(payload)
+    _raise_for_error(response)
+    results = response.get("results")
+    result = _object(results[0] if isinstance(results, list) and results else None)
+    _raise_for_error(result)
+    tables = result.get("tables")
+    table = _object(tables[0] if isinstance(tables, list) and tables else None)
+    _raise_for_error(table)
+    rows = table.get("rows")
+    if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+        raise ServiceError(UNEXPECTED_RESPONSE)
+    return _table(rows)
 
 
-def _table(rows: list[Any]) -> QueryResult:
+def _object(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ServiceError(UNEXPECTED_RESPONSE)
+    return value
+
+
+def _raise_for_error(part: dict[str, Any]) -> None:
+    if part.get("error"):
+        raise QueryError(_message_from(part["error"]))
+
+
+def _table(rows: list[dict[str, Any]]) -> QueryResult:
     columns: list[str] = []
     for row in rows:
-        if isinstance(row, dict):
-            columns += [name for name in row if name not in columns]
-    values = tuple(
-        tuple(_cell(row.get(name)) for name in columns)
-        for row in rows
-        if isinstance(row, dict)
-    )
+        columns += [name for name in row if name not in columns]
+    values = tuple(tuple(_cell(row.get(name)) for name in columns) for row in rows)
     return QueryResult(columns=tuple(columns), rows=values)
 
 
@@ -282,6 +311,6 @@ def _message_from(error: Any) -> str:
         body = detail.get("detail") if isinstance(detail, dict) else None
         value = body.get("value") if isinstance(body, dict) else None
         if isinstance(value, str) and value:
-            return value
+            return OII_TAGS.sub("", value)
     message = error.get("message") or error.get("code")
     return str(message) if message else "unknown error"
