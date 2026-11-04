@@ -314,3 +314,15 @@ def test_same_filter_values_in_another_order_are_not_reported() -> None:
     old, new = parse_report(old_raw), parse_report(new_raw)
 
     assert diff_content(old, new, match_reports(old.pages, new.pages), {}) == []
+
+
+def test_measure_moved_to_another_table_is_not_reported_in_the_report() -> None:
+    moves = {"Sales[Margin]": "Measures[Margin]"}
+
+    def on(table: str) -> Report:
+        margin = FieldRef(table=table, name="Margin", kind=FieldKind.MEASURE)
+        projection = Projection(role="Values", field=margin)
+        return report(visual(projection, filters=(gt("f", "Margin", table=table),)))
+
+    assert content(on("Sales"), on("Measures"), moves) == []
+    assert content(on("Sales"), on("Measures")) != []
