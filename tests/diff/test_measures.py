@@ -2,10 +2,15 @@ from pbi_report_validator.diff.measures import diff_measures
 from pbi_report_validator.domain.models import (
     ChangeKind,
     Measure,
+    MeasureRename,
     ParseIssue,
     SemanticModel,
     Table,
 )
+
+
+def new_keys(renames: dict[str, MeasureRename]) -> dict[str, str]:
+    return {old: rename.new_key for old, rename in renames.items()}
 
 
 def model(*measures: Measure, table: str = "Sales") -> SemanticModel:
@@ -24,7 +29,7 @@ def test_rename_with_same_expression_is_one_finding() -> None:
     assert [(f.path, f.change, f.old, f.new) for f in result.findings] == [
         ("model/Sales/Margin %", ChangeKind.RENAMED, "Margin %", "Gross Margin %")
     ]
-    assert result.renames == {"Sales[Margin %]": "Sales[Gross Margin %]"}
+    assert new_keys(result.renames) == {"Sales[Margin %]": "Sales[Gross Margin %]"}
 
 
 def test_added_removed_and_modified() -> None:
@@ -38,7 +43,7 @@ def test_added_removed_and_modified() -> None:
         ("model/Sales/Gone", ChangeKind.REMOVED),
         ("model/Sales/Keep", ChangeKind.MODIFIED),
     ]
-    assert result.renames == {}
+    assert new_keys(result.renames) == {}
 
 
 def test_ambiguous_expressions_are_not_renames() -> None:
@@ -115,7 +120,10 @@ def test_two_renames_in_one_table() -> None:
     result = diff_measures(old, new)
 
     assert [(f.old, f.new) for f in result.findings] == [("A", "A2"), ("B", "B2")]
-    assert result.renames == {"Sales[A]": "Sales[A2]", "Sales[B]": "Sales[B2]"}
+    assert new_keys(result.renames) == {
+        "Sales[A]": "Sales[A2]",
+        "Sales[B]": "Sales[B2]",
+    }
 
 
 def test_rename_with_expression_edit_is_removed_plus_added() -> None:
@@ -125,7 +133,7 @@ def test_rename_with_expression_edit_is_removed_plus_added() -> None:
         ChangeKind.ADDED,
         ChangeKind.REMOVED,
     ]
-    assert result.renames == {}
+    assert new_keys(result.renames) == {}
 
 
 def tables(**measures: tuple[Measure, ...]) -> SemanticModel:
@@ -149,7 +157,7 @@ def test_measure_moved_to_another_table_is_one_finding() -> None:
             "Measure Sales[Margin %] moved to Measures[Margin %]",
         )
     ]
-    assert result.renames == {"Sales[Margin %]": "Measures[Margin %]"}
+    assert new_keys(result.renames) == {"Sales[Margin %]": "Measures[Margin %]"}
 
 
 def test_moved_measure_with_an_edited_expression_is_removed_plus_added() -> None:
@@ -162,7 +170,7 @@ def test_moved_measure_with_an_edited_expression_is_removed_plus_added() -> None
         ("model/Measures/X", ChangeKind.ADDED),
         ("model/Sales/X", ChangeKind.REMOVED),
     ]
-    assert result.renames == {}
+    assert new_keys(result.renames) == {}
 
 
 def test_ambiguous_moves_are_not_paired() -> None:

@@ -12,12 +12,14 @@ from collections.abc import Callable, Mapping, Sequence
 from pbi_report_validator.domain.helpers import aggregated, unique_by
 from pbi_report_validator.domain.models import (
     MatchMethod,
+    MeasureRename,
     Page,
     PageMatch,
     ReportMatch,
     Visual,
     VisualMatch,
 )
+from pbi_report_validator.domain.semantic import renamed_key
 
 DEFAULT_THRESHOLD = 0.6
 TYPE_WEIGHT = 0.3
@@ -30,7 +32,7 @@ def match_reports(
     old_pages: Sequence[Page],
     new_pages: Sequence[Page],
     threshold: float = DEFAULT_THRESHOLD,
-    renames: Mapping[str, str] | None = None,
+    renames: Mapping[str, MeasureRename] | None = None,
 ) -> ReportMatch:
     """Match the pages of two report versions and the visuals on each page.
 
@@ -39,7 +41,7 @@ def match_reports(
         new_pages: Pages of the new report.
         threshold: Minimum similarity (0-1) for pairing visuals whose ids
             differ.
-        renames: Old to new field key of renamed measures; old visuals'
+        renames: Renamed or moved measures by old field key; old visuals'
             fields are compared under their new names.
 
     Returns:
@@ -71,11 +73,11 @@ def match_visuals(
     old: Page,
     new: Page,
     threshold: float = DEFAULT_THRESHOLD,
-    renames: Mapping[str, str] | None = None,
+    renames: Mapping[str, MeasureRename] | None = None,
 ) -> tuple[list[VisualMatch], list[Visual], list[Visual]]:
     """Match the visuals of two versions of a page.
 
-    ``renames`` maps old to new field keys of renamed measures.
+    ``renames`` holds renamed or moved measures by old field key.
 
     Returns:
         Matched visuals, visuals only on the old page and visuals only on
@@ -124,7 +126,7 @@ def _similarity_candidates(
     old_page: Page,
     new_page: Page,
     threshold: float,
-    renames: Mapping[str, str],
+    renames: Mapping[str, MeasureRename],
 ) -> list[tuple[float, int, int]]:
     """``(score, old index, new index)`` pairs above the threshold, best first.
 
@@ -148,7 +150,7 @@ def similarity(
     new: Visual,
     old_page: Page,
     new_page: Page,
-    renames: Mapping[str, str] | None = None,
+    renames: Mapping[str, MeasureRename] | None = None,
 ) -> float:
     """Score (0-1) how likely two visuals are the same visual.
 
@@ -175,7 +177,7 @@ def _match_page(
     new: Page,
     method: MatchMethod,
     threshold: float,
-    renames: Mapping[str, str],
+    renames: Mapping[str, MeasureRename],
 ) -> PageMatch:
     visuals, removed, added = match_visuals(old, new, threshold, renames)
     return PageMatch(
@@ -201,9 +203,9 @@ def _match_by_key[T: (Page, Visual)](
     return pairs, old_left, new_left
 
 
-def _field_keys(visual: Visual, renames: Mapping[str, str]) -> set[str]:
+def _field_keys(visual: Visual, renames: Mapping[str, MeasureRename]) -> set[str]:
     return {
-        aggregated(renames.get(p.field.key, p.field.key), p.field.aggregation)
+        aggregated(renamed_key(p.field.key, renames), p.field.aggregation)
         for p in visual.projections
     }
 

@@ -120,7 +120,7 @@ def test_similarity_tells_aggregations_apart() -> None:
 def test_rebuilt_visual_on_a_renamed_measure_is_matched() -> None:
     old = page("p", visual("a", title="Margin", fields=("Margin",)))
     new = page("p", visual("b", title="Gross margin", fields=("Gross Margin",)))
-    renames = {"Sales[Margin]": "Sales[Gross Margin]"}
+    renames = factories.renames(("Sales", "Margin", "Sales", "Gross Margin"))
 
     without, _, _ = match_visuals(old, new)
     with_renames, _, _ = match_visuals(old, new, renames=renames)
