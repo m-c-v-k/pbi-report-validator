@@ -16,7 +16,7 @@ from pbi_report_validator.dax.builder import build_query, result_column
 from pbi_report_validator.diff.attribution import attribute_difference
 from pbi_report_validator.diff.results import compare_results, not_validated
 from pbi_report_validator.diff.severity import make_finding
-from pbi_report_validator.domain.helpers import field_name, is_within, visual_path
+from pbi_report_validator.domain.helpers import is_within, visual_path
 from pbi_report_validator.domain.models import (
     Attribution,
     Category,
@@ -25,6 +25,7 @@ from pbi_report_validator.domain.models import (
     DataSettings,
     DataStatus,
     DaxQuery,
+    MeasureRename,
     Page,
     PageMatch,
     QueryResult,
@@ -121,7 +122,7 @@ def validate_data(
     old: Report,
     new: Report,
     match: ReportMatch,
-    renames: Mapping[str, str],
+    renames: Mapping[str, MeasureRename],
     runner: QueryRunner,
     settings: DataSettings,
 ) -> list[DataComparison]:
@@ -398,6 +399,6 @@ def _with_unpaired(
     return DataComparison(summary=summary, findings=(*comparison.findings, finding))
 
 
-def _value_renames(renames: Mapping[str, str]) -> dict[str, str]:
-    """Measure renames by name: ``Sales[Margin %]`` -> ``Margin %``."""
-    return {field_name(old): field_name(new) for old, new in renames.items()}
+def _value_renames(renames: Mapping[str, MeasureRename]) -> dict[str, str]:
+    """Measure renames by name: ``Margin %`` -> ``Gross Margin %``."""
+    return {r.old_name: r.new_name for r in renames.values()}

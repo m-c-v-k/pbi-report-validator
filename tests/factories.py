@@ -15,6 +15,7 @@ from pbi_report_validator.domain.models import (
     FilterLevel,
     LiteralKind,
     LiteralValue,
+    MeasureRename,
     Page,
     Position,
     Projection,
@@ -128,3 +129,16 @@ def filter_card(
         condition=condition,
         expression=expression,
     )
+
+
+def renames(*pairs: tuple[str, str, str, str]) -> dict[str, MeasureRename]:
+    """Measure renames from ``(old_table, old_name, new_table, new_name)``."""
+    return {
+        f"{old_table}[{old_name}]": MeasureRename(
+            old_table=old_table,
+            old_name=old_name,
+            new_table=new_table,
+            new_name=new_name,
+        )
+        for old_table, old_name, new_table, new_name in pairs
+    }

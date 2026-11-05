@@ -30,6 +30,7 @@ from pbi_report_validator.domain.diff import (
     DataComparison,
     DiffResult,
     Finding,
+    FindingScope,
     ItemStatus,
     MatchMethod,
     MeasureDiff,
@@ -67,6 +68,7 @@ from pbi_report_validator.domain.report import (
 from pbi_report_validator.domain.semantic import (
     Column,
     Measure,
+    MeasureRename,
     SemanticModel,
     Table,
 )
@@ -101,6 +103,7 @@ __all__ = [
     "Filter",
     "FilterLevel",
     "Finding",
+    "FindingScope",
     "InCondition",
     "ItemStatus",
     "LiteralKind",
@@ -109,6 +112,7 @@ __all__ = [
     "MatchMethod",
     "Measure",
     "MeasureDiff",
+    "MeasureRename",
     "NotCondition",
     "Page",
     "PageMatch",

@@ -1,3 +1,5 @@
+from typing import Literal
+
 import pytest
 
 from pbi_report_validator.dax.builder import build_query, column, literal, text
@@ -125,6 +127,29 @@ def test_slicers_on_the_page_filter_other_visuals() -> None:
     assert "TREATAS({2025}, 'Date'[Year])" in result.dax
     assert query_for(slicer) == UnsupportedQuery(
         reason="slicers only filter other visuals"
+    )
+
+
+BLANK = LiteralValue(kind=LiteralKind.NULL, value="")
+
+
+def test_blank_comparison_uses_isblank_not_equals_blank() -> None:
+    is_blank = ComparisonCondition(field=REGION, operator="=", value=BLANK)
+
+    text_out = dax(visual(TOTAL, filters=(flt(NotCondition(operand=is_blank)),)))
+
+    assert "NOT(ISBLANK('Sales'[Region]))" in text_out
+    assert "= BLANK()" not in text_out
+
+
+@pytest.mark.parametrize("operator", [">", ">=", "<", "<="])
+def test_ordering_against_blank_is_unsupported(
+    operator: Literal[">", ">=", "<", "<="],
+) -> None:
+    condition = ComparisonCondition(field=REGION, operator=operator, value=BLANK)
+
+    assert query_for(visual(TOTAL, filters=(flt(condition),))) == UnsupportedQuery(
+        reason=f"comparison {operator} against blank is not supported"
     )
 
 

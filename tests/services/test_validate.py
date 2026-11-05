@@ -88,6 +88,73 @@ def test_unparseable_visual_in_old_version_is_not_reported_added(
     ]
 
 
+def test_unparseable_visual_on_page_with_new_id_is_not_reported_removed(
+    tmp_path: Path,
+) -> None:
+    new = tmp_path / "new"
+    shutil.copytree(FIXTURES / "sales_v1", new)
+    pages = new / "Sales.Report/definition/pages"
+    (pages / "overview").rename(pages / "overview_2")
+    for file in (pages / "pages.json", pages / "overview_2/page.json"):
+        text = file.read_text(encoding="utf-8")
+        file.write_text(text.replace('"overview"', '"overview_2"'), encoding="utf-8")
+    (pages / "overview_2/visuals/card_margin/visual.json").write_text("{")
+
+    result = validate(FIXTURES / "sales_v1", new)
+
+    removed = [f for f in result.findings if f.change == ChangeKind.REMOVED]
+    issues = [f for f in result.findings if f.category == Category.PARSE_ISSUE]
+    assert removed == []
+    assert [f.visual_path for f in issues] == ["overview/card_margin"]
+
+
+PAGES = "Sales.Report/definition/pages"
+
+
+def copies(tmp_path: Path) -> tuple[Path, Path]:
+    old, new = tmp_path / "old", tmp_path / "new"
+    shutil.copytree(FIXTURES / "sales_v1", old)
+    shutil.copytree(FIXTURES / "sales_v1", new)
+    return old, new
+
+
+@pytest.mark.parametrize("broken", ["old", "new"])
+def test_broken_page_whose_folder_differs_from_its_name_is_not_removed(
+    tmp_path: Path, broken: str
+) -> None:
+    old, new = copies(tmp_path)
+    for project in (old, new):
+        page_json = project / PAGES / "overview/page.json"
+        text = page_json.read_text(encoding="utf-8")
+        page_json.write_text(text.replace('"name": "overview"', '"name": "ov_id"', 1))
+    (tmp_path / broken / PAGES / "overview/page.json").write_text("{")
+
+    result = validate(old, new)
+
+    assert [(f.category, f.path.split("/")[0]) for f in result.findings] == [
+        (Category.PARSE_ISSUE, broken)
+    ]
+
+
+@pytest.mark.parametrize("broken", ["old", "new"])
+def test_broken_visual_whose_folder_differs_from_its_name_is_not_removed(
+    tmp_path: Path, broken: str
+) -> None:
+    old, new = copies(tmp_path)
+    for project in (old, new):
+        visuals = project / PAGES / "overview/visuals"
+        (visuals / "card_margin").rename(visuals / "folder_x")
+    (tmp_path / broken / PAGES / "overview/visuals/folder_x/visual.json").write_text(
+        "{"
+    )
+
+    result = validate(old, new)
+
+    issues = [f for f in result.findings if f.category == Category.PARSE_ISSUE]
+    assert [f.change for f in result.findings] == [ChangeKind.ERROR]
+    assert [f.visual_path for f in issues] == ["overview/card_margin"]
+
+
 def test_tmdl_issues_become_findings(tmp_path: Path) -> None:
     new = tmp_path / "new"
     shutil.copytree(FIXTURES / "sales_v1", new)

@@ -64,16 +64,6 @@ def _tmdl_name(name: str) -> str:
     return "'" + name.replace("'", "''") + "'"
 
 
-def field_table(key: str) -> str:
-    """The table part of a field key: ``Sales[Margin %]`` -> ``Sales``."""
-    return key.partition("[")[0]
-
-
-def field_name(key: str) -> str:
-    """The name part of a field key: ``Sales[Margin %]`` -> ``Margin %``."""
-    return key.partition("[")[2].removesuffix("]")
-
-
 def unique_by[T](items: Sequence[T], key: Callable[[T], str]) -> dict[str, T]:
     """Items by key, leaving out every key that occurs more than once."""
     counts = Counter(key(item) for item in items)

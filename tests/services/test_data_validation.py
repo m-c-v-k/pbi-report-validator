@@ -1,18 +1,24 @@
 import logging
 import re
+import shutil
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
 from pbi_report_validator.cli.main import app
+from pbi_report_validator.dax.builder import column as dax_column
 from pbi_report_validator.dax.builder import result_column
 from pbi_report_validator.diff.results import compare_results, not_fully_validated
+from pbi_report_validator.domain.helpers import field_key
 from pbi_report_validator.domain.models import (
     Category,
     ChangeKind,
     DataSettings,
     DataStatus,
     DaxQuery,
+    FieldKind,
+    FieldRef,
     ParseIssue,
     QueryResult,
     Report,
@@ -41,11 +47,13 @@ from pbi_report_validator.services.data_validation import (
     _comparable_queries,
     _pair_values,
     _truncation_reason,
+    _value_renames,
     _with_unpaired,
     data_settings,
     validate_data,
 )
 from pbi_report_validator.services.validate import validate
+from tests import factories
 from tests.factories import FIXTURES, REPO_ROOT, column, measure, page, report, visual
 
 OLD_DS = "11111111-1111-1111-1111-111111111111"
@@ -156,6 +164,23 @@ def test_visual_lost_in_one_version_is_not_validated() -> None:
     new = with_issues(report(page("p")), issue("p/card"))
 
     assert data_of(old, new) == ([("p/card", LOST_VISUAL.format(side="new"))], 0)
+
+
+def test_lost_visual_whose_folder_differs_from_its_name_is_not_validated(
+    tmp_path: Path,
+) -> None:
+    old, new = tmp_path / "old", tmp_path / "new"
+    for project in (old, new):
+        shutil.copytree(FIXTURES / "sales_v1", project)
+        visuals = project / "Sales.Report/definition/pages/overview/visuals"
+        (visuals / "card_margin").rename(visuals / "folder_x")
+    broken = new / "Sales.Report/definition/pages/overview/visuals/folder_x"
+    (broken / "visual.json").write_text("{")
+
+    result = validate(old, new, SETTINGS, FakeRunner())
+
+    reasons = {s.path: s.reason for s in result.data}
+    assert reasons["overview/card_margin"] == LOST_VISUAL.format(side="new")
 
 
 def test_page_lost_in_one_version_is_not_validated() -> None:
@@ -363,10 +388,32 @@ def test_cli_authentication_failure_exits_with_error(
 
 @pytest.mark.parametrize(
     ("reference", "expected"),
-    [("'Date'[Month]", "Date[Month]"), ("'Bob''s Orders'[Net]", "Bob's Orders[Net]")],
+    [
+        ("'Date'[Month]", "Date[Month]"),
+        ("'Bob''s Orders'[Net]", "Bob's Orders[Net]"),
+        ("'Sales [EUR]'[Amount]", "Sales [EUR][Amount]"),
+        ("'Sales'[Amount [net]]]", "Sales[Amount [net]]"),
+        ("'Sales'[Qty]]]", "Sales[Qty]]"),
+        ("'It''s [x]'''[a]]b]", "It's [x]'[a]b]"),
+    ],
 )
 def test_result_column(reference: str, expected: str) -> None:
     assert result_column(reference) == expected
+
+
+@pytest.mark.parametrize(
+    ("table", "name"),
+    [("Sales [EUR]", "Amount"), ("Sales", "Amount [net]"), ("O'Brien]", "[q]'")],
+)
+def test_result_column_undoes_column(table: str, name: str) -> None:
+    field = FieldRef(table=table, name=name, kind=FieldKind.COLUMN)
+
+    assert result_column(dax_column(field)) == field_key(table, name)
+
+
+def test_result_column_rejects_other_text() -> None:
+    with pytest.raises(ValueError, match="not a column reference"):
+        result_column("Sales[Amount]")
 
 
 def test_measure_only_in_one_version_is_noted_not_hidden() -> None:
@@ -666,6 +713,18 @@ def test_pair_values_follows_renames_and_lists_unpaired() -> None:
 
     assert pairs.columns == (("[Margin %]", "[Gross Margin %]"), ("[Sales]", "[Sales]"))
     assert (pairs.only_old, pairs.only_new) == (("Old only",), ("New only",))
+
+
+def test_value_renames_use_measure_names_in_tables_with_brackets() -> None:
+    renames = factories.renames(
+        ("Sales [EUR]", "Margin", "Sales [EUR]", "Gross Margin"),
+        ("Sales", "Rate [%]", "Measures", "Rate [%]"),
+    )
+
+    assert _value_renames(renames) == {
+        "Margin": "Gross Margin",
+        "Rate [%]": "Rate [%]",
+    }
 
 
 # Typer's own min=0 check already rejects -inf; nan and inf reach Tolerance.

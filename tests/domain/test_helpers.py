@@ -2,7 +2,6 @@ import pytest
 
 from pbi_report_validator.domain.helpers import (
     field_key,
-    field_name,
     is_within,
     unique_by,
     visual_path,
@@ -31,11 +30,8 @@ def test_is_within(path: str, parent: str, inside: bool) -> None:
     assert is_within(path, parent) is inside
 
 
-def test_field_key_and_name() -> None:
-    key = field_key("Sales", "Margin %")
-
-    assert key == "Sales[Margin %]"
-    assert field_name(key) == "Margin %"
+def test_field_key() -> None:
+    assert field_key("Sales", "Margin %") == "Sales[Margin %]"
 
 
 def test_unique_by_drops_duplicate_keys() -> None:

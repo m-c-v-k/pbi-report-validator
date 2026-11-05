@@ -7,7 +7,7 @@
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
 
-**Status:** v0.5.0 – structural diff and data validation (`--data`, values masked by default, `--attribute` tells report changes from model changes), JSON, Markdown and HTML reports (JSON and HTML say in which file and where each change is), a GitHub Action with PR comments and `--fail-on`, and an optional AI layer (`--ai api`). See the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
+**Status:** v0.6.0 – structural diff and data validation (`--data`, values masked by default, `--attribute` tells report changes from model changes), JSON, Markdown and HTML reports (JSON and HTML say in which file and where each change is), a GitHub Action with PR comments and `--fail-on`, and an optional AI layer (`--ai api`). See the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
 
 **Live:** [demo report](https://m-c-v-k.github.io/pbi-report-validator/report.html) for the sample reports in this repository · [latest release](https://github.com/m-c-v-k/pbi-report-validator/releases/latest)
 
@@ -42,13 +42,13 @@ credentials or network access once installed.
 Install the latest release as a command-line tool:
 
 ```bash
-uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.5.0
+uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.6.0
 ```
 
 Or run it once without installing:
 
 ```bash
-uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.5.0 pbi-validate --help
+uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.6.0 pbi-validate --help
 ```
 
 Each [GitHub release](https://github.com/m-c-v-k/pbi-report-validator/releases)
@@ -125,7 +125,7 @@ or the `.Report` folder itself. The terminal always shows a summary; add any of:
 |---|---|
 | `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual that shows the file (and JSON Pointer) where each finding is defined. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
 | `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
-| `--json PATH` | Every finding with old and new values and where the object is defined in each version (`old_location` / `new_location`: the file in the project and a JSON Pointer, or the TMDL object for measures), plus every page and visual with its status, and counts per severity (`schema_version` 1.9) |
+| `--json PATH` | Every finding with old and new values and where the object is defined in each version (`old_location` / `new_location`: the file in the project and a JSON Pointer, or the TMDL object for measures), plus every page and visual with its status, and counts per severity. Each finding's `scope` (`report`, `page`, `model`, `parse` or `ai`) says where its `path` starts, so a page named `report` or `model` can't be mistaken for those (`schema_version` 1.10) |
 
 Running it on the sample reports in this repository gives:
 
@@ -270,8 +270,8 @@ Unauthorized` after a successful sign-in usually means the tenant setting
 from step 2 blocks the app: the setting is off, it hasn't applied yet, or
 the app is not in the allowed group. The API then sends
 `ServicePrincipalIsNotAllowedByTenantAdminSwitch` in the
-`x-powerbi-error-info` response header, which the tool doesn't show yet
-([#231](https://github.com/m-c-v-k/pbi-report-validator/issues/231)).
+`x-powerbi-error-info` response header; the error message shows that value
+and what to check.
 
 Limitations: models with row-level security can't be queried by a service
 principal; slicer interactions edited in Power BI and slicers synced from
@@ -301,7 +301,7 @@ the features below each need their own flag, and they can be combined.
 Setup for `api`:
 
 ```bash
-uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator@v0.5.0"
+uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator@v0.6.0"
 export ANTHROPIC_API_KEY=...
 pbi-validate diff ./old ./new --ai api
 ```
@@ -339,7 +339,7 @@ from v0.2.0:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: m-c-v-k/pbi-report-validator@v0.5.0
+- uses: m-c-v-k/pbi-report-validator@v0.6.0
   with:
     old: reports/v1        # paths relative to the workspace
     new: reports/v2
@@ -393,7 +393,7 @@ are passed on too, so `PBI_VALIDATE_AI: disabled` (for example from an
 organisation variable) blocks `ai: api`:
 
 ```yaml
-- uses: m-c-v-k/pbi-report-validator@v0.5.0
+- uses: m-c-v-k/pbi-report-validator@v0.6.0
   env:
     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   with:
@@ -417,7 +417,7 @@ The action needs a Linux runner with Docker (such as `ubuntu-latest`) and
 cannot run inside a job `container:`. Input and output paths must be
 relative to the workspace or lie inside it or `$RUNNER_TEMP`.
 
-**Versions.** Pin a full version tag such as `@v0.5.0`; it runs the
+**Versions.** Pin a full version tag such as `@v0.6.0`; it runs the
 published image of that version. Before 1.0, minor versions can change the
 output, so there is no moving `@v0` tag. Dependabot (`package-ecosystem:
 github-actions`) can keep the tag up to date. Organisations that require it

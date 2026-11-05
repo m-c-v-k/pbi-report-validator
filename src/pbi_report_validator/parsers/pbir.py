@@ -259,6 +259,51 @@ def _unreadable(
     )
 
 
+def with_issues_by_name(report: Report, other: Report) -> Report:
+    """``report`` with page and visual parse issues keyed by name, not folder.
+
+    A file that cannot be read only gives its folder name, but pages and
+    visuals are identified by the ``name`` inside, which may differ. The
+    name is taken from the object in the same folder: in ``report`` when it
+    was parsed (with problems), else in ``other``, the other version.
+    """
+    names = {**_names_by_folder(other), **_names_by_folder(report)}
+    issues = tuple(_issue_by_name(issue, names) for issue in report.issues)
+    return report.model_copy(update={"issues": issues})
+
+
+def _names_by_folder(report: Report) -> dict[tuple[str, ...], str]:
+    names: dict[tuple[str, ...], str] = {}
+    for page in report.pages:
+        located: list[Page | Visual] = [page, *page.visuals]
+        for item in located:
+            folders = _folders(item.location.file) if item.location else ()
+            if folders:
+                names[folders] = item.name
+    return names
+
+
+def _issue_by_name(issue: ParseIssue, names: dict[tuple[str, ...], str]) -> ParseIssue:
+    folders = _folders(issue.path)
+    name = names.get(folders) if folders else None
+    if name is None:
+        return issue
+    if issue.page is not None:
+        return issue.model_copy(update={"page": name})
+    if issue.visual_path is not None:
+        page, _, _ = issue.visual_path.partition("/")
+        return issue.model_copy(update={"visual_path": visual_path(page, name)})
+    return issue
+
+
+def _folders(file: str) -> tuple[str, ...]:
+    """The folders below ``definition``, e.g. ``("pages", "p", "visuals", "v")``."""
+    parts = PurePosixPath(file).parts
+    if "definition" not in parts:
+        return ()
+    return parts[parts.index("definition") + 1 : -1]
+
+
 def _first_error(exc: ValidationError) -> str:
     error = exc.errors()[0]
     location = ".".join(str(part) for part in error["loc"])

@@ -82,6 +82,7 @@ AGGREGATIONS = {
 }
 INDENT = "    "
 PLAIN_NUMBER = re.compile(r"-?[0-9]+(?:[.][0-9]+)?")
+COLUMN_REFERENCE = re.compile(r"'((?:[^']|'')*)'\[(.*)\]", re.DOTALL)
 
 
 class UnsupportedError(ValueError):
@@ -189,9 +190,7 @@ def _predicate(condition: Condition) -> str:
         target = targets[0] if len(targets) == 1 else f"({', '.join(targets)})"
         return f"{target} IN {{{rows}}}"
     if isinstance(condition, ComparisonCondition):
-        return (
-            f"{column(condition.field)} {condition.operator} {literal(condition.value)}"
-        )
+        return _comparison(condition)
     if isinstance(condition, TopNCondition):
         raise UnsupportedError("TopN filters are not supported yet")
     if isinstance(condition, NotCondition):
@@ -204,6 +203,18 @@ def _predicate(condition: Condition) -> str:
     if isinstance(condition, AllCondition):
         return " && ".join(f"({_predicate(item)})" for item in condition.items)
     assert_never(condition)
+
+
+def _comparison(condition: ComparisonCondition) -> str:
+    """A comparison; blank tests use ``ISBLANK`` because ``= BLANK()`` matches 0."""
+    target = column(condition.field)
+    if condition.value.kind != LiteralKind.NULL:
+        return f"{target} {condition.operator} {literal(condition.value)}"
+    if condition.operator != "=":
+        raise UnsupportedError(
+            f"comparison {condition.operator} against blank is not supported"
+        )
+    return f"ISBLANK({target})"
 
 
 def _fields(condition: Condition) -> list[FieldRef]:
@@ -260,13 +271,16 @@ def result_column(reference: str) -> str:
     """The column name ``executeQueries`` returns for a ``column()`` reference.
 
     For example ``'Date'[Month]`` -> ``Date[Month]``: the table loses its
-    DAX quoting.
+    DAX quoting and the column its ``]]`` escape.
+
+    Raises:
+        ValueError: ``reference`` is not a ``column()`` reference.
     """
-    table, _, name = reference.partition("[")
-    return field_key(
-        table.removeprefix("'").removesuffix("'").replace("''", "'"),
-        name.removesuffix("]"),
-    )
+    parts = COLUMN_REFERENCE.fullmatch(reference)
+    if parts is None:
+        raise ValueError(f"not a column reference: {reference}")
+    table, name = parts.groups()
+    return field_key(table.replace("''", "'"), name.replace("]]", "]"))
 
 
 def text(value: str) -> str:

@@ -21,8 +21,9 @@ from pbi_report_validator.domain.report import (
     Position,
     Visual,
 )
+from pbi_report_validator.domain.semantic import MeasureRename
 
-SCHEMA_VERSION: Final = "1.9"
+SCHEMA_VERSION: Final = "1.10"
 
 
 class MatchMethod(StrEnum):
@@ -106,6 +107,28 @@ class AiExplanation(DomainModel):
     text: str
 
 
+class FindingScope(StrEnum):
+    """Which kind of object a finding's ``path`` starts at.
+
+    Paths of report filters, measures, parse issues and AI notes start with
+    a fixed word (``report``, ``model``, ``old``/``new``, ``ai``) that a page
+    can also have as its name; the scope says which one is meant. Since 1.10.
+    """
+
+    REPORT = "report"
+    PAGE = "page"
+    MODEL = "model"
+    PARSE = "parse"
+    AI = "ai"
+
+
+CATEGORY_SCOPES: Final = {
+    Category.MEASURE: FindingScope.MODEL,
+    Category.PARSE_ISSUE: FindingScope.PARSE,
+    Category.AI: FindingScope.AI,
+}
+
+
 class Finding(DomainModel):
     """One difference (or parse problem) between the old and new report.
 
@@ -113,8 +136,11 @@ class Finding(DomainModel):
     visual_filter_category`` or ``model/Sales/Total Sales``. ``severity`` is
     required; ``diff.severity.make_finding`` sets the usual level.
     ``explanation`` is set only with ``--ai-explain`` and left out of the JSON
-    otherwise. ``old_location`` and ``new_location`` say where the object is
-    defined in each version; ``None`` on a side where it does not exist,
+    otherwise. ``scope`` says whether ``path`` starts at the report, a page,
+    the model, a parse issue or an AI note; it follows from ``category``
+    unless given (report filters pass ``report``).
+    ``old_location`` and ``new_location`` say where the object is defined in
+    each version; ``None`` on a side where it does not exist,
     and for findings without a single source (data, AI, parse issues).
     """
 
@@ -122,6 +148,7 @@ class Finding(DomainModel):
     change: ChangeKind
     severity: Severity
     path: str
+    scope: FindingScope = FindingScope.PAGE
     message: str
     old: str | None = None
     new: str | None = None
@@ -141,6 +168,28 @@ class Finding(DomainModel):
         if self.explanation is None:
             data.pop("explanation", None)
         return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def _default_scope(cls, data: object) -> object:
+        """Derive ``scope`` from ``category`` when it is not given."""
+        if not isinstance(data, dict) or "scope" in data:
+            return data
+        category = data.get("category")
+        if not isinstance(category, str):
+            return data
+        scope = CATEGORY_SCOPES.get(Category(category), FindingScope.PAGE)
+        return {**data, "scope": scope}
+
+    @property
+    def page_path(self) -> str | None:
+        """The ``page`` or ``page/...`` path the finding is inside, if any.
+
+        Measures, parse issues, AI notes and report filters have paths with
+        a fixed prefix (``model``, ``old``, ``new``, ``ai``, ``report``) that
+        a page can share as its name, so they belong to no page.
+        """
+        return self.path if self.scope == FindingScope.PAGE else None
 
     @property
     def sort_key(self) -> tuple[str, str, str, str, str, str]:
@@ -216,7 +265,7 @@ class MeasureDiff(DomainModel):
     """Measure findings plus the renames found, keyed by old field key."""
 
     findings: tuple[Finding, ...] = ()
-    renames: dict[str, str] = Field(default_factory=dict)
+    renames: dict[str, MeasureRename] = Field(default_factory=dict)
 
 
 class AiSuggestion(DomainModel):
@@ -254,11 +303,12 @@ class DiffResult(DomainModel):
     ``ai_suggestions`` (``--ai-match``); 1.7 added the optional
     ``explanation`` on findings (``--ai-explain``); 1.8 added ``attribution``
     and ``attribution_reason`` on data summaries (``--attribute``); 1.9
-    added ``old_location`` and ``new_location`` on findings.
+    added ``old_location`` and ``new_location`` on findings; 1.10 added
+    ``scope`` on findings.
     """
 
     # Keep the Literal in sync with SCHEMA_VERSION (enforced by a test).
-    schema_version: Literal["1.9"] = SCHEMA_VERSION
+    schema_version: Literal["1.10"] = SCHEMA_VERSION
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()

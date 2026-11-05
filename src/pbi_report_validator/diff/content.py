@@ -8,6 +8,7 @@ never rewritten: a new visual that still uses a measure's old name is a
 broken reference and is reported.
 """
 
+from collections import Counter
 from collections.abc import Mapping
 
 from pbi_report_validator.diff.severity import make_finding
@@ -18,6 +19,8 @@ from pbi_report_validator.domain.models import (
     ChangeKind,
     Filter,
     Finding,
+    FindingScope,
+    MeasureRename,
     Projection,
     Report,
     ReportMatch,
@@ -25,12 +28,13 @@ from pbi_report_validator.domain.models import (
     SourceLocation,
     VisualMatch,
 )
+from pbi_report_validator.domain.semantic import renamed_key
 
 REPORT_PATH = "report"
 
 
 def diff_content(
-    old: Report, new: Report, match: ReportMatch, renames: Mapping[str, str]
+    old: Report, new: Report, match: ReportMatch, renames: Mapping[str, MeasureRename]
 ) -> list[Finding]:
     """Compare filters, fields and slicer selections of two report versions.
 
@@ -41,9 +45,12 @@ def diff_content(
         old: The old report (for report-level filters).
         new: The new report.
         match: Page and visual pairing from the matcher.
-        renames: Old to new field key for renamed measures.
+        renames: Renamed or moved measures, keyed by old field key.
     """
-    findings = _diff_filters(REPORT_PATH, old.filters, new.filters, renames)
+    findings = [
+        f.model_copy(update={"scope": FindingScope.REPORT})
+        for f in _diff_filters(REPORT_PATH, old.filters, new.filters, renames)
+    ]
     for page_match in match.pages:
         page = page_match.old.name
         findings += _diff_filters(
@@ -57,7 +64,7 @@ def diff_content(
 
 
 def _diff_visual(
-    path: str, match: VisualMatch, renames: Mapping[str, str]
+    path: str, match: VisualMatch, renames: Mapping[str, MeasureRename]
 ) -> list[Finding]:
     findings = _diff_fields(path, match.old.projections, match.new.projections, renames)
     findings += _diff_filters(path, match.old.filters, match.new.filters, renames)
@@ -69,7 +76,7 @@ def _diff_slicer(
     path: str,
     old: SlicerState | None,
     new: SlicerState | None,
-    renames: Mapping[str, str],
+    renames: Mapping[str, MeasureRename],
 ) -> Finding | None:
     """Compare slicer selections of a matched visual.
 
@@ -102,7 +109,7 @@ def _diff_fields(
     path: str,
     old: tuple[Projection, ...],
     new: tuple[Projection, ...],
-    renames: Mapping[str, str],
+    renames: Mapping[str, MeasureRename],
 ) -> list[Finding]:
     old_roles = _roles_by_field(old, renames)
     new_roles = _roles_by_field(new, {})
@@ -134,7 +141,7 @@ def _diff_fields(
 
 
 def _roles_by_field(
-    projections: tuple[Projection, ...], renames: Mapping[str, str]
+    projections: tuple[Projection, ...], renames: Mapping[str, MeasureRename]
 ) -> dict[str, str]:
     """Map each field (with aggregation) to its comma-separated roles."""
     roles: dict[str, set[str]] = {}
@@ -146,7 +153,7 @@ def _roles_by_field(
 
 
 def _first_locations(
-    projections: tuple[Projection, ...], renames: Mapping[str, str]
+    projections: tuple[Projection, ...], renames: Mapping[str, MeasureRename]
 ) -> dict[str, SourceLocation | None]:
     """Where each field (with aggregation) is first placed in the visual."""
     locations: dict[str, SourceLocation | None] = {}
@@ -155,10 +162,12 @@ def _first_locations(
     return locations
 
 
-def _projection_key(projection: Projection, renames: Mapping[str, str]) -> str:
+def _projection_key(
+    projection: Projection, renames: Mapping[str, MeasureRename]
+) -> str:
     """The field's key after renames, with its aggregation if it has one."""
     field = projection.field
-    key = renames.get(field.key, field.key)
+    key = renamed_key(field.key, renames)
     return f"{key} ({field.aggregation})" if field.aggregation else key
 
 
@@ -166,10 +175,9 @@ def _diff_filters(
     owner: str,
     old: tuple[Filter, ...],
     new: tuple[Filter, ...],
-    renames: Mapping[str, str],
+    renames: Mapping[str, MeasureRename],
 ) -> list[Finding]:
-    old_by_name = {f.name: f for f in old}
-    new_by_name = {f.name: f for f in new}
+    old_by_name, new_by_name = _by_label(old), _by_label(new)
     findings = []
     for name in sorted(old_by_name.keys() | new_by_name.keys()):
         path = f"{owner}/filters/{name}"
@@ -180,12 +188,28 @@ def _diff_filters(
     return findings
 
 
+def _by_label(filters: tuple[Filter, ...]) -> dict[str, Filter]:
+    """Filters by name; repeats get ``name#2``, ``name#3``, unnamed ``#1``, ``#2``.
+
+    Every filter keeps its own entry, so a repeated or missing name does not
+    hide the others from the diff.
+    """
+    labelled: dict[str, Filter] = {}
+    seen: Counter[str] = Counter()
+    for item in filters:
+        seen[item.name] += 1
+        count = seen[item.name]
+        label = item.name if count == 1 and item.name else f"{item.name}#{count}"
+        labelled[label] = item
+    return labelled
+
+
 def _filter_finding(
     path: str,
     name: str,
     old: Filter | None,
     new: Filter | None,
-    renames: Mapping[str, str],
+    renames: Mapping[str, MeasureRename],
 ) -> Finding | None:
     before = _definition(old, renames) if old else None
     after = _definition(new, {}) if new else None
@@ -215,7 +239,9 @@ def _filter_finding(
     )
 
 
-def _definition(item: Filter | SlicerState, renames: Mapping[str, str]) -> str | None:
+def _definition(
+    item: Filter | SlicerState, renames: Mapping[str, MeasureRename]
+) -> str | None:
     """What a filter or slicer selects: its condition or unread definition.
 
     Renames are applied to the parsed condition, so a key is only replaced
@@ -229,8 +255,8 @@ def _definition(item: Filter | SlicerState, renames: Mapping[str, str]) -> str |
     return render(rename_fields(item.expression, renames))
 
 
-def _field_key(item: Filter, renames: Mapping[str, str]) -> str | None:
+def _field_key(item: Filter, renames: Mapping[str, MeasureRename]) -> str | None:
     if item.field is None:
         return None
-    key = renames.get(item.field.key, item.field.key)
+    key = renamed_key(item.field.key, renames)
     return aggregated(key, item.field.aggregation)
