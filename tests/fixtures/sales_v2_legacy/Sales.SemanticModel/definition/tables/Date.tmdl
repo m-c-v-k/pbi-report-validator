@@ -1,0 +1,28 @@
+table Date
+	lineageTag: de2d9c1a-093e-5686-b1cc-a96933490257
+
+	column DateKey
+		dataType: int64
+		lineageTag: 48780100-9144-5cac-a69c-978d164a259c
+		summarizeBy: none
+		sourceColumn: DateKey
+
+	column Year
+		dataType: int64
+		lineageTag: 02dd340f-6a03-52ca-bae6-ceeea0cdfe1c
+		summarizeBy: none
+		sourceColumn: Year
+
+	column Month
+		dataType: string
+		lineageTag: 2a93129e-e795-5284-9e6a-d79685a0a8bf
+		summarizeBy: none
+		sourceColumn: Month
+
+	partition Date = m
+		mode: import
+		source =
+				let
+				    Source = #table(type table [DateKey = Int64.Type, Year = Int64.Type, Month = text], {{20240310, 2024, "2024-03"}, {20250115, 2025, "2025-01"}, {20250210, 2025, "2025-02"}})
+				in
+				    Source

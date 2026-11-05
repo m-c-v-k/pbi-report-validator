@@ -23,6 +23,9 @@ Notes for the diff engine:
 - #6: the new page's visual is reported as part of the added page.
 - Unchanged on purpose: report filter, page filter, `card_total_sales`, size
   of `chart_sales_by_region`, all titles.
+- `sales_v1_legacy` → `sales_v2_legacy` has the same changes in the legacy
+  report format. The report changes are all in `Sales.Report/report.json`;
+  see [`README.md`](README.md).
 
 # Expected changes: `sales_v2` → `sales_v3`
 
