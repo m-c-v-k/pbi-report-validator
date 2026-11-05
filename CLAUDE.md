@@ -97,10 +97,27 @@ integrations/ ALL I/O: filesystem, Power BI REST API, Anthropic API, env config.
   - `<Name>.Report/definition.pbir`: the model the report uses, `byPath`
     (must stay inside the project) or `byConnection` to a published model,
     in which case the `<Name>.SemanticModel` folder next to it is read
-- The legacy single-file `report.json` (also `Report/Layout` inside `.pbix`)
-  stores config and filters as JSON-encoded strings. Support is a later
-  milestone and gets its own parser module.
-- `.pbix` binaries are not parsed. Users convert with "Save as Power BI Project".
+- The legacy single-file `report.json` (also `Report/Layout` inside `.pbit`
+  and `.pbix`) stores config and filters as JSON-encoded strings. It gets its
+  own parser module.
+- `.pbit` and `.pbix` are zip archives. What may be read from them:
+  - The report part (`Report/Layout`, or `Report/definition/` when saved
+    with PBIR) and, in `.pbit`, `DataModelSchema` (TMSL without data). Both
+    are UTF-16LE JSON.
+  - `DataModel` in `.pbix` holds the model metadata and the imported data,
+    compressed together. Read it only with the explicit opt-in flag
+    (`--read-pbix-model`, optional extra), extract model metadata only, and
+    never parse, store, log or output data values.
+  - Any other entry is ignored.
+- Archives are untrusted input: read them in `integrations/` with an
+  allowlist of entries, size limits per entry and in total, and no paths that
+  escape the target.
+- Models in the pre-2020 metadata format (before Power BI Desktop's enhanced
+  metadata) are a documented limitation: they become a finding that asks the
+  user to open and save the file in a current Power BI Desktop or export a
+  `.pbit`. The report part is still compared.
+- Never upload, convert or create items in a workspace to read a file.
+  Published reports and models are only fetched read-only.
 
 ## Rules
 
