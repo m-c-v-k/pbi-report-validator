@@ -131,21 +131,10 @@ def _tree(root: Path) -> dict[str, str]:
 
 
 def test_legacy_pair_reports_the_pbir_findings() -> None:
-    # Filters and slicer selections are not read from the legacy format yet.
-    unread = {Category.FILTER, Category.SLICER}
-
-    def findings(old: str, new: str) -> list[tuple[str, str, str]]:
+    def findings(old: str, new: str) -> list[tuple[str, str, str, str | None]]:
         result = validate(FIXTURES / old, FIXTURES / new)
-        return [
-            (f.category, f.change, f.path)
-            for f in result.findings
-            if f.category not in unread
-        ]
+        return [(f.category, f.change, f.path, f.new) for f in result.findings]
 
     expected = findings("sales_v1", "sales_v2")
     assert findings("sales_v1_legacy", "sales_v2_legacy") == expected
-    assert {c for c, _, _ in expected} == {
-        Category.PAGE,
-        Category.VISUAL,
-        Category.MEASURE,
-    }
+    assert {c for c, *_ in expected} >= {Category.FILTER, Category.SLICER}

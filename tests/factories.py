@@ -23,7 +23,9 @@ from pbi_report_validator.domain.models import (
     SlicerState,
     Visual,
 )
+from pbi_report_validator.domain.raw import RawLegacyReport
 from pbi_report_validator.integrations.files import load_project
+from pbi_report_validator.parsers.legacy import parse_legacy_report
 from pbi_report_validator.parsers.pbir import parse_report
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -33,7 +35,10 @@ SNAPSHOTS = Path(__file__).parent / "snapshots"
 
 def fixture_report(name: str) -> Report:
     """The parsed report of a fixture project, e.g. ``sales_v1``."""
-    return parse_report(load_project(FIXTURES / name).report)
+    raw = load_project(FIXTURES / name).report
+    if isinstance(raw, RawLegacyReport):
+        return parse_legacy_report(raw)
+    return parse_report(raw)
 
 
 def fixture_pages(name: str) -> tuple[Page, ...]:
