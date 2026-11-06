@@ -6,7 +6,7 @@ import pytest
 from pbi_report_validator.domain.models import (
     FieldKind,
     FieldRef,
-    Page,
+    FilterLevel,
     Position,
     Report,
     SourceLocation,
@@ -18,6 +18,7 @@ from pbi_report_validator.parsers.pbir import parse_report
 from tests.factories import FIXTURES
 
 FILE = "Sales.Report/report.json"
+YEAR = FieldRef(table="Date", name="Year", kind=FieldKind.COLUMN)
 TOTAL_SALES = FieldRef(table="Sales", name="Total Sales", kind=FieldKind.MEASURE)
 
 
@@ -86,23 +87,13 @@ def legacy_fixture(name: str) -> RawLegacyReport:
     return raw
 
 
-def without_sources(pages: tuple[Page, ...]) -> list[dict[str, Any]]:
-    """Pages as plain data without locations, filters and slicer state.
-
-    Filters and slicer selections are not read from the legacy format yet.
-    """
-    dumped = []
-    for page in pages:
-        data = page.model_dump(exclude={"location", "filters", "visuals"})
-        unread = {
-            "location": True,
-            "filters": True,
-            "slicer": True,
-            "projections": {"__all__": {"location"}},
-        }
-        data["visuals"] = [v.model_dump(exclude=unread) for v in page.visuals]
-        dumped.append(data)
-    return dumped
+def without_locations(value: Any) -> Any:
+    """Dumped model data with every ``location`` removed, at any depth."""
+    if isinstance(value, dict):
+        return {k: without_locations(v) for k, v in value.items() if k != "location"}
+    if isinstance(value, list):
+        return [without_locations(v) for v in value]
+    return value
 
 
 @pytest.mark.parametrize("name", ["sales_v1", "sales_v2"])
@@ -110,11 +101,13 @@ def test_legacy_fixture_parses_like_pbir(name: str) -> None:
     pbir = load_project(FIXTURES / name).report
     assert isinstance(pbir, RawReport)
 
-    expected = parse_report(pbir)
+    expected = parse_report(pbir).model_dump(mode="json")
     actual = parse_legacy_report(legacy_fixture(f"{name}_legacy"))
 
     assert actual.issues == ()
-    assert without_sources(actual.pages) == without_sources(expected.pages)
+    assert without_locations(actual.model_dump(mode="json")) == without_locations(
+        expected
+    )
 
 
 def test_locations_point_into_the_report_document() -> None:
@@ -129,6 +122,120 @@ def test_locations_point_into_the_report_document() -> None:
     assert visual.projections[0].location == SourceLocation(
         file=FILE, pointer="/sections/0/visualContainers/0/config"
     )
+
+
+def test_filter_and_slicer_locations_point_to_the_encoded_strings() -> None:
+    report = parse_legacy_report(legacy_fixture("sales_v1_legacy"))
+    overview = report.pages[0]
+    slicer = next(v for v in overview.visuals if v.name == "slicer_year")
+    table = next(v for v in report.pages[1].visuals if v.name == "table_product_sales")
+
+    assert report.filters[0].location == SourceLocation(file=FILE, pointer="/filters")
+    assert overview.filters[0].location == SourceLocation(
+        file=FILE, pointer="/sections/0/filters"
+    )
+    assert table.filters[0].location == SourceLocation(
+        file=FILE, pointer="/sections/1/visualContainers/1/filters"
+    )
+    assert slicer.slicer is not None
+    assert slicer.slicer.location == SourceLocation(
+        file=FILE, pointer="/sections/0/visualContainers/3/config"
+    )
+
+
+def year_filter(name: str = "f") -> dict[str, Any]:
+    return {
+        "name": name,
+        "expression": {
+            "Column": {
+                "Expression": {"SourceRef": {"Entity": "Date"}},
+                "Property": "Year",
+            }
+        },
+        "type": "Categorical",
+        "filter": {
+            "Version": 2,
+            "From": [{"Name": "d", "Entity": "Date", "Type": 0}],
+            "Where": [
+                {
+                    "Condition": {
+                        "In": {
+                            "Expressions": [
+                                {
+                                    "Column": {
+                                        "Expression": {"SourceRef": {"Source": "d"}},
+                                        "Property": "Year",
+                                    }
+                                }
+                            ],
+                            "Values": [[{"Literal": {"Value": "2025L"}}]],
+                        }
+                    }
+                }
+            ],
+        },
+    }
+
+
+def test_filters_on_every_level() -> None:
+    page = section("p", container(card_config()))
+    page["filters"] = json.dumps([year_filter("page")])
+    page["visualContainers"][0]["filters"] = json.dumps([year_filter("visual")])
+    raw = RawJsonFile(
+        path=FILE,
+        content={"filters": json.dumps([year_filter("report")]), "sections": [page]},
+    )
+
+    report = parse_legacy_report(RawLegacyReport(path="Sales.Report", layout=raw))
+
+    filters = [
+        *report.filters,
+        *report.pages[0].filters,
+        *report.pages[0].visuals[0].filters,
+    ]
+    assert [(f.name, f.level) for f in filters] == [
+        ("report", FilterLevel.REPORT),
+        ("page", FilterLevel.PAGE),
+        ("visual", FilterLevel.VISUAL),
+    ]
+    assert {f.condition for f in filters} == {"Date[Year] in (2025)"}
+    assert {f.field for f in filters} == {YEAR}
+
+
+def test_unreadable_filters_become_an_issue() -> None:
+    broken = container(card_config())
+    broken["filters"] = "[{"
+
+    report = legacy(section("p", broken))
+
+    assert report.pages[0].visuals[0].filters == ()
+    (issue,) = report.issues
+    assert issue.visual_path == "p/card"
+    assert issue.message.startswith("filters are unreadable")
+
+
+def test_filters_that_are_not_a_list_become_an_issue() -> None:
+    page = section("p")
+    page["filters"] = "{}"
+
+    report = legacy(page)
+
+    assert report.pages[0].filters == ()
+    assert report.issues[0].message == "filters are unreadable: not a JSON list"
+
+
+def test_group_keeps_its_filters() -> None:
+    config = {
+        "name": "group",
+        "layouts": [{"position": {"x": 0, "y": 0, "width": 10, "height": 10}}],
+        "singleVisualGroup": {"displayName": "Group"},
+    }
+    grouped = container(config)
+    grouped["filters"] = json.dumps([year_filter()])
+
+    report = legacy(section("p", grouped))
+
+    assert [f.name for f in report.pages[0].visuals[0].filters] == ["f"]
 
 
 def test_visual_with_title_position_and_field() -> None:

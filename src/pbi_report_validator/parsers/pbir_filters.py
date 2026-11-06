@@ -206,7 +206,8 @@ def _parse_filter(
         location=location,
         name=name,
         level=level,
-        field=parse_field(entry.get("field")),
+        # The legacy report format calls the field "expression".
+        field=parse_field(entry.get("field", entry.get("expression"))),
         filter_type=str(entry.get("type", "Unknown")),
         condition=render(expression) if expression else None,
         expression=expression,

@@ -8,6 +8,11 @@ name, position and ``singleVisual`` definition. Fields are listed per role
 in ``projections`` by ``queryRef`` and defined in the ``Select`` list of the
 visual's ``prototypeQuery``, which refers to tables by alias.
 
+Filters (report, page and visual) are JSON-encoded lists in ``filters`` with
+the same entries as PBIR, except that the field is called ``expression``.
+A slicer's selection is in ``singleVisual.objects``, as in PBIR. Both are
+read with the PBIR filter parser.
+
 A section or visual that cannot be parsed becomes a ``ParseIssue`` and the
 rest of the report is still parsed. Source locations point to the section
 or container in the document; positions inside the encoded strings cannot
@@ -22,6 +27,8 @@ from pydantic import ValidationError
 from pbi_report_validator.domain.base import SourceLocation
 from pbi_report_validator.domain.helpers import json_location, visual_path
 from pbi_report_validator.domain.models import (
+    Filter,
+    FilterLevel,
     Page,
     ParseIssue,
     Projection,
@@ -39,8 +46,10 @@ from pbi_report_validator.parsers.pbir import (
     parse_position,
 )
 from pbi_report_validator.parsers.pbir_fields import parse_field, unknown_field
+from pbi_report_validator.parsers.pbir_filters import parse_filters, parse_slicer_state
 
 SECTIONS = "sections"
+FILTERS = "filters"
 CONTAINERS = "visualContainers"
 NO_SECTIONS = "sections is not a list; no pages were read"
 # Keys of a prototypeQuery Select item that name it rather than define it.
@@ -50,7 +59,7 @@ JsonPath = tuple[str | int, ...]
 
 
 def parse_legacy_report(raw: RawLegacyReport) -> Report:
-    """Parse the pages and visuals of a legacy-format report.
+    """Parse the filters, pages and visuals of a legacy-format report.
 
     Args:
         raw: The report document as read by ``integrations.files``.
@@ -62,11 +71,13 @@ def parse_legacy_report(raw: RawLegacyReport) -> Report:
         failed to parse.
     """
     file = raw.layout.path
+    filters, problems = _filters(raw.layout.content, FilterLevel.REPORT, file, ())
+    issues = [ParseIssue(path=file, message=m) for m in problems]
     sections = raw.layout.content.get(SECTIONS)
     if not isinstance(sections, list):
-        return Report(issues=(ParseIssue(path=file, message=NO_SECTIONS),))
+        issues.append(ParseIssue(path=file, message=NO_SECTIONS))
+        return Report(filters=filters, issues=tuple(issues))
     pages: list[Page] = []
-    issues: list[ParseIssue] = []
     for ordinal, index in enumerate(_display_order(sections)):
         page, page_issues = _parse_section(
             sections[index], (SECTIONS, index), ordinal, file
@@ -74,7 +85,7 @@ def parse_legacy_report(raw: RawLegacyReport) -> Report:
         issues += page_issues
         if page is not None:
             pages.append(page)
-    return Report(pages=tuple(pages), issues=tuple(issues))
+    return Report(filters=filters, pages=tuple(pages), issues=tuple(issues))
 
 
 def _display_order(sections: list[Any]) -> list[int]:
@@ -110,6 +121,8 @@ def _parse_section(
         issues += problems
         if visual is not None:
             visuals.append(visual)
+    filters, filter_problems = _filters(section, FilterLevel.PAGE, file, where)
+    issues += [ParseIssue(path=file, message=m) for m in filter_problems]
     try:
         page = Page(
             location=json_location(file, *where),
@@ -118,6 +131,7 @@ def _parse_section(
             ordinal=ordinal,
             width=section.get("width", DEFAULT_PAGE_WIDTH),
             height=section.get("height", DEFAULT_PAGE_HEIGHT),
+            filters=filters,
             visuals=tuple(visuals),
         )
     except ValidationError as exc:
@@ -164,7 +178,8 @@ def parse_container(
         where: The container's JSON path in the document.
 
     Returns:
-        The visual, and a message for each field that was skipped.
+        The visual, and a message for each field, filter or slicer selection
+        that could not be fully read.
 
     Raises:
         VisualParseError: Name or position (x, y, width, height) is missing.
@@ -175,13 +190,22 @@ def parse_container(
         raise VisualParseError("visual has no name")
     position = parse_position(_position(config, container))
     location = json_location(file, *where)
+    filters, problems = _filters(container, FilterLevel.VISUAL, file, where)
     single = config.get("singleVisual")
     if not isinstance(single, dict):
         visual_type = GROUP_VISUAL_TYPE if "singleVisualGroup" in config else "unknown"
-        return Visual(
-            location=location, name=name, visual_type=visual_type, position=position
-        ), []
-    projections, problems = _projections(single, json_location(file, *where, "config"))
+        group = Visual(
+            location=location,
+            name=name,
+            visual_type=visual_type,
+            position=position,
+            filters=filters,
+        )
+        return group, problems
+    config_location = json_location(file, *where, "config")
+    projections, field_problems = _projections(single, config_location)
+    first_field = projections[0].field if projections else None
+    slicer, slicer_problems = parse_slicer_state(single, first_field)
     visual = Visual(
         location=location,
         name=name,
@@ -189,8 +213,30 @@ def parse_container(
         position=position,
         title=container_title(single.get("vcObjects")),
         projections=projections,
+        filters=filters,
+        slicer=slicer.model_copy(update={"location": config_location})
+        if slicer
+        else None,
     )
-    return visual, problems
+    return visual, [*problems, *field_problems, *slicer_problems]
+
+
+def _filters(
+    owner: Any, level: FilterLevel, file: str | None, where: JsonPath
+) -> tuple[tuple[Filter, ...], list[str]]:
+    """The filters in ``owner``'s encoded ``filters`` list, and any problems.
+
+    Every filter is located at the encoded string, since entries inside it
+    cannot be addressed by a JSON pointer.
+    """
+    if not isinstance(owner, dict) or FILTERS not in owner:
+        return (), []
+    entries, error = _loads(owner[FILTERS])
+    if not isinstance(entries, list):
+        return (), [f"filters are unreadable: {error or 'not a JSON list'}"]
+    filters, problems = parse_filters({"filterConfig": {FILTERS: entries}}, level)
+    location = json_location(file, *where, FILTERS)
+    return tuple(f.model_copy(update={"location": location}) for f in filters), problems
 
 
 def _position(config: dict[str, Any], container: dict[str, Any]) -> dict[str, Any]:
@@ -254,12 +300,19 @@ def _query_fields(query: Any) -> tuple[dict[str, dict[str, Any]], dict[str, str]
 
 def decode(value: Any) -> tuple[dict[str, Any] | None, str | None]:
     """Decode a JSON-encoded object string, or ``None`` and why it failed."""
-    if not isinstance(value, str):
-        return None, "not a JSON string"
-    try:
-        decoded = json.loads(value)
-    except json.JSONDecodeError as exc:
-        return None, str(exc)
+    decoded, error = _loads(value)
+    if error is not None:
+        return None, error
     if not isinstance(decoded, dict):
         return None, "not a JSON object"
     return decoded, None
+
+
+def _loads(value: Any) -> tuple[Any, str | None]:
+    """The value of a JSON-encoded string, or ``None`` and why it failed."""
+    if not isinstance(value, str):
+        return None, "not a JSON string"
+    try:
+        return json.loads(value), None
+    except json.JSONDecodeError as exc:
+        return None, str(exc)

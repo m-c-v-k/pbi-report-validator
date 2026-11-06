@@ -483,9 +483,9 @@ tests/             # Mirrors src/, plus sample reports in fixtures/ and expected
 
 ## Limitations
 
-- Reports saved without PBIR (the legacy `report.json`) are compared by
-  pages, visuals and fields only; their filters and slicer selections are not
-  read yet ([#279](https://github.com/m-c-v-k/pbi-report-validator/issues/279))
+- Reports saved without PBIR (the legacy `report.json`) are supported; their
+  source locations point to the page, visual or encoded `config`/`filters`
+  string in `report.json`, not to a position inside it
 - `.pbix` and `.pbit` files are not supported yet (save as `.pbip`)
 - Data validation (`--data`) has been run against live published models with
   the sample reports, and CI replays the recorded API responses. See
