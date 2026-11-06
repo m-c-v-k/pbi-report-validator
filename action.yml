@@ -11,10 +11,10 @@ branding:
 # PBI_VALIDATE_AI=disabled on the step blocks ai: api.
 inputs:
   old:
-    description: Old PBIP project or .Report folder, relative to the workspace.
+    description: Old PBIP project, .Report folder or .pbip file, relative to the workspace.
     required: true
   new:
-    description: New PBIP project or .Report folder, relative to the workspace.
+    description: New PBIP project, .Report folder or .pbip file, relative to the workspace.
     required: true
   html:
     description: Write a self-contained HTML report to this path.

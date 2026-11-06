@@ -6,11 +6,23 @@ parsers turn it into the typed domain models. The models are frozen, but the
 JSON dictionaries inside them are not; parsers must not modify them.
 """
 
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 JsonObject = dict[str, Any]
+
+
+class InputFormat(StrEnum):
+    """What kind of input a path given to ``diff`` is."""
+
+    PBIP_PBIR = "pbip-pbir"
+    PBIP_LEGACY = "pbip-legacy"
+    PBIT = "pbit"
+    PBIX = "pbix"
+    SEMANTIC_MODEL = "semantic-model"
+    UNKNOWN = "unknown"
 
 
 class RawModel(BaseModel):

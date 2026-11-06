@@ -4,13 +4,20 @@ from pathlib import Path
 
 import pytest
 
-from pbi_report_validator.domain.raw import RawLegacyReport, RawPage, RawProject
+from pbi_report_validator.domain.raw import (
+    InputFormat,
+    RawLegacyReport,
+    RawPage,
+    RawProject,
+)
 from pbi_report_validator.integrations.files import (
     InvalidJsonError,
     MissingDefinitionError,
     ModelOutsideProjectError,
     ProjectNotFoundError,
     UnreadableFolderError,
+    UnsupportedInputError,
+    detect_input,
     load_project,
 )
 from tests.factories import FIXTURES
@@ -364,3 +371,92 @@ def test_report_without_any_definition_names_both_formats(
 
     with pytest.raises(MissingDefinitionError, match=r"nor report.json"):
         load_project(project_copy)
+
+
+@pytest.mark.parametrize(
+    ("relative", "expected"),
+    [
+        ("sales_v1", InputFormat.PBIP_PBIR),
+        ("sales_v1/Sales.Report", InputFormat.PBIP_PBIR),
+        ("sales_v1/Sales.pbip", InputFormat.PBIP_PBIR),
+        ("sales_v1_legacy", InputFormat.PBIP_LEGACY),
+        ("sales_v1_legacy/Sales.Report", InputFormat.PBIP_LEGACY),
+        ("sales_v1_legacy/Sales.pbip", InputFormat.PBIP_LEGACY),
+        ("sales_v1/Sales.SemanticModel", InputFormat.SEMANTIC_MODEL),
+    ],
+)
+def test_detect_fixture_inputs(relative: str, expected: InputFormat) -> None:
+    assert detect_input(FIXTURES / relative) is expected
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("Sales.pbit", InputFormat.PBIT),
+        ("Sales.PBIX", InputFormat.PBIX),
+        ("Sales.zip", InputFormat.UNKNOWN),
+    ],
+)
+def test_detect_files_by_extension(
+    tmp_path: Path, name: str, expected: InputFormat
+) -> None:
+    (tmp_path / name).write_bytes(b"PK")
+
+    assert detect_input(tmp_path / name) is expected
+
+
+def test_folder_with_only_a_model_is_a_semantic_model(tmp_path: Path) -> None:
+    shutil.copytree(
+        FIXTURES / "sales_v1/Sales.SemanticModel", tmp_path / "Sales.SemanticModel"
+    )
+
+    assert detect_input(tmp_path) is InputFormat.SEMANTIC_MODEL
+
+
+@pytest.mark.parametrize(
+    ("name", "reason"),
+    [
+        ("Sales.pbit", ".pbit files are not supported yet"),
+        ("Sales.pbix", ".pbix files are not supported yet"),
+        ("notes.txt", "not a supported input"),
+    ],
+)
+def test_unsupported_files_name_the_input(
+    tmp_path: Path, name: str, reason: str
+) -> None:
+    (tmp_path / name).write_bytes(b"PK")
+
+    with pytest.raises(UnsupportedInputError) as exc_info:
+        load_project(tmp_path / name)
+
+    assert str(exc_info.value).startswith(f"{tmp_path / name}: {reason}")
+
+
+def test_semantic_model_alone_is_unsupported() -> None:
+    with pytest.raises(UnsupportedInputError, match="semantic model on its own"):
+        load_project(FIXTURES / "sales_v1/Sales.SemanticModel")
+
+
+def test_pbip_file_loads_its_project() -> None:
+    from_file = load_project(FIXTURES / "sales_v1/Sales.pbip")
+    from_folder = load_project(FIXTURES / "sales_v1")
+
+    assert from_file.model_dump_json() == from_folder.model_dump_json()
+
+
+@pytest.mark.parametrize(
+    ("artifacts", "message"),
+    [
+        ([], "lists no report"),
+        ([{"report": {"path": "Missing.Report"}}], "points to missing"),
+        ([{"report": {"path": "../Other.Report"}}], "points outside"),
+    ],
+)
+def test_pbip_file_with_bad_report_path(
+    tmp_path: Path, artifacts: list[object], message: str
+) -> None:
+    pbip = tmp_path / "Sales.pbip"
+    pbip.write_text(json.dumps({"artifacts": artifacts}))
+
+    with pytest.raises(ProjectNotFoundError, match=message):
+        detect_input(pbip)
