@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from pbi_report_validator.domain.raw import RawPage, RawProject
+from pbi_report_validator.domain.raw import RawLegacyReport, RawPage, RawProject
 from pbi_report_validator.integrations.files import (
     InvalidJsonError,
     MissingDefinitionError,
@@ -337,3 +337,30 @@ def test_unreadable_folder_raises(
     with pytest.raises(UnreadableFolderError, match="Permission denied") as info:
         load_project(project_copy)
     assert info.value.path
+
+
+def test_legacy_report_is_loaded_as_one_document() -> None:
+    project = load_project(FIXTURES / "sales_v1_legacy")
+
+    assert isinstance(project.report, RawLegacyReport)
+    assert project.report.layout.path == "Sales.Report/report.json"
+    assert "sections" in project.report.layout.content
+    assert project.semantic_model is not None
+
+
+def test_broken_legacy_report_raises(tmp_path: Path) -> None:
+    copy = tmp_path / "legacy"
+    shutil.copytree(FIXTURES / "sales_v1_legacy", copy)
+    (copy / "Sales.Report" / "report.json").write_text("{")
+
+    with pytest.raises(InvalidJsonError):
+        load_project(copy)
+
+
+def test_report_without_any_definition_names_both_formats(
+    project_copy: Path,
+) -> None:
+    shutil.rmtree(project_copy / "Sales.Report" / "definition")
+
+    with pytest.raises(MissingDefinitionError, match=r"nor report.json"):
+        load_project(project_copy)

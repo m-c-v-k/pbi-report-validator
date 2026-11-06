@@ -27,11 +27,12 @@ from pbi_report_validator.domain.models import (
     SemanticModel,
     Severity,
 )
-from pbi_report_validator.domain.raw import RawProject
+from pbi_report_validator.domain.raw import RawLegacyReport, RawProject
 from pbi_report_validator.integrations.anthropic_client import LlmClient
 from pbi_report_validator.integrations.files import load_project, write_text
 from pbi_report_validator.integrations.templates import read_template
 from pbi_report_validator.matching.matcher import match_reports
+from pbi_report_validator.parsers.legacy import parse_legacy_report
 from pbi_report_validator.parsers.pbir import parse_report, with_issues_by_name
 from pbi_report_validator.parsers.tmdl import parse_semantic_model
 from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
@@ -183,7 +184,11 @@ def write_markdown(result: DiffResult, path: Path) -> None:
 
 
 def _parse(project: RawProject) -> tuple[Report, SemanticModel | None]:
-    report = parse_report(project.report)
+    report = (
+        parse_legacy_report(project.report)
+        if isinstance(project.report, RawLegacyReport)
+        else parse_report(project.report)
+    )
     model = (
         parse_semantic_model(project.semantic_model) if project.semantic_model else None
     )

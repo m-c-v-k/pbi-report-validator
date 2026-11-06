@@ -1,4 +1,4 @@
-"""Read a PBIP project (PBIR report + TMDL semantic model) from disk.
+"""Read a PBIP project (PBIR or legacy report + semantic model) from disk.
 
 This is the only module in the validation flow that touches the filesystem.
 Paths in the returned models are POSIX paths relative to the project folder,
@@ -13,6 +13,7 @@ from pathlib import Path
 
 from pbi_report_validator.domain.raw import (
     RawJsonFile,
+    RawLegacyReport,
     RawPage,
     RawProject,
     RawReport,
@@ -35,7 +36,7 @@ class ProjectNotFoundError(ProjectLoadError):
 
 
 class MissingDefinitionError(ProjectLoadError):
-    """A ``.Report`` folder has no PBIR ``definition/report.json``."""
+    """A ``.Report`` folder has neither a PBIR nor a legacy ``report.json``."""
 
 
 class ModelOutsideProjectError(ProjectLoadError):
@@ -79,7 +80,8 @@ def load_project(path: Path) -> RawProject:
 
     Raises:
         ProjectNotFoundError: No single ``.Report`` folder was found.
-        MissingDefinitionError: The report is not in PBIR format.
+        MissingDefinitionError: The report has neither a PBIR definition
+            nor a legacy ``report.json``.
         InvalidJsonError: ``report.json``, ``pages.json`` or ``definition.pbir``
             is unreadable or not valid JSON.
         UnreadableFolderError: A project folder could not be listed.
@@ -175,13 +177,26 @@ def _require_inside(path: Path, root: Path, source: str) -> None:
         )
 
 
-def _load_report(report_dir: Path, root: Path) -> RawReport:
+def _load_report(report_dir: Path, root: Path) -> RawReport | RawLegacyReport:
+    """The PBIR ``definition`` folder, else the legacy-format ``report.json``."""
     definition = report_dir / "definition"
     report_json = definition / "report.json"
-    if not report_json.is_file():
-        raise MissingDefinitionError(
-            f"{_relative(report_json, root)} not found; save the report in PBIR format"
+    if report_json.is_file():
+        return _load_pbir_report(report_dir, root)
+    legacy = report_dir / "report.json"
+    if legacy.is_file():
+        return RawLegacyReport(
+            path=_relative(report_dir, root), layout=_read_required_json(legacy, root)
         )
+    raise MissingDefinitionError(
+        f"{_relative(report_dir, root)} has neither definition/report.json (PBIR)"
+        " nor report.json (legacy format)"
+    )
+
+
+def _load_pbir_report(report_dir: Path, root: Path) -> RawReport:
+    definition = report_dir / "definition"
+    report_json = definition / "report.json"
     pages_dir = definition / "pages"
     pages_json = pages_dir / "pages.json"
     return RawReport(
