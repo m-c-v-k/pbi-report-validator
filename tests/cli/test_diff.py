@@ -58,6 +58,22 @@ def test_missing_project_exits_with_error(tmp_path: Path) -> None:
     assert "Error:" in result.stderr
 
 
+def test_unsupported_input_exits_with_usage_code(tmp_path: Path) -> None:
+    pbix = tmp_path / "Sales.pbix"
+    pbix.write_bytes(b"PK")
+
+    result = runner.invoke(app, ["diff", OLD, str(pbix)])
+
+    assert result.exit_code == 2
+    assert "Sales.pbix: .pbix files are not supported yet" in result.stderr
+
+
+def test_pbip_file_is_accepted() -> None:
+    result = runner.invoke(app, ["diff", f"{OLD}/Sales.pbip", f"{OLD}/Sales.pbip"])
+
+    assert result.exit_code == 0, result.stderr
+
+
 def test_unreadable_folder_exits_with_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def deny(self: Path) -> None:
         raise PermissionError(13, "Permission denied")
