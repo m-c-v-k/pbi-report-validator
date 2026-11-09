@@ -32,7 +32,7 @@ credentials or network access once installed.
 | To run | You need |
 |---|---|
 | The diff (`pbi-validate diff`) | [uv](https://docs.astral.sh/uv/), which installs Python 3.12 for you, or Docker |
-| Input reports | Power BI Desktop to save both versions as Power BI Projects (`.pbip`) in the PBIR format ([Quick start](#quick-start)) |
+| Input reports | Power BI Desktop to save both versions as Power BI Projects (`.pbip`) ([Quick start](#quick-start)) |
 | Data validation (`--data`) | A Microsoft Entra service principal with access to both published semantic models through the Power BI REST API ([setup](#data-validation-optional---data)) |
 | AI options (`--ai api`) | An Anthropic API key, and the `ai` extra or the `-ai` Docker image ([setup](#ai-options-optional---ai)) |
 | The GitHub Action | A Linux runner with Docker, such as `ubuntu-latest` ([GitHub Action](#github-action)) |
@@ -109,17 +109,16 @@ In CI, set the same variables from secrets, as shown under
 ## Quick start
 
 1. Save both report versions as Power BI Projects (*File → Save as → Power BI
-   project (.pbip)*) in the **PBIR** report format. If your Power BI Desktop
-   version does not use PBIR by default, enable it under *Options → Preview
-   features* first.
+   project (.pbip)*). Both the **PBIR** report format and the older
+   single-file `report.json` format work.
 2. Compare them:
 
 ```bash
 pbi-validate diff ./old ./new --html report.html
 ```
 
-Each argument is a PBIP project folder (containing one `<Name>.Report` folder)
-or the `.Report` folder itself. The terminal always shows a summary; add any of:
+Each argument is a PBIP project folder (containing one `<Name>.Report` folder),
+the `.Report` folder itself or the project's `.pbip` file. The terminal always shows a summary; add any of:
 
 | Option | Output |
 |---|---|
@@ -166,7 +165,7 @@ fully validated.
 |---|---|
 | `0` | The comparison ran (with or without differences), and neither `--fail-on` nor `--fail-on-data-error` was triggered |
 | `1` | A project could not be loaded, an output file could not be written, or data validation could not run |
-| `2` | Invalid options, including `--ai api` when AI is disabled or not set up |
+| `2` | Invalid options, including `--ai api` when AI is disabled or not set up, or an input format that is not supported (such as a `.pbix` file) |
 | `3` | At least one finding at or above the `--fail-on` severity, or (with `--fail-on-data-error`) data that was not fully validated |
 
 ### What it compares
@@ -486,7 +485,8 @@ tests/             # Mirrors src/, plus sample reports in fixtures/ and expected
 - Reports saved without PBIR (the legacy `report.json`) are supported; their
   source locations point to the page, visual or encoded `config`/`filters`
   string in `report.json`, not to a position inside it
-- `.pbix` and `.pbit` files are not supported yet (save as `.pbip`)
+- `.pbix` and `.pbit` files and semantic models on their own are not
+  supported yet (save as `.pbip`); `diff` names the input and exits with code 2
 - Data validation (`--data`) has been run against live published models with
   the sample reports, and CI replays the recorded API responses. See
   [its own limitations](#data-validation-optional---data)
