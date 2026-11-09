@@ -416,7 +416,6 @@ def test_folder_with_only_a_model_is_a_semantic_model(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("name", "reason"),
     [
-        ("Sales.pbit", ".pbit files are not supported yet"),
         ("Sales.pbix", ".pbix files are not supported yet"),
         ("notes.txt", "not a supported input"),
     ],

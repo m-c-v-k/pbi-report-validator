@@ -32,7 +32,7 @@ credentials or network access once installed.
 | To run | You need |
 |---|---|
 | The diff (`pbi-validate diff`) | [uv](https://docs.astral.sh/uv/), which installs Python 3.12 for you, or Docker |
-| Input reports | Power BI Desktop to save both versions as Power BI Projects (`.pbip`) ([Quick start](#quick-start)) |
+| Input reports | Both versions saved as Power BI Projects (`.pbip`) or templates (`.pbit`) from Power BI Desktop ([Quick start](#quick-start)) |
 | Data validation (`--data`) | A Microsoft Entra service principal with access to both published semantic models through the Power BI REST API ([setup](#data-validation-optional---data)) |
 | AI options (`--ai api`) | An Anthropic API key, and the `ai` extra or the `-ai` Docker image ([setup](#ai-options-optional---ai)) |
 | The GitHub Action | A Linux runner with Docker, such as `ubuntu-latest` ([GitHub Action](#github-action)) |
@@ -110,7 +110,8 @@ In CI, set the same variables from secrets, as shown under
 
 1. Save both report versions as Power BI Projects (*File → Save as → Power BI
    project (.pbip)*). Both the **PBIR** report format and the older
-   single-file `report.json` format work.
+   single-file `report.json` format work. A Power BI template (`.pbit`)
+   works too, and can be compared with a project.
 2. Compare them:
 
 ```bash
@@ -118,7 +119,7 @@ pbi-validate diff ./old ./new --html report.html
 ```
 
 Each argument is a PBIP project folder (containing one `<Name>.Report` folder),
-the `.Report` folder itself or the project's `.pbip` file. The terminal always shows a summary; add any of:
+the `.Report` folder itself, the project's `.pbip` file or a `.pbit` file. The terminal always shows a summary; add any of:
 
 | Option | Output |
 |---|---|
@@ -485,8 +486,12 @@ tests/             # Mirrors src/, plus sample reports in fixtures/ and expected
 - Reports saved without PBIR (the legacy `report.json`) are supported; their
   source locations point to the page, visual or encoded `config`/`filters`
   string in `report.json`, not to a position inside it
-- `.pbix` and `.pbit` files and semantic models on their own are not
-  supported yet (save as `.pbip`); `diff` names the input and exits with code 2
+- A `.pbit` is read for its report (`Report/Layout`, the legacy format) and
+  model schema (`DataModelSchema`); nothing else in the archive is read, and
+  archives that are too large or hold paths outside the archive are refused.
+  A `.pbit` saved with the PBIR report format is not supported yet
+- `.pbix` files and semantic models on their own are not supported yet (save
+  as `.pbip`); `diff` names the input and exits with code 2
 - Data validation (`--data`) has been run against live published models with
   the sample reports, and CI replays the recorded API responses. See
   [its own limitations](#data-validation-optional---data)

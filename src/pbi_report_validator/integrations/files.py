@@ -1,8 +1,9 @@
-"""Detect the input format and read a PBIP project from disk.
+"""Detect the input format and read a PBIP project or ``.pbit`` file from disk.
 
 This is the only module in the validation flow that touches the filesystem.
 Paths in the returned models are POSIX paths relative to the project folder,
-so the output does not depend on where the project lives.
+so the output does not depend on where the project lives. Inside a
+``.pbit`` they are the archive's entry names.
 """
 
 import json
@@ -21,6 +22,8 @@ from pbi_report_validator.domain.raw import (
     RawSemanticModel,
     RawTextFile,
 )
+from pbi_report_validator.integrations.archives import read_entries
+from pbi_report_validator.integrations.errors import ProjectLoadError
 
 logger = logging.getLogger(__name__)
 
@@ -31,19 +34,16 @@ FILE_FORMATS = {".pbit": InputFormat.PBIT, ".pbix": InputFormat.PBIX}
 PROJECT_FORMATS = frozenset({InputFormat.PBIP_PBIR, InputFormat.PBIP_LEGACY})
 SAVE_AS_PBIP = "save the report as a Power BI Project (.pbip)"
 UNSUPPORTED_REASONS = {
-    InputFormat.PBIT: f".pbit files are not supported yet (planned for v0.7.0); "
-    f"{SAVE_AS_PBIP}",
     InputFormat.PBIX: f".pbix files are not supported yet (planned for v0.9.0); "
     f"{SAVE_AS_PBIP}",
     InputFormat.SEMANTIC_MODEL: "a semantic model on its own is not supported yet "
     "(planned for v0.10.0); pass the PBIP project folder or its .Report folder",
     InputFormat.UNKNOWN: "not a supported input; expected a PBIP project folder, "
-    "a .Report folder or a .pbip file",
+    "a .Report folder, a .pbip file or a .pbit file",
 }
-
-
-class ProjectLoadError(Exception):
-    """Base class for errors that prevent loading a project."""
+PBIT_LAYOUT = "Report/Layout"
+PBIT_MODEL = "DataModelSchema"
+PBIT_ENTRIES = frozenset({PBIT_LAYOUT, PBIT_MODEL})
 
 
 class ProjectNotFoundError(ProjectLoadError):
@@ -51,7 +51,7 @@ class ProjectNotFoundError(ProjectLoadError):
 
 
 class MissingDefinitionError(ProjectLoadError):
-    """A ``.Report`` folder has neither a PBIR nor a legacy ``report.json``."""
+    """A report has neither a PBIR nor a legacy-format definition."""
 
 
 class UnsupportedInputError(ProjectLoadError):
@@ -91,12 +91,12 @@ class OutputWriteError(Exception):
 
 
 def load_project(path: Path) -> RawProject:
-    """Load a PBIP project.
+    """Load a PBIP project or a ``.pbit`` file.
 
     Args:
         path: A folder containing one ``<Name>.Report`` folder (a PBIP
-            project folder), the ``<Name>.Report`` folder itself or the
-            project's ``.pbip`` file.
+            project folder), the ``<Name>.Report`` folder itself, the
+            project's ``.pbip`` file or a ``.pbit`` file.
 
     Returns:
         The raw report contents and, if the report references its semantic
@@ -105,8 +105,9 @@ def load_project(path: Path) -> RawProject:
         kept with its error); otherwise why there is no model to read.
 
     Raises:
-        UnsupportedInputError: The path is not a PBIP project (see
-            ``detect_input``).
+        UnsupportedInputError: The path is neither a PBIP project nor a
+            ``.pbit`` file (see ``detect_input``).
+        ArchiveError: A ``.pbit`` file could not be read safely.
         ProjectNotFoundError: No single ``.Report`` folder was found.
         MissingDefinitionError: The report has neither a PBIR definition
             nor a legacy ``report.json``.
@@ -117,6 +118,8 @@ def load_project(path: Path) -> RawProject:
             model outside the project folder.
     """
     input_format = detect_input(path)
+    if input_format is InputFormat.PBIT:
+        return _load_pbit(path)
     if input_format not in PROJECT_FORMATS:
         raise UnsupportedInputError(path, input_format)
     report_dir = _find_report_dir(path)
@@ -132,6 +135,42 @@ def load_project(path: Path) -> RawProject:
         semantic_model=model,
         model_missing=missing,
     )
+
+
+def _load_pbit(path: Path) -> RawProject:
+    """The legacy-format report and, if present, the TMSL model of a ``.pbit``.
+
+    Both entries are UTF-16LE JSON. Every other entry is ignored.
+    """
+    entries = read_entries(path, PBIT_ENTRIES)
+    if PBIT_LAYOUT not in entries:
+        raise MissingDefinitionError(
+            f"{path}: no {PBIT_LAYOUT} (legacy report format) in the archive; "
+            f"if the report uses the PBIR format, {SAVE_AS_PBIP}"
+        )
+    layout = _utf16_json(PBIT_LAYOUT, entries[PBIT_LAYOUT])
+    if layout.error is not None:
+        raise InvalidJsonError(f"{path.name}/{PBIT_LAYOUT}", layout.error)
+    model = entries.get(PBIT_MODEL)
+    return RawProject(
+        name=path.stem,
+        report=RawLegacyReport(path=PBIT_LAYOUT.split("/")[0], layout=layout),
+        semantic_model=RawSemanticModel(
+            path=PBIT_MODEL, bim=_utf16_json(PBIT_MODEL, model)
+        )
+        if model is not None
+        else None,
+        model_missing=None if model is not None else f"{path.name} has no {PBIT_MODEL}",
+    )
+
+
+def _utf16_json(name: str, data: bytes) -> RawJsonFile:
+    try:
+        text = data.decode("utf-16-le").removeprefix("﻿")
+    except UnicodeDecodeError as exc:
+        logger.warning("Could not decode %s: %s", name, exc)
+        return RawJsonFile(path=name, error=str(exc))
+    return _json_file(name, text)
 
 
 def write_text(path: Path, text: str) -> None:
@@ -352,9 +391,18 @@ def _read_required_json(path: Path, root: Path) -> RawJsonFile:
 def _read_json(path: Path, root: Path) -> RawJsonFile:
     relative = _relative(path, root)
     try:
-        content = json.loads(path.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as exc:
         logger.warning("Could not read %s: %s", relative, exc)
+        return RawJsonFile(path=relative, error=str(exc))
+    return _json_file(relative, text)
+
+
+def _json_file(relative: str, text: str) -> RawJsonFile:
+    try:
+        content = json.loads(text)
+    except json.JSONDecodeError as exc:
+        logger.warning("Could not parse %s: %s", relative, exc)
         return RawJsonFile(path=relative, error=str(exc))
     if not isinstance(content, dict):
         return RawJsonFile(path=relative, error="top-level value is not an object")

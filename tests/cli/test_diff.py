@@ -7,7 +7,8 @@ from typer.testing import CliRunner
 from pbi_report_validator.cli.main import FailOn, app
 from pbi_report_validator.domain.models import Severity
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
-from tests.factories import REPO_ROOT, SNAPSHOTS
+from tests.factories import FIXTURES, REPO_ROOT, SNAPSHOTS
+from tests.pbit import write_pbit
 
 SNAPSHOT = SNAPSHOTS / "diff_sales_v1_v2.json"
 OLD = "tests/fixtures/sales_v1"
@@ -299,3 +300,22 @@ def test_allow_data_to_llm_warns(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.exit_code == 0
     assert "--allow-data-to-llm is on" in result.stderr
+
+
+def test_pbit_file_is_compared_with_a_project(tmp_path: Path) -> None:
+    pbit = write_pbit(FIXTURES / "sales_v1_legacy", tmp_path / "Sales.pbit")
+
+    result = runner.invoke(app, ["diff", str(pbit), OLD])
+
+    assert result.exit_code == 0, result.stderr
+    assert "No differences found." in result.stdout
+
+
+def test_broken_pbit_exits_with_error(tmp_path: Path) -> None:
+    pbit = tmp_path / "Sales.pbit"
+    pbit.write_bytes(b"PK")
+
+    result = runner.invoke(app, ["diff", str(pbit), OLD])
+
+    assert result.exit_code == 1
+    assert "Sales.pbit: not a valid zip archive" in result.stderr
