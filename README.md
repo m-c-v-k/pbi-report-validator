@@ -111,7 +111,8 @@ In CI, set the same variables from secrets, as shown under
 1. Save both report versions as Power BI Projects (*File → Save as → Power BI
    project (.pbip)*). Both the **PBIR** report format and the older
    single-file `report.json` format work. A Power BI template (`.pbit`)
-   works too, and can be compared with a project.
+   works too, and can be compared with a project. See
+   [supported inputs](docs/inputs.md) for what is read from each.
 2. Compare them:
 
 ```bash
@@ -119,7 +120,9 @@ pbi-validate diff ./old ./new --html report.html
 ```
 
 Each argument is a PBIP project folder (containing one `<Name>.Report` folder),
-the `.Report` folder itself, the project's `.pbip` file or a `.pbit` file. The terminal always shows a summary; add any of:
+the `.Report` folder itself, the project's `.pbip` file or a `.pbit` file
+([supported inputs](docs/inputs.md)). The terminal always shows a summary; add
+any of:
 
 | Option | Output |
 |---|---|
@@ -429,6 +432,9 @@ commit, which takes about a minute longer.
 - Runs locally or in your own CI; nothing is sent anywhere by default.
 - Only files inside the project folder are read: a `definition.pbir` that
   points to a semantic model outside it is rejected with an error.
+- From a `.pbit`, only the report (`Report/Layout`) and the model schema
+  (`DataModelSchema`) are read, in memory, with size limits. A template holds
+  no data values.
 - With `--data`, queries go only to the Power BI API of your own tenant.
   Query results stay in memory and are never logged or sent anywhere else.
   The output files contain only masked rows unless you pass
@@ -483,15 +489,11 @@ tests/             # Mirrors src/, plus sample reports in fixtures/ and expected
 
 ## Limitations
 
-- Reports saved without PBIR (the legacy `report.json`) are supported; their
-  source locations point to the page, visual or encoded `config`/`filters`
-  string in `report.json`, not to a position inside it
-- A `.pbit` is read for its report (`Report/Layout`, the legacy format) and
-  model schema (`DataModelSchema`); nothing else in the archive is read, and
-  archives that are too large or hold paths outside the archive are refused.
-  A `.pbit` saved with the PBIR report format is not supported yet
-- `.pbix` files and semantic models on their own are not supported yet (save
-  as `.pbip`); `diff` names the input and exits with code 2
+- Inputs: `.pbix` files and semantic models on their own are not supported
+  yet (save as `.pbip` or export a `.pbit`), and neither is a `.pbit` saved
+  with the PBIR report format. In the legacy report format, source locations
+  point to the encoded string, not to a position inside it. See
+  [supported inputs](docs/inputs.md)
 - Data validation (`--data`) has been run against live published models with
   the sample reports, and CI replays the recorded API responses. See
   [its own limitations](#data-validation-optional---data)
