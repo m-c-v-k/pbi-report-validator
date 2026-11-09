@@ -110,8 +110,9 @@ old one — and if not, where and why?"*
 
 ## Milestones
 
-M0–M5 (≈6 weeks, part-time) are done and released as v0.1.0–v0.6.0.
-M6–M10 follow in the order listed.
+M0–M5 (≈6 weeks, part-time) are done and released as v0.1.0–v0.6.0, and M6
+as v0.7.0.
+M7–M10 follow in the order listed.
 
 ### M0 – Foundation (week 1)
 - Repo, `CLAUDE.md`, this document, README, license.

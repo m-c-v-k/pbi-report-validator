@@ -1,7 +1,7 @@
 [project]
 name = "pbi-report-validator"
-version = "0.6.0"
-description = "Compare two versions of a Power BI report (PBIP) and report what changed."
+version = "0.7.0"
+description = "Compare two versions of a Power BI report (PBIP or .pbit) and report what changed."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
