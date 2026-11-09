@@ -8,6 +8,7 @@ from pbi_report_validator.domain.models import Category, ChangeKind
 from pbi_report_validator.services.validate import validate
 from tests.factories import FIXTURES
 from tests.make_legacy_fixtures import LEGACY_SUFFIX, SOURCES, build
+from tests.pbit import write_pbit
 
 JSON_SUFFIXES = {".json", ".pbip", ".pbir", ".pbism"}
 # Invalid on purpose: sales_v3 demonstrates the parse_issue finding.
@@ -138,3 +139,28 @@ def test_legacy_pair_reports_the_pbir_findings() -> None:
     expected = findings("sales_v1", "sales_v2")
     assert findings("sales_v1_legacy", "sales_v2_legacy") == expected
     assert {c for c, *_ in expected} >= {Category.FILTER, Category.SLICER}
+
+
+def test_pbit_pair_reports_the_pbip_findings(tmp_path: Path) -> None:
+    old = write_pbit(FIXTURES / "sales_v1_legacy", tmp_path / "v1.pbit")
+    new = write_pbit(FIXTURES / "sales_v2_legacy", tmp_path / "v2.pbit")
+
+    expected = _findings(FIXTURES / "sales_v1", FIXTURES / "sales_v2")
+
+    assert _findings(old, new) == expected
+    assert {c for c, *_ in expected} >= {Category.MEASURE, Category.FILTER}
+
+
+def test_pbit_compares_with_pbip_both_ways(tmp_path: Path) -> None:
+    old = write_pbit(FIXTURES / "sales_v1_legacy", tmp_path / "v1.pbit")
+    new = write_pbit(FIXTURES / "sales_v2_legacy", tmp_path / "v2.pbit")
+
+    expected = _findings(FIXTURES / "sales_v1", FIXTURES / "sales_v2")
+
+    assert _findings(old, FIXTURES / "sales_v2") == expected
+    assert _findings(FIXTURES / "sales_v1", new) == expected
+
+
+def _findings(old: Path, new: Path) -> list[tuple[str, str, str, str | None]]:
+    result = validate(old, new)
+    return [(f.category, f.change, f.path, f.new) for f in result.findings]

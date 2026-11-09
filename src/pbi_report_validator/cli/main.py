@@ -20,9 +20,9 @@ from pbi_report_validator.domain.models import (
 )
 from pbi_report_validator.integrations.anthropic_client import AiUnavailableError
 from pbi_report_validator.integrations.config import MissingCredentialsError
+from pbi_report_validator.integrations.errors import ProjectLoadError
 from pbi_report_validator.integrations.files import (
     OutputWriteError,
-    ProjectLoadError,
     UnsupportedInputError,
 )
 from pbi_report_validator.integrations.powerbi import PowerBIError
@@ -108,10 +108,12 @@ def _replace_unencodable_output() -> None:
 @app.command()
 def diff(
     old: Annotated[
-        Path, typer.Argument(help="Old PBIP project, .Report folder or .pbip file.")
+        Path,
+        typer.Argument(help="Old PBIP project, .Report folder, .pbip or .pbit file."),
     ],
     new: Annotated[
-        Path, typer.Argument(help="New PBIP project, .Report folder or .pbip file.")
+        Path,
+        typer.Argument(help="New PBIP project, .Report folder, .pbip or .pbit file."),
     ],
     json_path: Annotated[
         Path | None,
