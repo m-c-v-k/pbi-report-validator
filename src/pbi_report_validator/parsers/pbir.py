@@ -113,7 +113,7 @@ def _parse_page(raw: RawPage, ordinal: int) -> tuple[Page | None, list[ParseIssu
         )
     except ValidationError as exc:
         error = ParseIssue(
-            path=raw.page.path, message=_first_error(exc), page=page_name
+            path=raw.page.path, message=first_validation_error(exc), page=page_name
         )
         return None, [*issues, error]
     return page, issues
@@ -142,7 +142,7 @@ def _try_parse_visual(
     except VisualParseError as exc:
         return None, [str(exc)]
     except ValidationError as exc:
-        return None, [_first_error(exc)]
+        return None, [first_validation_error(exc)]
 
 
 def parse_visual(
@@ -168,9 +168,7 @@ def parse_visual(
     position = content.get("position")
     if not isinstance(name, str) or not isinstance(position, dict):
         raise VisualParseError("visual has no name or position")
-    missing = [key for key in REQUIRED_POSITION_KEYS if key not in position]
-    if missing:
-        raise VisualParseError(f"visual position is missing {', '.join(missing)}")
+    visual_position = parse_position(position)
     filters, problems = parse_filters(content, FilterLevel.VISUAL, file)
     location = json_location(file)
     body = content.get("visual")
@@ -179,7 +177,7 @@ def parse_visual(
             location=location,
             name=name,
             visual_type=GROUP_VISUAL_TYPE if "visualGroup" in content else "unknown",
-            position=_position(position),
+            position=visual_position,
             filters=filters,
         )
         return group, problems
@@ -190,7 +188,7 @@ def parse_visual(
         location=location,
         name=name,
         visual_type=str(body.get("visualType", "unknown")),
-        position=_position(position),
+        position=visual_position,
         title=_title(body),
         projections=projections,
         filters=filters,
@@ -209,9 +207,27 @@ def _position(position: dict[str, Any]) -> Position:
     )
 
 
+def parse_position(position: dict[str, Any]) -> Position:
+    """A visual's position from its ``x``, ``y``, ``z``, ``width``, ``height``.
+
+    Raises:
+        VisualParseError: x, y, width or height is missing.
+        pydantic.ValidationError: A value is out of range.
+    """
+    missing = [key for key in REQUIRED_POSITION_KEYS if key not in position]
+    if missing:
+        raise VisualParseError(f"visual position is missing {', '.join(missing)}")
+    return _position(position)
+
+
 def _title(body: dict[str, Any]) -> str | None:
+    return container_title(body.get("visualContainerObjects"))
+
+
+def container_title(objects: Any) -> str | None:
+    """The literal title text in a visual's container objects, if any."""
     try:
-        value = body["visualContainerObjects"]["title"][0]["properties"]["text"]
+        value = objects["title"][0]["properties"]["text"]
         literal = value["expr"]["Literal"]["Value"]
     except (KeyError, IndexError, TypeError):
         return None
@@ -304,7 +320,8 @@ def _folders(file: str) -> tuple[str, ...]:
     return parts[parts.index("definition") + 1 : -1]
 
 
-def _first_error(exc: ValidationError) -> str:
+def first_validation_error(exc: ValidationError) -> str:
+    """The first validation error as ``invalid <field>: <message>``."""
     error = exc.errors()[0]
     location = ".".join(str(part) for part in error["loc"])
     return f"invalid {location}: {error['msg']}"

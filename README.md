@@ -7,7 +7,7 @@
 > Compare two versions of a Power BI report and find out what changed — visuals,
 > filters, slicers and the numbers themselves.
 
-**Status:** v0.6.0 – structural diff and data validation (`--data`, values masked by default, `--attribute` tells report changes from model changes), JSON, Markdown and HTML reports (JSON and HTML say in which file and where each change is), a GitHub Action with PR comments and `--fail-on`, and an optional AI layer (`--ai api`). See the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
+**Status:** v0.7.0 – PBIP projects (PBIR or the legacy report format) and `.pbit` templates as input, structural diff and data validation (`--data`, values masked by default, `--attribute` tells report changes from model changes), JSON, Markdown and HTML reports (JSON and HTML say in which file and where each change is), a GitHub Action with PR comments and `--fail-on`, and an optional AI layer (`--ai api`). See the [roadmap](docs/PROJECT.md#milestones-6-weeks-part-time).
 
 **Live:** [demo report](https://m-c-v-k.github.io/pbi-report-validator/report.html) for the sample reports in this repository · [latest release](https://github.com/m-c-v-k/pbi-report-validator/releases/latest)
 
@@ -32,7 +32,7 @@ credentials or network access once installed.
 | To run | You need |
 |---|---|
 | The diff (`pbi-validate diff`) | [uv](https://docs.astral.sh/uv/), which installs Python 3.12 for you, or Docker |
-| Input reports | Power BI Desktop to save both versions as Power BI Projects (`.pbip`) in the PBIR format ([Quick start](#quick-start)) |
+| Input reports | Both versions saved as Power BI Projects (`.pbip`) or templates (`.pbit`) from Power BI Desktop ([Quick start](#quick-start)) |
 | Data validation (`--data`) | A Microsoft Entra service principal with access to both published semantic models through the Power BI REST API ([setup](#data-validation-optional---data)) |
 | AI options (`--ai api`) | An Anthropic API key, and the `ai` extra or the `-ai` Docker image ([setup](#ai-options-optional---ai)) |
 | The GitHub Action | A Linux runner with Docker, such as `ubuntu-latest` ([GitHub Action](#github-action)) |
@@ -42,13 +42,13 @@ credentials or network access once installed.
 Install the latest release as a command-line tool:
 
 ```bash
-uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.6.0
+uv tool install git+https://github.com/m-c-v-k/pbi-report-validator@v0.7.0
 ```
 
 Or run it once without installing:
 
 ```bash
-uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.6.0 pbi-validate --help
+uvx --from git+https://github.com/m-c-v-k/pbi-report-validator@v0.7.0 pbi-validate --help
 ```
 
 Each [GitHub release](https://github.com/m-c-v-k/pbi-report-validator/releases)
@@ -109,17 +109,20 @@ In CI, set the same variables from secrets, as shown under
 ## Quick start
 
 1. Save both report versions as Power BI Projects (*File → Save as → Power BI
-   project (.pbip)*) in the **PBIR** report format. If your Power BI Desktop
-   version does not use PBIR by default, enable it under *Options → Preview
-   features* first.
+   project (.pbip)*). Both the **PBIR** report format and the older
+   single-file `report.json` format work. A Power BI template (`.pbit`)
+   works too, and can be compared with a project. See
+   [supported inputs](docs/inputs.md) for what is read from each.
 2. Compare them:
 
 ```bash
 pbi-validate diff ./old ./new --html report.html
 ```
 
-Each argument is a PBIP project folder (containing one `<Name>.Report` folder)
-or the `.Report` folder itself. The terminal always shows a summary; add any of:
+Each argument is a PBIP project folder (containing one `<Name>.Report` folder),
+the `.Report` folder itself, the project's `.pbip` file or a `.pbit` file
+([supported inputs](docs/inputs.md)). The terminal always shows a summary; add
+any of:
 
 | Option | Output |
 |---|---|
@@ -166,7 +169,7 @@ fully validated.
 |---|---|
 | `0` | The comparison ran (with or without differences), and neither `--fail-on` nor `--fail-on-data-error` was triggered |
 | `1` | A project could not be loaded, an output file could not be written, or data validation could not run |
-| `2` | Invalid options, including `--ai api` when AI is disabled or not set up |
+| `2` | Invalid options, including `--ai api` when AI is disabled or not set up, or an input format that is not supported (such as a `.pbix` file) |
 | `3` | At least one finding at or above the `--fail-on` severity, or (with `--fail-on-data-error`) data that was not fully validated |
 
 ### What it compares
@@ -301,7 +304,7 @@ the features below each need their own flag, and they can be combined.
 Setup for `api`:
 
 ```bash
-uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator@v0.6.0"
+uv tool install "pbi-report-validator[ai] @ git+https://github.com/m-c-v-k/pbi-report-validator@v0.7.0"
 export ANTHROPIC_API_KEY=...
 pbi-validate diff ./old ./new --ai api
 ```
@@ -339,7 +342,7 @@ from v0.2.0:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: m-c-v-k/pbi-report-validator@v0.6.0
+- uses: m-c-v-k/pbi-report-validator@v0.7.0
   with:
     old: reports/v1        # paths relative to the workspace
     new: reports/v2
@@ -393,7 +396,7 @@ are passed on too, so `PBI_VALIDATE_AI: disabled` (for example from an
 organisation variable) blocks `ai: api`:
 
 ```yaml
-- uses: m-c-v-k/pbi-report-validator@v0.6.0
+- uses: m-c-v-k/pbi-report-validator@v0.7.0
   env:
     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   with:
@@ -417,7 +420,7 @@ The action needs a Linux runner with Docker (such as `ubuntu-latest`) and
 cannot run inside a job `container:`. Input and output paths must be
 relative to the workspace or lie inside it or `$RUNNER_TEMP`.
 
-**Versions.** Pin a full version tag such as `@v0.6.0`; it runs the
+**Versions.** Pin a full version tag such as `@v0.7.0`; it runs the
 published image of that version. Before 1.0, minor versions can change the
 output, so there is no moving `@v0` tag. Dependabot (`package-ecosystem:
 github-actions`) can keep the tag up to date. Organisations that require it
@@ -429,6 +432,9 @@ commit, which takes about a minute longer.
 - Runs locally or in your own CI; nothing is sent anywhere by default.
 - Only files inside the project folder are read: a `definition.pbir` that
   points to a semantic model outside it is rejected with an error.
+- From a `.pbit`, only the report (`Report/Layout`) and the model schema
+  (`DataModelSchema`) are read, in memory, with size limits. A template holds
+  no data values.
 - With `--data`, queries go only to the Power BI API of your own tenant.
   Query results stay in memory and are never logged or sent anywhere else.
   The output files contain only masked rows unless you pass
@@ -483,8 +489,11 @@ tests/             # Mirrors src/, plus sample reports in fixtures/ and expected
 
 ## Limitations
 
-- Only the PBIR report format; the legacy `report.json` and `.pbix` files are
-  not supported (save as `.pbip` with PBIR enabled)
+- Inputs: `.pbix` files and semantic models on their own are not supported
+  yet (save as `.pbip` or export a `.pbit`), and neither is a `.pbit` saved
+  with the PBIR report format. In the legacy report format, source locations
+  point to the encoded string, not to a position inside it. See
+  [supported inputs](docs/inputs.md)
 - Data validation (`--data`) has been run against live published models with
   the sample reports, and CI replays the recorded API responses. See
   [its own limitations](#data-validation-optional---data)

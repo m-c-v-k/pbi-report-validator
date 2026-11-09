@@ -1,0 +1,52 @@
+table Sales
+	lineageTag: 8e8e35aa-75eb-577c-b923-43547d371e77
+
+	measure 'Total Sales' = SUM(Sales[Amount])
+		formatString: #,0
+		lineageTag: 96ab5801-5021-5b5f-bf88-a132e23c377e
+
+	measure 'Margin %' =
+			DIVIDE(
+			    SUM(Sales[Amount]) - SUM(Sales[Cost]),
+			    SUM(Sales[Amount])
+			)
+		formatString: 0.0%
+		lineageTag: 32cc8276-ff77-5225-9324-c7cec80ddc15
+
+	column ProductKey
+		dataType: int64
+		lineageTag: 8336e6e0-aa51-5a37-8ea8-5be56fbf47d6
+		summarizeBy: none
+		sourceColumn: ProductKey
+
+	column DateKey
+		dataType: int64
+		lineageTag: 48780100-9144-5cac-a69c-978d164a259c
+		summarizeBy: none
+		sourceColumn: DateKey
+
+	column Region
+		dataType: string
+		lineageTag: 296bc445-c822-5059-8e75-1acf7d81c361
+		summarizeBy: none
+		sourceColumn: Region
+
+	column Amount
+		dataType: decimal
+		lineageTag: 069df6e9-c9e3-599b-84b7-9000045fb2f5
+		summarizeBy: sum
+		sourceColumn: Amount
+
+	column Cost
+		dataType: decimal
+		lineageTag: 63c13eb0-147e-57d2-b475-b8ff2c53ecb9
+		summarizeBy: sum
+		sourceColumn: Cost
+
+	partition Sales = m
+		mode: import
+		source =
+				let
+				    Source = #table(type table [ProductKey = Int64.Type, DateKey = Int64.Type, Region = text, Amount = number, Cost = number], {{1, 20250115, "North", 1200, 800}, {2, 20250115, "South", 80, 40}, {3, 20250210, "North", 45, 20}, {1, 20240310, "West", 1100, 760}})
+				in
+				    Source

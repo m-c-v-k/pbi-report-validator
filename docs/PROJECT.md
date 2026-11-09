@@ -25,6 +25,13 @@ old one — and if not, where and why?"*
    failing check on critical findings.
 3. With credentials configured: data validation of each visual against the
    published semantic models (e.g. dev vs prod workspace).
+4. In a repository with many reports: `pbi-validate diff --base <ref>` finds
+   every report and semantic model changed since a git ref and validates each,
+   with one combined result.
+5. Migrations from `.pbix`/`.pbit` to PBIP, or between file formats: compare
+   any supported input with any other.
+6. Semantic model changes without a report: compare two models on their own,
+   structurally and, with credentials, by the numbers each measure returns.
 
 ## Scope
 
@@ -52,25 +59,60 @@ old one — and if not, where and why?"*
 - Optional AI layer: suggest matches for renamed visuals/measures; write a
   plain-language explanation per finding (metadata only by default).
 
+### Next phase (M6–M10)
+
+- Input formats:
+  - Legacy report format (`report.json` with stringified config and filters),
+    in PBIP projects saved without PBIR and as `Report/Layout` in `.pbit` and
+    `.pbix`.
+  - `.pbit`: report part plus the model schema (`DataModelSchema`, TMSL
+    without data).
+  - `.pbix`: report part read locally. The model comes from, in this order:
+    an explicit model path (TMDL folder, `model.bim` or `.pbit`), the
+    published model of a thin report (Fabric `getDefinition`), or, only with
+    an explicit opt-in flag and optional extra, model metadata read from
+    `DataModel`. Otherwise the model is reported as unavailable.
+  - Published reports and models fetched read-only through the Fabric API.
+  - Any supported input can be compared with any other.
+- Semantic model validation: model-only diff, relationships, calculation
+  groups, roles, hierarchies, column properties and Power Query expressions;
+  model-level data checks of every measure.
+- CI: git-aware discovery of changed reports and models, multiple projects per
+  run with one combined comment, SARIF and JUnit output, Azure DevOps pipeline
+  template, accepted (baselined) findings, link to the HTML report in the PR
+  comment.
+- CLI: `inspect` (dump the parsed model), `doctor` (check credentials and
+  access), output filters, opening the HTML report, progress for data runs.
+
+### Known limitations
+
+- `.pbix` models last saved before the enhanced metadata format (Power BI
+  Desktop, ~2020) are not read. The run reports this as a finding that asks
+  the user to open and save the file in a current Power BI Desktop, or to
+  export a `.pbit`; the report part is still compared.
+
 ### Could have
 
-- Legacy report format (`report.json` with stringified config / `.pbix` Layout).
 - Simple web UI (upload two zipped PBIPs → report).
-- Azure DevOps pipeline template.
-- Attribute data differences to the report or the semantic model: run the new
-  report's queries against the old model as well (read-only; reports are never
-  rebound or changed).
 
 ### Out of scope
 
-- Parsing `.pbix` binaries / the compressed data model directly.
+- Data values in `.pbix` files: `DataModel` is read only with the explicit
+  opt-in, and only for model metadata. Data values are never parsed, stored or
+  output.
+- Uploading, converting or creating items in a workspace to read a file (no
+  service round-trip to convert `.pbix`).
 - Editing or auto-fixing reports, including rebinding a report to another
   semantic model. The validator only reads; a separate companion project may
   use its JSON output to propose and apply changes.
 - Pixel/screenshot comparison.
 - Supporting Power BI Report Server or paginated reports.
 
-## Milestones (≈6 weeks, part-time)
+## Milestones
+
+M0–M5 (≈6 weeks, part-time) are done and released as v0.1.0–v0.6.0, and M6
+as v0.7.0.
+M7–M10 follow in the order listed.
 
 ### M0 – Foundation (week 1)
 - Repo, `CLAUDE.md`, this document, README, license.
@@ -113,7 +155,59 @@ old one — and if not, where and why?"*
 - Optional `--attribute` for data findings: report change, model change or both.
 - Source locations (file and JSON pointer) on findings.
 - Docs: quick start, CI guide, security/data-handling page, architecture.
-- Release v1.0.0, demo GIF, CV-ready README.
+- Release v1.0.0, demo GIF, CV-ready README. (v1.0.0 moved to M10.)
+
+### M6 – Legacy report format and PBIT (v0.7.0)
+- Parser for the legacy report format (`report.json` / `Report/Layout` with
+  stringified config and filters) into the same domain models as PBIR.
+- Input detection with clear errors: PBIP with PBIR, PBIP with the legacy
+  format, `.pbit`, `.pbix`, or unsupported.
+- `.pbit` reader: zip archive read safely in `integrations/` (allowlist of
+  entries, size limits, no escaping paths), `Report/Layout` and
+  `DataModelSchema` through the existing TMSL parser.
+- Fixtures: a legacy-format copy of the sales fixtures and `.pbit` archives
+  built from synthetic content.
+- Docs: supported inputs and their limitations.
+
+### M7 – CI-native (v0.8.0)
+- Git-aware runs: `--base <ref>` finds changed reports and models between two
+  refs and validates each; the Action defaults to the pull request base.
+- Multiple projects per run with one combined result, PR comment and job
+  summary.
+- SARIF output for code scanning annotations on the changed definition files;
+  JUnit output for Azure DevOps test results.
+- Azure DevOps pipeline template.
+- Stable finding keys and accepted (baselined) findings, so `--fail-on` only
+  fails on new findings.
+- Link to the HTML report artifact in the PR comment.
+
+### M8 – PBIX and published sources (v0.9.0)
+- `.pbix` report part: `Report/Layout` or the PBIR folder inside the archive.
+- `--old-model` / `--new-model`: compare a report against an explicit model
+  (TMDL folder, `model.bim` or `.pbit`).
+- Thin reports: resolve the published model from `Connections` and fetch it
+  read-only through Fabric `getDefinition`.
+- Fetch published reports and models into a local PBIP folder (Fabric API).
+- Spike, then opt-in `--read-pbix-model` (optional extra): model metadata from
+  `DataModel`, no data values; pre-2020 metadata format becomes a finding with
+  the documented limitation.
+
+### M9 – Semantic model validation (v0.10.0)
+- Model-only diff: two `.SemanticModel` folders, `model.bim` files or `.pbit`
+  files without comparing a report.
+- Richer model domain and diff: relationships, calculation groups, roles
+  (RLS), hierarchies, column properties (data type, format string, sort by,
+  hidden), Power Query / partition expressions.
+- Model-level data checks: every measure in total and by chosen dimensions,
+  run against old and new model with `executeQueries`.
+
+### M10 – CLI ergonomics and v1.0.0
+- `inspect <path>`: print the parsed model of one input.
+- `doctor`: check credentials, workspace access and API scopes before a data
+  run.
+- Output filters by page and category, `--open` for the HTML report, progress
+  for data runs.
+- Docs review and release v1.0.0.
 
 ## Definition of done (per issue)
 

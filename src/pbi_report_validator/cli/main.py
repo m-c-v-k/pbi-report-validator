@@ -20,7 +20,11 @@ from pbi_report_validator.domain.models import (
 )
 from pbi_report_validator.integrations.anthropic_client import AiUnavailableError
 from pbi_report_validator.integrations.config import MissingCredentialsError
-from pbi_report_validator.integrations.files import OutputWriteError, ProjectLoadError
+from pbi_report_validator.integrations.errors import ProjectLoadError
+from pbi_report_validator.integrations.files import (
+    OutputWriteError,
+    UnsupportedInputError,
+)
 from pbi_report_validator.integrations.powerbi import PowerBIError
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
 from pbi_report_validator.reporting.terminal import (
@@ -48,7 +52,7 @@ from pbi_report_validator.services.validate import (
 
 PACKAGE_NAME = "pbi-report-validator"
 EXIT_ERROR = 1  # project not loadable, output not writable or data validation failed
-EXIT_USAGE = 2  # invalid combination of options
+EXIT_USAGE = 2  # invalid combination of options or an unsupported input
 EXIT_FINDINGS = 3  # a finding at or above the --fail-on severity
 
 
@@ -103,8 +107,14 @@ def _replace_unencodable_output() -> None:
 
 @app.command()
 def diff(
-    old: Annotated[Path, typer.Argument(help="Old PBIP project or .Report folder.")],
-    new: Annotated[Path, typer.Argument(help="New PBIP project or .Report folder.")],
+    old: Annotated[
+        Path,
+        typer.Argument(help="Old PBIP project, .Report folder, .pbip or .pbit file."),
+    ],
+    new: Annotated[
+        Path,
+        typer.Argument(help="New PBIP project, .Report folder, .pbip or .pbit file."),
+    ],
     json_path: Annotated[
         Path | None,
         typer.Option("--json", help="Write the full result as JSON to this file."),
@@ -320,6 +330,8 @@ def _run_or_exit(
             write_markdown(result, outputs.markdown)
         if outputs.html is not None:
             write_html(result, outputs.html, version(PACKAGE_NAME))
+    except UnsupportedInputError as exc:
+        _fail(str(exc), EXIT_USAGE)
     except (
         ProjectLoadError,
         OutputWriteError,

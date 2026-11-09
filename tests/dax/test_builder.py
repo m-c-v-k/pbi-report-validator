@@ -63,10 +63,10 @@ def dax(v: Visual, **kwargs: tuple[Filter, ...]) -> str:
     return result.dax
 
 
-def fixture_queries() -> str:
+def fixture_queries(suffix: str = "") -> str:
     blocks = []
     for name in ("sales_v1", "sales_v2"):
-        report = fixture_report(name)
+        report = fixture_report(name + suffix)
         for p in report.pages:
             for v in p.visuals:
                 result = build_query(v, p, report.filters)
@@ -84,6 +84,10 @@ def test_fixture_queries_match_snapshot() -> None:
     # uv run python -c "from tests.dax.test_builder import fixture_queries as f; \
     #   open('tests/snapshots/dax_sales.txt', 'w', newline='\n').write(f())"
     assert fixture_queries() == SNAPSHOT.read_text(encoding="utf-8")
+
+
+def test_legacy_fixture_queries_match_the_pbir_snapshot() -> None:
+    assert fixture_queries("_legacy") == SNAPSHOT.read_text(encoding="utf-8")
 
 
 def test_renamed_measure_uses_new_name_in_new_version() -> None:

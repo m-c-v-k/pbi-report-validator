@@ -61,3 +61,23 @@ A copy of `sales_v2` with two deliberate changes, so the `field` and
 `Sales[Region]` is added to `table_product_sales`, and
 `overview/card_total_sales/visual.json` is invalid JSON on purpose. Details in
 [`EXPECTED_CHANGES.md`](EXPECTED_CHANGES.md).
+
+## `sales_v1_legacy/`, `sales_v2_legacy/` – legacy report format
+
+Copies of `sales_v1` and `sales_v2` with the report in the legacy format
+(PBIP without PBIR): one `Sales.Report/report.json` instead of the
+`definition/` folder, with config and filters as JSON-encoded strings. This is
+the same structure as `Report/Layout` inside `.pbit` and `.pbix` files. The
+semantic model is copied unchanged.
+
+They are generated, not edited by hand: `tests/make_legacy_fixtures.py` builds
+them from the PBIR fixtures, and `tests/test_fixtures.py` fails when the
+committed copies differ from its output. After changing `sales_v1` or
+`sales_v2`, run:
+
+```bash
+uv run python -m tests.make_legacy_fixtures
+```
+
+The pair has the same seven changes as `sales_v1` → `sales_v2`; in the legacy
+copies every report change is in `Sales.Report/report.json`.

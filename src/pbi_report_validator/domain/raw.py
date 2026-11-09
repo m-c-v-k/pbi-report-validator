@@ -6,11 +6,23 @@ parsers turn it into the typed domain models. The models are frozen, but the
 JSON dictionaries inside them are not; parsers must not modify them.
 """
 
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 JsonObject = dict[str, Any]
+
+
+class InputFormat(StrEnum):
+    """What kind of input a path given to ``diff`` is."""
+
+    PBIP_PBIR = "pbip-pbir"
+    PBIP_LEGACY = "pbip-legacy"
+    PBIT = "pbit"
+    PBIX = "pbix"
+    SEMANTIC_MODEL = "semantic-model"
+    UNKNOWN = "unknown"
 
 
 class RawModel(BaseModel):
@@ -44,6 +56,18 @@ class RawReport(RawModel):
     pages: tuple[RawPage, ...] = ()
 
 
+class RawLegacyReport(RawModel):
+    """A report in the legacy format: one JSON document for the whole report.
+
+    ``layout`` is ``<Name>.Report/report.json`` in a PBIP project saved
+    without PBIR (``Report/Layout`` in ``.pbit`` and ``.pbix`` files). Its
+    ``config`` and ``filters`` values are still JSON-encoded strings.
+    """
+
+    path: str
+    layout: RawJsonFile
+
+
 class RawTextFile(RawModel):
     """A text file, e.g. a ``.tmdl`` file. ``error`` is set if it was unreadable."""
 
@@ -73,6 +97,6 @@ class RawProject(RawModel):
     """
 
     name: str
-    report: RawReport
+    report: RawReport | RawLegacyReport
     semantic_model: RawSemanticModel | None = None
     model_missing: str | None = None
