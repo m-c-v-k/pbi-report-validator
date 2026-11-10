@@ -18,7 +18,9 @@ from pbi_report_validator.domain.models import (
     Finding,
 )
 
-SOURCE_LOCATIONS: set[str] = {"old_location", "new_location"}
+# The model needs neither source locations (file paths in the project) nor
+# the finding key (path, category, change and scope, which it already gets).
+NOT_SENT: set[str] = {"key", "old_location", "new_location"}
 
 
 def build_payload(result: DiffResult, allow_data: bool) -> AiPayload:
@@ -39,8 +41,7 @@ def build_payload(result: DiffResult, allow_data: bool) -> AiPayload:
 
 
 def _finding(finding: Finding, allow_data: bool) -> AiFinding:
-    # Source locations are file paths in the project; the model needs none.
-    fields = finding.model_dump(exclude=SOURCE_LOCATIONS)
+    fields = finding.model_dump(exclude=NOT_SENT)
     payload = AiFinding.model_validate(fields)
     if allow_data or finding.category is not Category.DATA:
         return payload
