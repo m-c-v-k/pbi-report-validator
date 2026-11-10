@@ -1,0 +1,64 @@
+# sales_v1 -> sales_v2
+page:visual:moved:details/chart_sales_by_region
+page:filter:removed:details/table_product_sales/filters/visual_filter_category
+model:measure:renamed:model/Sales/Margin %
+model:measure:modified:model/Sales/Total Sales
+page:visual:retyped:overview/chart_sales_by_month
+page:slicer:modified:overview/slicer_year
+page:page:added:trends
+
+# sales_v2 -> sales_v1
+page:visual:moved:details/chart_sales_by_region
+page:filter:added:details/table_product_sales/filters/visual_filter_category
+model:measure:renamed:model/Sales/Gross Margin %
+model:measure:modified:model/Sales/Total Sales
+page:visual:retyped:overview/chart_sales_by_month
+page:slicer:modified:overview/slicer_year
+page:page:removed:trends
+
+# sales_v2 -> sales_v3
+page:field:added:details/table_product_sales/fields/Sales[Region]
+parse:parse_issue:error:new/Sales.Report/definition/pages/overview/visuals/card_total_sales/visual.json
+
+# sales_v1 -> sales_v3
+page:visual:moved:details/chart_sales_by_region
+page:field:added:details/table_product_sales/fields/Sales[Region]
+page:filter:removed:details/table_product_sales/filters/visual_filter_category
+model:measure:renamed:model/Sales/Margin %
+model:measure:modified:model/Sales/Total Sales
+parse:parse_issue:error:new/Sales.Report/definition/pages/overview/visuals/card_total_sales/visual.json
+page:visual:retyped:overview/chart_sales_by_month
+page:slicer:modified:overview/slicer_year
+page:page:added:trends
+
+# sales_v1_legacy -> sales_v2_legacy
+page:visual:moved:details/chart_sales_by_region
+page:filter:removed:details/table_product_sales/filters/visual_filter_category
+model:measure:renamed:model/Sales/Margin %
+model:measure:modified:model/Sales/Total Sales
+page:visual:retyped:overview/chart_sales_by_month
+page:slicer:modified:overview/slicer_year
+page:page:added:trends
+
+# v1.pbit -> v2.pbit
+page:visual:moved:details/chart_sales_by_region
+page:filter:removed:details/table_product_sales/filters/visual_filter_category
+model:measure:renamed:model/Sales/Margin %
+model:measure:modified:model/Sales/Total Sales
+page:visual:retyped:overview/chart_sales_by_month
+page:slicer:modified:overview/slicer_year
+page:page:added:trends
+
+# sales_v1 -> sales_v2 --data (recorded)
+page:visual:moved:details/chart_sales_by_region
+page:data:added:details/table_product_sales/data/row 1
+page:filter:removed:details/table_product_sales/filters/visual_filter_category
+model:measure:renamed:model/Sales/Margin %
+model:measure:modified:model/Sales/Total Sales
+page:data:modified:overview/card_margin/data/total/[Margin %]
+page:data:modified:overview/card_total_sales/data/total/[Total Sales]
+page:visual:retyped:overview/chart_sales_by_month
+page:data:added:overview/chart_sales_by_month/data/row 1
+page:data:removed:overview/chart_sales_by_month/data/row 2
+page:slicer:modified:overview/slicer_year
+page:page:added:trends

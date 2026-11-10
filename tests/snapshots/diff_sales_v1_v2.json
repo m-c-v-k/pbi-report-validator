@@ -1,9 +1,10 @@
 {
-  "schema_version": "1.10",
+  "schema_version": "1.11",
   "old_source": "tests/fixtures/sales_v1",
   "new_source": "tests/fixtures/sales_v2",
   "findings": [
     {
+      "key": "page:visual:moved:details/chart_sales_by_region",
       "category": "visual",
       "change": "moved",
       "severity": "info",
@@ -22,6 +23,7 @@
       }
     },
     {
+      "key": "page:filter:removed:details/table_product_sales/filters/visual_filter_category",
       "category": "filter",
       "change": "removed",
       "severity": "critical",
@@ -37,6 +39,7 @@
       "new_location": null
     },
     {
+      "key": "model:measure:renamed:model/Sales/Margin %",
       "category": "measure",
       "change": "renamed",
       "severity": "warning",
@@ -55,6 +58,7 @@
       }
     },
     {
+      "key": "model:measure:modified:model/Sales/Total Sales",
       "category": "measure",
       "change": "modified",
       "severity": "critical",
@@ -73,6 +77,7 @@
       }
     },
     {
+      "key": "page:visual:retyped:overview/chart_sales_by_month",
       "category": "visual",
       "change": "retyped",
       "severity": "warning",
@@ -91,6 +96,7 @@
       }
     },
     {
+      "key": "page:slicer:modified:overview/slicer_year",
       "category": "slicer",
       "change": "modified",
       "severity": "critical",
@@ -109,6 +115,7 @@
       }
     },
     {
+      "key": "page:page:added:trends",
       "category": "page",
       "change": "added",
       "severity": "info",

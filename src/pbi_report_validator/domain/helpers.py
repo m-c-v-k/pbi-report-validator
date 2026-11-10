@@ -1,8 +1,8 @@
 """Pure helpers for conventions shared by every layer.
 
 Findings and reports locate visuals by a ``page/visual`` path and model
-fields by a DAX-style ``Table[Name]`` key. Building and reading them here
-keeps the format in one place.
+fields by a DAX-style ``Table[Name]`` key, and every finding has a stable
+key. Building and reading them here keeps the format in one place.
 """
 
 import re
@@ -68,3 +68,28 @@ def unique_by[T](items: Sequence[T], key: Callable[[T], str]) -> dict[str, T]:
     """Items by key, leaving out every key that occurs more than once."""
     counts = Counter(key(item) for item in items)
     return {key(item): item for item in items if counts[key(item)] == 1}
+
+
+def finding_key(scope: str, category: str, change: str, path: str) -> str:
+    """The stable key of a finding, e.g. ``page:filter:modified:details/f``.
+
+    Built only from what identifies the finding, never from its message,
+    severity or AI text, so it stays the same across runs while the
+    finding does. The first three parts never contain ``:``.
+    """
+    return f"{scope}:{category}:{change}:{path}"
+
+
+def numbered_keys(keys: Sequence[str]) -> list[str]:
+    """``keys`` with ``#2``, ``#3``... added to the second and later repeats.
+
+    Only findings that share a key (such as several parse issues in one
+    file) are numbered, so adding or removing an unrelated finding never
+    changes another finding's key.
+    """
+    seen: Counter[str] = Counter()
+    numbered: list[str] = []
+    for key in keys:
+        seen[key] += 1
+        numbered.append(key if seen[key] == 1 else f"{key}#{seen[key]}")
+    return numbered

@@ -2,7 +2,9 @@ import pytest
 
 from pbi_report_validator.domain.helpers import (
     field_key,
+    finding_key,
     is_within,
+    numbered_keys,
     unique_by,
     visual_path,
     visual_path_of,
@@ -38,3 +40,15 @@ def test_unique_by_drops_duplicate_keys() -> None:
     items = ["apple", "avocado", "banana", "cherry", "cranberry", "date"]
 
     assert unique_by(items, lambda s: s[0]) == {"b": "banana", "d": "date"}
+
+
+def test_finding_key_joins_its_parts() -> None:
+    key = finding_key("model", "measure", "renamed", "model/Sales/Margin %")
+
+    assert key == "model:measure:renamed:model/Sales/Margin %"
+
+
+def test_only_repeated_keys_are_numbered() -> None:
+    keys = ["a", "b", "a", "c", "a"]
+
+    assert numbered_keys(keys) == ["a", "b", "a#2", "c", "a#3"]

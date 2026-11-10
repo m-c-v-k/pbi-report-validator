@@ -16,6 +16,7 @@ from pydantic import (
 from pbi_report_validator.domain.ai import AiMode
 from pbi_report_validator.domain.base import DomainModel, SourceLocation
 from pbi_report_validator.domain.data_validation import DataSummary
+from pbi_report_validator.domain.helpers import finding_key, numbered_keys
 from pbi_report_validator.domain.report import (
     Page,
     Position,
@@ -23,7 +24,7 @@ from pbi_report_validator.domain.report import (
 )
 from pbi_report_validator.domain.semantic import MeasureRename
 
-SCHEMA_VERSION: Final = "1.10"
+SCHEMA_VERSION: Final = "1.11"
 
 
 class MatchMethod(StrEnum):
@@ -142,8 +143,11 @@ class Finding(DomainModel):
     ``old_location`` and ``new_location`` say where the object is defined in
     each version; ``None`` on a side where it does not exist,
     and for findings without a single source (data, AI, parse issues).
+    ``key`` identifies the finding across runs (see ``base_key``); a
+    ``DiffResult`` sets it, numbering findings that would share one.
     """
 
+    key: str = ""
     category: Category
     change: ChangeKind
     severity: Severity
@@ -190,6 +194,11 @@ class Finding(DomainModel):
         a page can share as its name, so they belong to no page.
         """
         return self.path if self.scope == FindingScope.PAGE else None
+
+    @property
+    def base_key(self) -> str:
+        """The key from scope, category, change and path, before numbering."""
+        return finding_key(self.scope, self.category, self.change, self.path)
 
     @property
     def sort_key(self) -> tuple[str, str, str, str, str, str]:
@@ -304,11 +313,11 @@ class DiffResult(DomainModel):
     ``explanation`` on findings (``--ai-explain``); 1.8 added ``attribution``
     and ``attribution_reason`` on data summaries (``--attribute``); 1.9
     added ``old_location`` and ``new_location`` on findings; 1.10 added
-    ``scope`` on findings.
+    ``scope`` on findings; 1.11 added ``key`` on findings.
     """
 
     # Keep the Literal in sync with SCHEMA_VERSION (enforced by a test).
-    schema_version: Literal["1.10"] = SCHEMA_VERSION
+    schema_version: Literal["1.11"] = SCHEMA_VERSION
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()
@@ -324,7 +333,13 @@ class DiffResult(DomainModel):
     @field_validator("findings")
     @classmethod
     def _sort_findings(cls, findings: tuple[Finding, ...]) -> tuple[Finding, ...]:
-        return tuple(sorted(findings, key=lambda f: f.sort_key))
+        """Sort findings and set each one's ``key``."""
+        ordered = sorted(findings, key=lambda f: f.sort_key)
+        keys = numbered_keys([f.base_key for f in ordered])
+        return tuple(
+            f.model_copy(update={"key": key})
+            for f, key in zip(ordered, keys, strict=True)
+        )
 
     @field_validator("ai_suggestions")
     @classmethod

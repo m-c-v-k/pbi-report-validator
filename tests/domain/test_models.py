@@ -135,7 +135,14 @@ def test_diff_result_sorts_findings_and_sets_schema_version() -> None:
 
     result = DiffResult(old_source="old", new_source="new", findings=(later, earlier))
 
-    assert result.findings == (earlier, later)
+    assert [f.model_copy(update={"key": ""}) for f in result.findings] == [
+        earlier,
+        later,
+    ]
+    assert [f.key for f in result.findings] == [
+        "page:page:added:details",
+        "page:visual:moved:overview/chart",
+    ]
     assert result.schema_version == SCHEMA_VERSION
     assert DiffResult.model_validate_json(result.model_dump_json()) == result
 
@@ -155,7 +162,11 @@ def test_diff_result_order_is_independent_of_input_order() -> None:
     forward = DiffResult(old_source="o", new_source="n", findings=(first, second))
     backward = DiffResult(old_source="o", new_source="n", findings=(second, first))
 
-    assert forward.findings == backward.findings == (first, second)
+    assert forward.findings == backward.findings
+    assert [(f.old, f.key) for f in forward.findings] == [
+        ("a", "page:filter:modified:overview/card"),
+        ("c", "page:filter:modified:overview/card#2"),
+    ]
 
 
 def test_severity_counts_are_derived_from_findings() -> None:
