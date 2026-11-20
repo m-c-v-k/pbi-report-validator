@@ -172,6 +172,36 @@ fully validated.
 | `2` | Invalid options, including `--ai api` when AI is disabled or not set up, or an input format that is not supported (such as a `.pbix` file) |
 | `3` | At least one finding at or above the `--fail-on` severity, or (with `--fail-on-data-error`) data that was not fully validated |
 
+### Everything changed since a git ref (`changed`)
+
+In a repository with reports, `changed` compares every report that changed
+since a git ref with its version at that ref, so no second checkout is
+needed:
+
+```bash
+pbi-validate changed --base origin/develop
+pbi-validate changed --base main ./reports --fail-on critical
+```
+
+- A project is a `<Name>.Report` folder or a `.pbit` file. Committed,
+  uncommitted and untracked changes all count; the optional folder argument
+  limits the run to changes under it.
+- A changed `<Name>.SemanticModel` folder brings in every report that reads
+  it. A model no report reads is listed as skipped (comparing models on
+  their own is planned for v0.10.0).
+- Projects that exist on one side only are listed as added or removed. With
+  `--fail-on`, a removed project counts as `critical` and an added one as
+  `info`.
+- The base version is read from git into a temporary folder;
+  nothing is fetched, checked out or changed in the repository. If the ref
+  isn't available locally (a shallow clone in CI), the run exits with code 1
+  and says how to fetch it, for example with `fetch-depth: 0` in
+  `actions/checkout`.
+- Each project gets its own summary in the terminal. A project that can't be
+  loaded is listed as an error and the run exits with code 1; the others are
+  still compared. JSON, Markdown and HTML output for these runs, data
+  validation and the AI options are not available for `changed` yet.
+
 ### What it compares
 
 - Pages: added, removed, renamed, reordered

@@ -1,8 +1,16 @@
-"""Render a short plain-text summary of a ``DiffResult`` for the terminal."""
+"""Render a short plain-text summary of a ``DiffResult`` for the terminal.
+
+Runs over several projects (``pbi-validate changed``) get one block per project.
+"""
 
 from collections import Counter
 
-from pbi_report_validator.domain.models import Category, DiffResult, Severity
+from pbi_report_validator.domain.models import (
+    Category,
+    DiffResult,
+    ProjectRun,
+    Severity,
+)
 from pbi_report_validator.reporting.labels import (
     ATTRIBUTION_HEADING,
     UNMASKED_WARNING,
@@ -53,6 +61,23 @@ def format_summary(result: DiffResult, limit: int = DEFAULT_LIMIT) -> str:
     if hidden > 0:
         lines.append(f"  ... and {hidden} more (use --json for the full list)")
     return "\n".join(lines)
+
+
+def format_projects(runs: list[ProjectRun], base: str) -> str:
+    """How many projects changed since ``base``, then one block per project."""
+    if not runs:
+        return f"No reports or semantic models changed since {base}."
+    noun = "project" if len(runs) == 1 else "projects"
+    blocks = [f"{len(runs)} {noun} changed since {base}"]
+    blocks += [_format_project(run) for run in runs]
+    return "\n\n".join(blocks)
+
+
+def _format_project(run: ProjectRun) -> str:
+    heading = f"== {run.path} ({run.status.value})"
+    if run.result is not None:
+        return f"{heading}\n{format_summary(run.result)}"
+    return f"{heading}\n{run.message}" if run.message else heading
 
 
 def format_failure(count: int, threshold: Severity) -> str:
