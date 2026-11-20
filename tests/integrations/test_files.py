@@ -17,6 +17,7 @@ from pbi_report_validator.integrations.files import (
     ProjectNotFoundError,
     UnreadableFolderError,
     UnsupportedInputError,
+    bound_model_dir,
     detect_input,
     load_project,
 )
@@ -160,6 +161,29 @@ def test_model_is_none_with_malformed_dataset_reference(
     project = load_project(project_copy)
 
     assert project.semantic_model is None
+
+
+def test_bound_model_dir_is_the_model_load_project_reads(project_copy: Path) -> None:
+    model_dir = bound_model_dir(project_copy / "Sales.Report")
+
+    assert model_dir is not None
+    assert model_dir.resolve() == (project_copy / "Sales.SemanticModel").resolve()
+
+
+def test_bound_model_dir_is_none_without_a_model(project_copy: Path) -> None:
+    shutil.rmtree(project_copy / "Sales.SemanticModel")
+    (project_copy / "Sales.Report" / "definition.pbir").write_text(BY_CONNECTION)
+
+    assert bound_model_dir(project_copy / "Sales.Report") is None
+
+
+def test_bound_model_dir_with_broken_definition_pbir_raises(
+    project_copy: Path,
+) -> None:
+    (project_copy / "Sales.Report/definition.pbir").write_text("{")
+
+    with pytest.raises(InvalidJsonError):
+        bound_model_dir(project_copy / "Sales.Report")
 
 
 def overview_visual(project_copy: Path, name: str) -> Path:
