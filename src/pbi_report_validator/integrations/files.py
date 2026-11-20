@@ -137,15 +137,31 @@ def load_project(path: Path) -> RawProject:
     )
 
 
-def bound_model_dir(report_dir: Path) -> Path | None:
-    """The semantic model folder ``report_dir`` reads, as ``load_project`` finds it.
+def model_reference(report_dir: Path) -> Path | None:
+    """The semantic model folder ``report_dir`` reads when it exists.
+
+    Unlike ``load_project``, this does not need the folder to exist, so it
+    also names a model that was removed. ``None`` means the report reads no
+    local model (a published model and no ``byPath`` or ``byConnection``).
 
     Raises:
         InvalidJsonError: ``definition.pbir`` is unreadable or not valid JSON.
         ModelOutsideProjectError: It points outside the project folder.
     """
-    model_dir, _ = _find_model_dir(report_dir, report_dir.parent)
-    return model_dir
+    pbir = report_dir / "definition.pbir"
+    sibling = report_dir.with_name(
+        report_dir.name.removesuffix(REPORT_SUFFIX) + MODEL_SUFFIX
+    )
+    if not pbir.is_file():
+        return sibling.resolve()
+    dataset = _read_required_json(pbir, report_dir.parent).content.get(
+        "datasetReference"
+    )
+    target = _by_path_target(report_dir, dataset)
+    if target is not None:
+        return target
+    by_connection = isinstance(dataset, dict) and "byConnection" in dataset
+    return sibling.resolve() if by_connection else None
 
 
 def _load_pbit(path: Path) -> RawProject:
@@ -288,11 +304,8 @@ def _find_model_dir(report_dir: Path, root: Path) -> tuple[Path | None, str | No
     if pbir.is_file():
         reference = _read_required_json(pbir, report_dir.parent)
         dataset = reference.content.get("datasetReference")
-        by_path = dataset.get("byPath") if isinstance(dataset, dict) else None
-        if isinstance(by_path, dict) and isinstance(by_path.get("path"), str):
-            model_path: str = by_path["path"]
-            candidate = (report_dir / model_path).resolve()
-            _require_inside(candidate, report_dir.parent.resolve(), pbir.name)
+        candidate = _by_path_target(report_dir, dataset)
+        if candidate is not None:
             if candidate.is_dir():
                 return candidate, None
             logger.warning("%s points to missing folder %s", pbir.name, candidate)
@@ -306,6 +319,21 @@ def _find_model_dir(report_dir: Path, root: Path) -> tuple[Path | None, str | No
     if sibling.is_dir():
         return sibling, None
     return None, f"no {sibling.name} folder next to {_relative(report_dir, root)}"
+
+
+def _by_path_target(report_dir: Path, dataset: object) -> Path | None:
+    """The folder a ``byPath`` dataset reference names, existing or not.
+
+    Raises:
+        ModelOutsideProjectError: It points outside the project folder.
+    """
+    by_path = dataset.get("byPath") if isinstance(dataset, dict) else None
+    if not (isinstance(by_path, dict) and isinstance(by_path.get("path"), str)):
+        return None
+    model_path: str = by_path["path"]
+    candidate = (report_dir / model_path).resolve()
+    _require_inside(candidate, report_dir.parent.resolve(), "definition.pbir")
+    return candidate
 
 
 def _empty_model_reason(model_dir: Path, root: Path) -> str:

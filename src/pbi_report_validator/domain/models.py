@@ -9,6 +9,7 @@ live in ``report``, ``semantic``, ``data_validation``, ``diff``, ``ai`` and
 from pbi_report_validator.domain.ai import AiMode, AiSettings
 from pbi_report_validator.domain.ai_payload import AiDataSummary, AiFinding, AiPayload
 from pbi_report_validator.domain.base import DomainModel, Located, SourceLocation
+from pbi_report_validator.domain.changed import ProjectRun, ProjectStatus
 from pbi_report_validator.domain.data_validation import (
     Attribution,
     CellValue,
@@ -119,6 +120,8 @@ __all__ = [
     "PageView",
     "ParseIssue",
     "Position",
+    "ProjectRun",
+    "ProjectStatus",
     "Projection",
     "QueryResult",
     "Report",

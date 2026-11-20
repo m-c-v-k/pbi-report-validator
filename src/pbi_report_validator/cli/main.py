@@ -16,6 +16,7 @@ from pbi_report_validator.domain.models import (
     AiSettings,
     DataSettings,
     DiffResult,
+    ProjectStatus,
     Severity,
 )
 from pbi_report_validator.integrations.anthropic_client import AiUnavailableError
@@ -25,10 +26,12 @@ from pbi_report_validator.integrations.files import (
     OutputWriteError,
     UnsupportedInputError,
 )
+from pbi_report_validator.integrations.git import GitError
 from pbi_report_validator.integrations.powerbi import PowerBIError
 from pbi_report_validator.integrations.templates import TemplateNotFoundError
 from pbi_report_validator.reporting.terminal import (
     format_llm_data_warning,
+    format_projects,
     format_summary,
     format_unmasked_warning,
 )
@@ -37,6 +40,7 @@ from pbi_report_validator.services.ai import (
     ai_settings,
     llm_client,
 )
+from pbi_report_validator.services.changed import run_failures, validate_changed
 from pbi_report_validator.services.data_validation import (
     InvalidDataOptionsError,
     create_runner,
@@ -252,6 +256,51 @@ def diff(
     result = _run_or_exit(old, new, settings, ai_options, outputs)
     _print_result(result, outputs)
     _exit_on_failures(result, fail_on, fail_on_data_error)
+
+
+@app.command()
+def changed(
+    base: Annotated[
+        str,
+        typer.Option(
+            "--base",
+            help="Git ref to compare with, e.g. origin/develop. It must be "
+            "available locally; nothing is fetched.",
+        ),
+    ],
+    path: Annotated[
+        Path,
+        typer.Argument(help="Folder in the repository to look in. Default: here."),
+    ] = Path(),
+    fail_on: Annotated[
+        FailOn,
+        typer.Option(
+            "--fail-on",
+            help="Exit with code 3 when a finding in any project has at least "
+            "this severity. A removed project counts as critical, an added one "
+            "as info.",
+        ),
+    ] = FailOn.NONE,
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Show progress logging.")
+    ] = False,
+) -> None:
+    """Compare every report changed since a git ref with its version there."""
+    _configure_logging(verbose)
+    try:
+        runs = validate_changed(path, base)
+    except GitError as exc:
+        _fail(str(exc), EXIT_ERROR)
+    typer.echo(format_projects(runs, base))
+    errors = [run for run in runs if run.status is ProjectStatus.ERROR]
+    threshold = None if fail_on is FailOn.NONE else Severity(fail_on.value)
+    failures = run_failures(runs, threshold)
+    for failure in failures:
+        typer.echo(f"\nFailed: {failure}", err=True)
+    if errors:
+        raise typer.Exit(EXIT_ERROR)
+    if failures:
+        raise typer.Exit(EXIT_FINDINGS)
 
 
 class Outputs(NamedTuple):
