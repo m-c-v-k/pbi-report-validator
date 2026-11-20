@@ -18,6 +18,7 @@ from pbi_report_validator.domain.models import (
     AiMode,
     AiSettings,
     Category,
+    ChangedResult,
     ChangeKind,
     DataSettings,
     DiffResult,
@@ -155,7 +156,7 @@ def failure_reasons(
     return reasons
 
 
-def write_json(result: DiffResult, path: Path) -> None:
+def write_json(result: DiffResult | ChangedResult, path: Path) -> None:
     """Write the result as JSON to ``path``.
 
     Raises:

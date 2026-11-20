@@ -9,14 +9,20 @@ import pytest
 from typer.testing import CliRunner
 
 from pbi_report_validator.cli.main import app
-from pbi_report_validator.domain.models import DiffResult, ProjectStatus, Severity
+from pbi_report_validator.domain.models import (
+    ChangedResult,
+    DiffResult,
+    ProjectStatus,
+    Severity,
+)
 from pbi_report_validator.integrations.git import (
     NotARepositoryError,
     UnknownRefError,
 )
+from pbi_report_validator.reporting.json_out import to_json
 from pbi_report_validator.services.changed import run_failures, validate_changed
 from pbi_report_validator.services.validate import validate
-from tests.factories import FIXTURES
+from tests.factories import FIXTURES, SNAPSHOTS
 from tests.pbit import write_pbit
 
 SALES = "reports/sales"
@@ -79,13 +85,13 @@ def findings(result: DiffResult | None) -> list[tuple[str, str, str]]:
 def test_nothing_changed(repo: Path) -> None:
     (repo / "README.md").write_text("other\n", encoding="utf-8")
 
-    assert validate_changed(repo, "base") == []
+    assert validate_changed(repo, "base").projects == ()
 
 
 def test_changed_report_is_compared_with_its_base_version(repo: Path) -> None:
     put(repo, "sales_v2")
 
-    (run,) = validate_changed(repo, "base")
+    (run,) = validate_changed(repo, "base").projects
 
     assert (run.path, run.status) == (REPORT, ProjectStatus.CHANGED)
     expected = validate(FIXTURES / "sales_v1", FIXTURES / "sales_v2")
@@ -99,7 +105,7 @@ def test_committed_changes_count_too(repo: Path) -> None:
     put(repo, "sales_v2")
     commit(repo)
 
-    (run,) = validate_changed(repo, "base")
+    (run,) = validate_changed(repo, "base").projects
 
     assert run.status is ProjectStatus.CHANGED
 
@@ -108,7 +114,7 @@ def test_model_change_validates_the_report_that_reads_it(repo: Path) -> None:
     model = repo / SALES / MEASURES
     shutil.copy(FIXTURES / "sales_v2" / MEASURES, model)
 
-    (run,) = validate_changed(repo, "base")
+    (run,) = validate_changed(repo, "base").projects
 
     assert (run.path, run.status) == (REPORT, ProjectStatus.CHANGED)
     assert "measure" in {category for category, *_ in findings(run.result)}
@@ -122,7 +128,7 @@ def test_model_nobody_reads_is_skipped(repo: Path) -> None:
     git(repo, "tag", "-f", "base")
     shutil.copy(FIXTURES / "sales_v2" / MEASURES, repo / "models" / MEASURES)
 
-    (run,) = validate_changed(repo, "base")
+    (run,) = validate_changed(repo, "base").projects
 
     assert (run.path, run.status) == (
         "models/Sales.SemanticModel",
@@ -136,15 +142,15 @@ def test_added_and_removed_projects(repo: Path) -> None:
     put(repo, "sales_v1", "reports/other")
     shutil.rmtree(repo / SALES)
 
-    runs = validate_changed(repo, "base")
+    result = validate_changed(repo, "base")
 
-    assert [(r.path, r.status) for r in runs] == [
+    assert [(r.path, r.status) for r in result.projects] == [
         ("reports/other/Sales.Report", ProjectStatus.ADDED),
         (REPORT, ProjectStatus.REMOVED),
     ]
-    assert run_failures(runs, Severity.CRITICAL) == [f"{REPORT}: project removed"]
-    assert len(run_failures(runs, Severity.INFO)) == 2
-    assert run_failures(runs, None) == []
+    assert run_failures(result, Severity.CRITICAL) == [f"{REPORT}: project removed"]
+    assert len(run_failures(result, Severity.INFO)) == 2
+    assert run_failures(result, None) == []
 
 
 def test_changed_pbit_is_compared(repo: Path) -> None:
@@ -154,7 +160,7 @@ def test_changed_pbit_is_compared(repo: Path) -> None:
     git(repo, "tag", "-f", "base")
     write_pbit(FIXTURES / "sales_v2_legacy", repo / "templates/Sales.pbit")
 
-    (run,) = validate_changed(repo, "base")
+    (run,) = validate_changed(repo, "base").projects
 
     assert (run.path, run.status) == ("templates/Sales.pbit", ProjectStatus.CHANGED)
     expected = validate(FIXTURES / "sales_v1", FIXTURES / "sales_v2")
@@ -165,14 +171,14 @@ def test_only_changes_under_the_given_folder_count(repo: Path) -> None:
     put(repo, "sales_v2")
     (repo / "docs").mkdir()
 
-    assert validate_changed(repo / "docs", "base") == []
-    assert len(validate_changed(repo / "reports", "base")) == 1
+    assert validate_changed(repo / "docs", "base").projects == ()
+    assert len(validate_changed(repo / "reports", "base").projects) == 1
 
 
 def test_project_that_cannot_be_loaded_is_an_error_run(repo: Path) -> None:
     (repo / REPORT / "definition/report.json").write_text("{", encoding="utf-8")
 
-    (run,) = validate_changed(repo, "base")
+    (run,) = validate_changed(repo, "base").projects
 
     assert run.status is ProjectStatus.ERROR
     assert run.message is not None
@@ -253,7 +259,7 @@ def test_project_at_the_repository_root(tmp_path: Path) -> None:
     shutil.rmtree(root / "Sales.Report")
     shutil.copytree(FIXTURES / "sales_v2/Sales.Report", root / "Sales.Report")
 
-    (run,) = validate_changed(root, "HEAD")
+    (run,) = validate_changed(root, "HEAD").projects
 
     assert (run.path, run.status) == ("Sales.Report", ProjectStatus.CHANGED)
 
@@ -283,7 +289,7 @@ def test_model_in_another_folder_of_the_project(repo: Path) -> None:
     model = move_model(repo, "models")
     shutil.copy(FIXTURES / "sales_v2" / MEASURES, repo / SALES / "models" / MEASURES)
 
-    (run,) = validate_changed(repo, "base")
+    (run,) = validate_changed(repo, "base").projects
 
     assert (run.path, run.status) == (REPORT, ProjectStatus.CHANGED)
     assert not missing_model(run.result, "old")
@@ -296,7 +302,7 @@ def test_model_outside_the_project_is_an_error_run(repo: Path) -> None:
     pbir = {"datasetReference": {"byPath": {"path": "../../../Sales.SemanticModel"}}}
     (repo / REPORT / "definition.pbir").write_text(json.dumps(pbir), encoding="utf-8")
 
-    runs = validate_changed(repo, "base")
+    runs = validate_changed(repo, "base").projects
 
     statuses = {run.path: run.status for run in runs}
     assert statuses[REPORT] is ProjectStatus.ERROR
@@ -307,7 +313,7 @@ def test_removed_model_brings_in_the_unchanged_report_that_read_it(
 ) -> None:
     shutil.rmtree(repo / SALES / "Sales.SemanticModel")
 
-    (run,) = validate_changed(repo, "base")
+    (run,) = validate_changed(repo, "base").projects
 
     assert (run.path, run.status) == (REPORT, ProjectStatus.CHANGED)
     assert not missing_model(run.result, "old")
@@ -322,7 +328,7 @@ def test_removed_model_nobody_reads_is_not_listed(repo: Path) -> None:
     git(repo, "tag", "-f", "base")
     shutil.rmtree(repo / "models")
 
-    assert validate_changed(repo, "base") == []
+    assert validate_changed(repo, "base").projects == ()
 
 
 def test_cli_error_run_exits_with_1_even_with_fail_on(repo: Path) -> None:
@@ -336,3 +342,65 @@ def test_cli_error_run_exits_with_1_even_with_fail_on(repo: Path) -> None:
     assert result.exit_code == 1
     assert "(error)" in result.stdout
     assert "(added)" in result.stdout
+
+
+SNAPSHOT = SNAPSHOTS / "changed_two_projects.json"
+
+
+def two_project_repo(tmp_path: Path) -> Path:
+    """``reports/a`` goes sales_v1 → v2, ``reports/b`` v2 → v3, ``reports/c`` is new."""
+    root = tmp_path / "two"
+    root.mkdir()
+    git(root, "init", "-q")
+    git(root, "config", "core.autocrlf", "false")
+    put(root, "sales_v1", "reports/a")
+    put(root, "sales_v2", "reports/b")
+    commit(root, "base")
+    git(root, "tag", "base")
+    put(root, "sales_v2", "reports/a")
+    put(root, "sales_v3", "reports/b")
+    put(root, "sales_v1", "reports/c")
+    return root
+
+
+def test_cli_json_for_two_projects_matches_snapshot(tmp_path: Path) -> None:
+    # To update after an intended change, write the output of this run to
+    # tests/snapshots/changed_two_projects.json.
+    repo = two_project_repo(tmp_path)
+    first, second = tmp_path / "a.json", tmp_path / "b.json"
+
+    for target in (first, second):
+        args = ["changed", "--base", "base", str(repo), "--json", str(target)]
+        result = runner.invoke(app, args)
+        assert result.exit_code == 0, result.stderr
+        assert f"JSON written to {target.as_posix()}" in result.stdout
+
+    assert first.read_bytes() == second.read_bytes() == SNAPSHOT.read_bytes()
+
+
+def test_json_root_holds_every_project_and_totals(tmp_path: Path) -> None:
+    result = validate_changed(two_project_repo(tmp_path), "base")
+    parsed = ChangedResult.model_validate_json(to_json(result))
+
+    assert to_json(parsed) == to_json(result)
+    assert [(p.path, p.status) for p in parsed.projects] == [
+        ("reports/a/Sales.Report", ProjectStatus.CHANGED),
+        ("reports/b/Sales.Report", ProjectStatus.CHANGED),
+        ("reports/c/Sales.Report", ProjectStatus.ADDED),
+    ]
+    a, b, _ = parsed.projects
+    assert a.result is not None and b.result is not None
+    total = a.result.severity_counts.critical + b.result.severity_counts.critical
+    assert parsed.severity_counts.critical == total
+
+
+def test_cli_json_that_cannot_be_written_exits_with_1(repo: Path) -> None:
+    put(repo, "sales_v2")
+    target = repo / "missing" / "deeper" / "out.json"
+    (repo / "missing").write_text("a file, not a folder", encoding="utf-8")
+
+    result = runner.invoke(
+        app, ["changed", "--base", "base", str(repo), "--json", str(target)]
+    )
+
+    assert result.exit_code == 1

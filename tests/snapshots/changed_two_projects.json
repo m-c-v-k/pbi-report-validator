@@ -1,0 +1,549 @@
+{
+  "schema_version": "1.12",
+  "base": "base",
+  "severity_counts": {
+    "critical": 3,
+    "warning": 4,
+    "info": 2
+  },
+  "projects": [
+    {
+      "path": "reports/a/Sales.Report",
+      "status": "changed",
+      "result": {
+        "schema_version": "1.12",
+        "old_source": "base:reports/a/Sales.Report",
+        "new_source": "reports/a/Sales.Report",
+        "findings": [
+          {
+            "key": "page:visual:moved:details/chart_sales_by_region",
+            "category": "visual",
+            "change": "moved",
+            "severity": "info",
+            "path": "details/chart_sales_by_region",
+            "scope": "page",
+            "message": "clusteredBarChart 'Sales by region' (chart_sales_by_region) moved",
+            "old": "x=840, y=40, width=400, height=320",
+            "new": "x=840, y=360, width=400, height=320",
+            "old_location": {
+              "file": "Sales.Report/definition/pages/details/visuals/chart_sales_by_region/visual.json",
+              "pointer": ""
+            },
+            "new_location": {
+              "file": "Sales.Report/definition/pages/details/visuals/chart_sales_by_region/visual.json",
+              "pointer": ""
+            }
+          },
+          {
+            "key": "page:filter:removed:details/table_product_sales/filters/visual_filter_category",
+            "category": "filter",
+            "change": "removed",
+            "severity": "critical",
+            "path": "details/table_product_sales/filters/visual_filter_category",
+            "scope": "page",
+            "message": "Filter visual_filter_category removed",
+            "old": "Product[Category] in ('Bikes', 'Clothing')",
+            "new": null,
+            "old_location": {
+              "file": "Sales.Report/definition/pages/details/visuals/table_product_sales/visual.json",
+              "pointer": "/filterConfig/filters/0"
+            },
+            "new_location": null
+          },
+          {
+            "key": "model:measure:renamed:model/Sales/Margin %",
+            "category": "measure",
+            "change": "renamed",
+            "severity": "warning",
+            "path": "model/Sales/Margin %",
+            "scope": "model",
+            "message": "Measure Sales[Margin %] renamed to Sales[Gross Margin %]",
+            "old": "Margin %",
+            "new": "Gross Margin %",
+            "old_location": {
+              "file": "Sales.SemanticModel/definition/tables/Sales.tmdl",
+              "pointer": "table Sales / measure 'Margin %'"
+            },
+            "new_location": {
+              "file": "Sales.SemanticModel/definition/tables/Sales.tmdl",
+              "pointer": "table Sales / measure 'Gross Margin %'"
+            }
+          },
+          {
+            "key": "model:measure:modified:model/Sales/Total Sales",
+            "category": "measure",
+            "change": "modified",
+            "severity": "critical",
+            "path": "model/Sales/Total Sales",
+            "scope": "model",
+            "message": "Expression of measure Sales[Total Sales] changed",
+            "old": "SUM(Sales[Amount])",
+            "new": "CALCULATE(SUM(Sales[Amount]), Sales[Amount] > 0)",
+            "old_location": {
+              "file": "Sales.SemanticModel/definition/tables/Sales.tmdl",
+              "pointer": "table Sales / measure 'Total Sales'"
+            },
+            "new_location": {
+              "file": "Sales.SemanticModel/definition/tables/Sales.tmdl",
+              "pointer": "table Sales / measure 'Total Sales'"
+            }
+          },
+          {
+            "key": "page:visual:retyped:overview/chart_sales_by_month",
+            "category": "visual",
+            "change": "retyped",
+            "severity": "warning",
+            "path": "overview/chart_sales_by_month",
+            "scope": "page",
+            "message": "clusteredColumnChart 'Sales by month' (chart_sales_by_month) changed type to lineChart",
+            "old": "clusteredColumnChart",
+            "new": "lineChart",
+            "old_location": {
+              "file": "Sales.Report/definition/pages/overview/visuals/chart_sales_by_month/visual.json",
+              "pointer": ""
+            },
+            "new_location": {
+              "file": "Sales.Report/definition/pages/overview/visuals/chart_sales_by_month/visual.json",
+              "pointer": ""
+            }
+          },
+          {
+            "key": "page:slicer:modified:overview/slicer_year",
+            "category": "slicer",
+            "change": "modified",
+            "severity": "critical",
+            "path": "overview/slicer_year",
+            "scope": "page",
+            "message": "Slicer selection changed",
+            "old": "Date[Year] in (2025)",
+            "new": "Date[Year] in (2024)",
+            "old_location": {
+              "file": "Sales.Report/definition/pages/overview/visuals/slicer_year/visual.json",
+              "pointer": "/visual/objects/general/0/properties/filter"
+            },
+            "new_location": {
+              "file": "Sales.Report/definition/pages/overview/visuals/slicer_year/visual.json",
+              "pointer": "/visual/objects/general/0/properties/filter"
+            }
+          },
+          {
+            "key": "page:page:added:trends",
+            "category": "page",
+            "change": "added",
+            "severity": "info",
+            "path": "trends",
+            "scope": "page",
+            "message": "Page 'Trends' added with 1 visual",
+            "old": null,
+            "new": "Trends",
+            "old_location": null,
+            "new_location": {
+              "file": "Sales.Report/definition/pages/trends/page.json",
+              "pointer": ""
+            }
+          }
+        ],
+        "severity_counts": {
+          "critical": 3,
+          "warning": 2,
+          "info": 2
+        },
+        "pages": [
+          {
+            "name": "overview",
+            "display_name": "Overview",
+            "status": "modified",
+            "ordinal": 0,
+            "width": 1280.0,
+            "height": 720.0,
+            "visuals": [
+              {
+                "name": "card_margin",
+                "visual_type": "card",
+                "title": "Margin",
+                "status": "unchanged",
+                "old_position": {
+                  "x": 360.0,
+                  "y": 40.0,
+                  "z": 1000,
+                  "width": 280.0,
+                  "height": 140.0
+                },
+                "new_position": {
+                  "x": 360.0,
+                  "y": 40.0,
+                  "z": 1000,
+                  "width": 280.0,
+                  "height": 140.0
+                }
+              },
+              {
+                "name": "card_total_sales",
+                "visual_type": "card",
+                "title": "Total sales",
+                "status": "unchanged",
+                "old_position": {
+                  "x": 40.0,
+                  "y": 40.0,
+                  "z": 0,
+                  "width": 280.0,
+                  "height": 140.0
+                },
+                "new_position": {
+                  "x": 40.0,
+                  "y": 40.0,
+                  "z": 0,
+                  "width": 280.0,
+                  "height": 140.0
+                }
+              },
+              {
+                "name": "chart_sales_by_month",
+                "visual_type": "lineChart",
+                "title": "Sales by month",
+                "status": "modified",
+                "old_position": {
+                  "x": 40.0,
+                  "y": 220.0,
+                  "z": 3000,
+                  "width": 1200.0,
+                  "height": 460.0
+                },
+                "new_position": {
+                  "x": 40.0,
+                  "y": 220.0,
+                  "z": 3000,
+                  "width": 1200.0,
+                  "height": 460.0
+                }
+              },
+              {
+                "name": "slicer_year",
+                "visual_type": "slicer",
+                "title": "Year",
+                "status": "modified",
+                "old_position": {
+                  "x": 1000.0,
+                  "y": 40.0,
+                  "z": 2000,
+                  "width": 240.0,
+                  "height": 140.0
+                },
+                "new_position": {
+                  "x": 1000.0,
+                  "y": 40.0,
+                  "z": 2000,
+                  "width": 240.0,
+                  "height": 140.0
+                }
+              }
+            ]
+          },
+          {
+            "name": "details",
+            "display_name": "Details",
+            "status": "modified",
+            "ordinal": 1,
+            "width": 1280.0,
+            "height": 720.0,
+            "visuals": [
+              {
+                "name": "chart_sales_by_region",
+                "visual_type": "clusteredBarChart",
+                "title": "Sales by region",
+                "status": "modified",
+                "old_position": {
+                  "x": 840.0,
+                  "y": 40.0,
+                  "z": 1000,
+                  "width": 400.0,
+                  "height": 320.0
+                },
+                "new_position": {
+                  "x": 840.0,
+                  "y": 360.0,
+                  "z": 1000,
+                  "width": 400.0,
+                  "height": 320.0
+                }
+              },
+              {
+                "name": "table_product_sales",
+                "visual_type": "tableEx",
+                "title": "Sales by product",
+                "status": "modified",
+                "old_position": {
+                  "x": 40.0,
+                  "y": 40.0,
+                  "z": 0,
+                  "width": 760.0,
+                  "height": 640.0
+                },
+                "new_position": {
+                  "x": 40.0,
+                  "y": 40.0,
+                  "z": 0,
+                  "width": 760.0,
+                  "height": 640.0
+                }
+              }
+            ]
+          },
+          {
+            "name": "trends",
+            "display_name": "Trends",
+            "status": "added",
+            "ordinal": 2,
+            "width": 1280.0,
+            "height": 720.0,
+            "visuals": [
+              {
+                "name": "chart_margin_by_month",
+                "visual_type": "lineChart",
+                "title": "Margin by month",
+                "status": "added",
+                "old_position": null,
+                "new_position": {
+                  "x": 40.0,
+                  "y": 40.0,
+                  "z": 0,
+                  "width": 1200.0,
+                  "height": 640.0
+                }
+              }
+            ]
+          }
+        ],
+        "data": [],
+        "data_values_shown": false,
+        "ai_mode": "off",
+        "ai_model": null,
+        "ai_suggestions": []
+      },
+      "message": null
+    },
+    {
+      "path": "reports/b/Sales.Report",
+      "status": "changed",
+      "result": {
+        "schema_version": "1.12",
+        "old_source": "base:reports/b/Sales.Report",
+        "new_source": "reports/b/Sales.Report",
+        "findings": [
+          {
+            "key": "page:field:added:details/table_product_sales/fields/Sales[Region]",
+            "category": "field",
+            "change": "added",
+            "severity": "warning",
+            "path": "details/table_product_sales/fields/Sales[Region]",
+            "scope": "page",
+            "message": "Field Sales[Region] added",
+            "old": null,
+            "new": "Values",
+            "old_location": null,
+            "new_location": {
+              "file": "Sales.Report/definition/pages/details/visuals/table_product_sales/visual.json",
+              "pointer": "/visual/query/queryState/Values/projections/2"
+            }
+          },
+          {
+            "key": "parse:parse_issue:error:new/Sales.Report/definition/pages/overview/visuals/card_total_sales/visual.json",
+            "category": "parse_issue",
+            "change": "error",
+            "severity": "warning",
+            "path": "new/Sales.Report/definition/pages/overview/visuals/card_total_sales/visual.json",
+            "scope": "parse",
+            "message": "Could not fully parse the new version: unreadable: Expecting ',' delimiter: line 59 column 1 (char 1287)",
+            "old": null,
+            "new": null,
+            "old_location": null,
+            "new_location": null
+          }
+        ],
+        "severity_counts": {
+          "critical": 0,
+          "warning": 2,
+          "info": 0
+        },
+        "pages": [
+          {
+            "name": "overview",
+            "display_name": "Overview",
+            "status": "unchanged",
+            "ordinal": 0,
+            "width": 1280.0,
+            "height": 720.0,
+            "visuals": [
+              {
+                "name": "card_margin",
+                "visual_type": "card",
+                "title": "Margin",
+                "status": "unchanged",
+                "old_position": {
+                  "x": 360.0,
+                  "y": 40.0,
+                  "z": 1000,
+                  "width": 280.0,
+                  "height": 140.0
+                },
+                "new_position": {
+                  "x": 360.0,
+                  "y": 40.0,
+                  "z": 1000,
+                  "width": 280.0,
+                  "height": 140.0
+                }
+              },
+              {
+                "name": "card_total_sales",
+                "visual_type": "card",
+                "title": "Total sales",
+                "status": "modified",
+                "old_position": {
+                  "x": 40.0,
+                  "y": 40.0,
+                  "z": 0,
+                  "width": 280.0,
+                  "height": 140.0
+                },
+                "new_position": null
+              },
+              {
+                "name": "chart_sales_by_month",
+                "visual_type": "lineChart",
+                "title": "Sales by month",
+                "status": "unchanged",
+                "old_position": {
+                  "x": 40.0,
+                  "y": 220.0,
+                  "z": 3000,
+                  "width": 1200.0,
+                  "height": 460.0
+                },
+                "new_position": {
+                  "x": 40.0,
+                  "y": 220.0,
+                  "z": 3000,
+                  "width": 1200.0,
+                  "height": 460.0
+                }
+              },
+              {
+                "name": "slicer_year",
+                "visual_type": "slicer",
+                "title": "Year",
+                "status": "unchanged",
+                "old_position": {
+                  "x": 1000.0,
+                  "y": 40.0,
+                  "z": 2000,
+                  "width": 240.0,
+                  "height": 140.0
+                },
+                "new_position": {
+                  "x": 1000.0,
+                  "y": 40.0,
+                  "z": 2000,
+                  "width": 240.0,
+                  "height": 140.0
+                }
+              }
+            ]
+          },
+          {
+            "name": "details",
+            "display_name": "Details",
+            "status": "modified",
+            "ordinal": 1,
+            "width": 1280.0,
+            "height": 720.0,
+            "visuals": [
+              {
+                "name": "chart_sales_by_region",
+                "visual_type": "clusteredBarChart",
+                "title": "Sales by region",
+                "status": "unchanged",
+                "old_position": {
+                  "x": 840.0,
+                  "y": 360.0,
+                  "z": 1000,
+                  "width": 400.0,
+                  "height": 320.0
+                },
+                "new_position": {
+                  "x": 840.0,
+                  "y": 360.0,
+                  "z": 1000,
+                  "width": 400.0,
+                  "height": 320.0
+                }
+              },
+              {
+                "name": "table_product_sales",
+                "visual_type": "tableEx",
+                "title": "Sales by product",
+                "status": "modified",
+                "old_position": {
+                  "x": 40.0,
+                  "y": 40.0,
+                  "z": 0,
+                  "width": 760.0,
+                  "height": 640.0
+                },
+                "new_position": {
+                  "x": 40.0,
+                  "y": 40.0,
+                  "z": 0,
+                  "width": 760.0,
+                  "height": 640.0
+                }
+              }
+            ]
+          },
+          {
+            "name": "trends",
+            "display_name": "Trends",
+            "status": "unchanged",
+            "ordinal": 2,
+            "width": 1280.0,
+            "height": 720.0,
+            "visuals": [
+              {
+                "name": "chart_margin_by_month",
+                "visual_type": "lineChart",
+                "title": "Margin by month",
+                "status": "unchanged",
+                "old_position": {
+                  "x": 40.0,
+                  "y": 40.0,
+                  "z": 0,
+                  "width": 1200.0,
+                  "height": 640.0
+                },
+                "new_position": {
+                  "x": 40.0,
+                  "y": 40.0,
+                  "z": 0,
+                  "width": 1200.0,
+                  "height": 640.0
+                }
+              }
+            ]
+          }
+        ],
+        "data": [],
+        "data_values_shown": false,
+        "ai_mode": "off",
+        "ai_model": null,
+        "ai_suggestions": []
+      },
+      "message": null
+    },
+    {
+      "path": "reports/c/Sales.Report",
+      "status": "added",
+      "result": null,
+      "message": null
+    }
+  ]
+}

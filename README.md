@@ -128,7 +128,7 @@ any of:
 |---|---|
 | `--html PATH` | Self-contained HTML report: summary, page wireframes coloured by status, a drill-down per visual that shows the file (and JSON Pointer) where each finding is defined. Works offline. [Example](https://m-c-v-k.github.io/pbi-report-validator/report.html) |
 | `--markdown PATH` | Summary for a pull request comment, kept under GitHub's size limit |
-| `--json PATH` | Every finding with old and new values and where the object is defined in each version (`old_location` / `new_location`: the file in the project and a JSON Pointer, or the TMDL object for measures), plus every page and visual with its status, and counts per severity. Each finding's `scope` (`report`, `page`, `model`, `parse` or `ai`) says where its `path` starts, so a page named `report` or `model` can't be mistaken for those. Each finding's `key` (such as `page:filter:removed:details/table_product_sales/filters/visual_filter_category`, made from scope, category, change and path) stays the same across runs while the finding does; findings that would share one get `#2`, `#3`… With masked data, rows are keyed by position (`row 1`) (`schema_version` 1.11) |
+| `--json PATH` | Every finding with old and new values and where the object is defined in each version (`old_location` / `new_location`: the file in the project and a JSON Pointer, or the TMDL object for measures), plus every page and visual with its status, and counts per severity. Each finding's `scope` (`report`, `page`, `model`, `parse` or `ai`) says where its `path` starts, so a page named `report` or `model` can't be mistaken for those. Each finding's `key` (such as `page:filter:removed:details/table_product_sales/filters/visual_filter_category`, made from scope, category, change and path) stays the same across runs while the finding does; findings that would share one get `#2`, `#3`… With masked data, rows are keyed by position (`row 1`) (`schema_version` 1.12) |
 
 Running it on the sample reports in this repository gives:
 
@@ -202,8 +202,15 @@ pbi-validate changed --base main ./reports --fail-on critical
   `actions/checkout`.
 - Each project gets its own summary in the terminal. A project that can't be
   loaded is listed as an error and the run exits with code 1; the others are
-  still compared. JSON, Markdown and HTML output for these runs, data
-  validation and the AI options are not available for `changed` yet.
+  still compared.
+- `--json PATH` writes every project in one file: `base`, the
+  `severity_counts` totalled over all compared projects, and `projects`
+  ordered by path, each with its `path`, `status` (`changed`, `added`,
+  `removed`, `skipped` or `error`), a `message` and, for a compared
+  project, the same `result` that `diff --json` writes (`schema_version`
+  1.12). `diff --json` itself is unchanged.
+- Markdown and HTML output for these runs, data validation and the AI
+  options are not available for `changed` yet.
 
 ### What it compares
 

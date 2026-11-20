@@ -24,7 +24,7 @@ from pbi_report_validator.domain.report import (
 )
 from pbi_report_validator.domain.semantic import MeasureRename
 
-SCHEMA_VERSION: Final = "1.11"
+SCHEMA_VERSION: Final = "1.12"
 
 
 class MatchMethod(StrEnum):
@@ -313,11 +313,12 @@ class DiffResult(DomainModel):
     ``explanation`` on findings (``--ai-explain``); 1.8 added ``attribution``
     and ``attribution_reason`` on data summaries (``--attribute``); 1.9
     added ``old_location`` and ``new_location`` on findings; 1.10 added
-    ``scope`` on findings; 1.11 added ``key`` on findings.
+    ``scope`` on findings; 1.11 added ``key`` on findings; 1.12 added the
+    ``ChangedResult`` root of ``pbi-validate changed`` (this root is unchanged).
     """
 
     # Keep the Literal in sync with SCHEMA_VERSION (enforced by a test).
-    schema_version: Literal["1.11"] = SCHEMA_VERSION
+    schema_version: Literal["1.12"] = SCHEMA_VERSION
     old_source: str
     new_source: str
     findings: tuple[Finding, ...] = ()
