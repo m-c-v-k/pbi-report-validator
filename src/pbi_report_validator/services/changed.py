@@ -13,7 +13,7 @@ from pathlib import Path, PurePosixPath
 from pbi_report_validator.domain.changed import ProjectRun, ProjectStatus
 from pbi_report_validator.domain.models import Severity
 from pbi_report_validator.integrations.errors import ProjectLoadError
-from pbi_report_validator.integrations.files import bound_model_dir
+from pbi_report_validator.integrations.files import model_reference
 from pbi_report_validator.integrations.git import (
     changed_files,
     files_at,
@@ -54,16 +54,16 @@ def validate_changed(path: Path, base: str) -> list[ProjectRun]:
     changed = _units(f for f in changed_files(root, commit) if _inside(f, scope))
     old_units = _units(files_at(root, commit))
     new_units = _units(working_files(root))
-    # A removed model needs no run of its own: its reports show the change.
-    all_models = {u for u in changed if u.endswith(MODEL_SUFFIX)}
-    models = all_models & new_units
+    # A model has no run of its own: the reports that read it show the change.
+    models = {u for u in changed if u.endswith(MODEL_SUFFIX)}
     readers = _readers(root, models, new_units)
     projects = sorted(
-        (changed - all_models) | {r for found in readers.values() for r in found}
+        (changed - models) | {r for found in readers.values() for r in found}
     )
+    # A removed model no report reads any more went with its reports.
     runs = [
         ProjectRun(path=m, status=ProjectStatus.SKIPPED, message=MODEL_ONLY)
-        for m in sorted(models)
+        for m in sorted(models & new_units)
         if not readers[m]
     ]
     compared = [p for p in projects if p in old_units and p in new_units]
@@ -106,22 +106,24 @@ def _inside(file: str, scope: PurePosixPath) -> bool:
 
 
 def _readers(root: Path, models: set[str], reports: set[str]) -> dict[str, set[str]]:
-    """The working-tree reports that read each changed model.
+    """The working-tree reports that read each changed or removed model.
 
-    A report whose model cannot be determined (a broken ``definition.pbir``)
-    counts as a reader of every changed model, so its error is reported.
+    A report still pointing at a removed model is a reader, so its broken
+    model reference is reported. A report whose model cannot be determined
+    (a broken ``definition.pbir``) counts as a reader of every changed
+    model, so its error is reported.
     """
     found: dict[str, set[str]] = {model: set() for model in models}
     targets = {(root / m).resolve(): m for m in models}
     for report in sorted(r for r in reports if r.endswith(REPORT_SUFFIX)):
         try:
-            model_dir = bound_model_dir(root / report)
+            model_dir = model_reference(root / report)
         except ProjectLoadError as exc:
             logger.warning("Cannot tell which model %s reads: %s", report, exc)
             for readers in found.values():
                 readers.add(report)
             continue
-        model = targets.get(model_dir.resolve()) if model_dir else None
+        model = targets.get(model_dir) if model_dir else None
         if model is not None:
             found[model].add(report)
     return found
@@ -144,7 +146,9 @@ def _one_sided(project: str, added: bool) -> ProjectRun:
 def _compare(old_root: Path, new_root: Path, project: str, base: str) -> ProjectRun:
     """Compare one project; a project that cannot be loaded becomes an error run.
 
-    The sources name the ref and the project path, not the temporary folder.
+    Without data validation or the AI layer, ``validate`` raises only
+    ``ProjectLoadError``: problems inside a project are findings. The sources
+    name the ref and the project path, not the temporary folder.
     """
     try:
         result = validate(old_root / project, new_root / project)

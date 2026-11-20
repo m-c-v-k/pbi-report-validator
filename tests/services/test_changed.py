@@ -1,5 +1,6 @@
 """``pbi-validate changed``: tested against git repositories built from fixtures."""
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -255,3 +256,83 @@ def test_project_at_the_repository_root(tmp_path: Path) -> None:
     (run,) = validate_changed(root, "HEAD")
 
     assert (run.path, run.status) == ("Sales.Report", ProjectStatus.CHANGED)
+
+
+def missing_model(result: DiffResult | None, side: str) -> bool:
+    """Whether ``side`` of the comparison had no semantic model to read."""
+    return any(
+        category == "parse_issue" and path.startswith(f"{side}/")
+        for category, _, path in findings(result)
+    )
+
+
+def move_model(repo: Path, folder: str) -> str:
+    """Move the sales model to ``folder`` in the project, commit, retag ``base``."""
+    model = f"{SALES}/{folder}/Sales.SemanticModel"
+    shutil.move(repo / SALES / "Sales.SemanticModel", repo / model)
+    pbir = {
+        "datasetReference": {"byPath": {"path": f"../{folder}/Sales.SemanticModel"}}
+    }
+    (repo / REPORT / "definition.pbir").write_text(json.dumps(pbir), encoding="utf-8")
+    commit(repo)
+    git(repo, "tag", "-f", "base")
+    return model
+
+
+def test_model_in_another_folder_of_the_project(repo: Path) -> None:
+    model = move_model(repo, "models")
+    shutil.copy(FIXTURES / "sales_v2" / MEASURES, repo / SALES / "models" / MEASURES)
+
+    (run,) = validate_changed(repo, "base")
+
+    assert (run.path, run.status) == (REPORT, ProjectStatus.CHANGED)
+    assert not missing_model(run.result, "old")
+    assert "measure" in {category for category, *_ in findings(run.result)}
+    assert model.startswith(SALES)
+
+
+def test_model_outside_the_project_is_an_error_run(repo: Path) -> None:
+    shutil.move(repo / SALES / "Sales.SemanticModel", repo / "Sales.SemanticModel")
+    pbir = {"datasetReference": {"byPath": {"path": "../../../Sales.SemanticModel"}}}
+    (repo / REPORT / "definition.pbir").write_text(json.dumps(pbir), encoding="utf-8")
+
+    runs = validate_changed(repo, "base")
+
+    statuses = {run.path: run.status for run in runs}
+    assert statuses[REPORT] is ProjectStatus.ERROR
+
+
+def test_removed_model_brings_in_the_unchanged_report_that_read_it(
+    repo: Path,
+) -> None:
+    shutil.rmtree(repo / SALES / "Sales.SemanticModel")
+
+    (run,) = validate_changed(repo, "base")
+
+    assert (run.path, run.status) == (REPORT, ProjectStatus.CHANGED)
+    assert not missing_model(run.result, "old")
+    assert missing_model(run.result, "new")
+
+
+def test_removed_model_nobody_reads_is_not_listed(repo: Path) -> None:
+    shutil.copytree(
+        FIXTURES / "sales_v1/Sales.SemanticModel", repo / "models/Sales.SemanticModel"
+    )
+    commit(repo)
+    git(repo, "tag", "-f", "base")
+    shutil.rmtree(repo / "models")
+
+    assert validate_changed(repo, "base") == []
+
+
+def test_cli_error_run_exits_with_1_even_with_fail_on(repo: Path) -> None:
+    put(repo, "sales_v2", "reports/other")
+    (repo / REPORT / "definition/report.json").write_text("{", encoding="utf-8")
+
+    result = runner.invoke(
+        app, ["changed", "--base", "base", str(repo), "--fail-on", "info"]
+    )
+
+    assert result.exit_code == 1
+    assert "(error)" in result.stdout
+    assert "(added)" in result.stdout

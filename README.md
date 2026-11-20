@@ -186,9 +186,12 @@ pbi-validate changed --base main ./reports --fail-on critical
 - A project is a `<Name>.Report` folder or a `.pbit` file. Committed,
   uncommitted and untracked changes all count; the optional folder argument
   limits the run to changes under it.
-- A changed `<Name>.SemanticModel` folder brings in every report that reads
-  it. A model no report reads is listed as skipped (comparing models on
-  their own is planned for v0.10.0).
+- A changed or removed `<Name>.SemanticModel` folder brings in every report
+  that reads it. A model no report reads is listed as skipped (comparing
+  models on their own is planned for v0.10.0). The folder argument limits
+  which changes count, not which reports are compared: a model changed
+  under it also brings in its reports elsewhere, and a model changed
+  outside it does not count.
 - Projects that exist on one side only are listed as added or removed. With
   `--fail-on`, a removed project counts as `critical` and an added one as
   `info`.
