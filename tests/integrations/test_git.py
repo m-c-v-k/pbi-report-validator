@@ -6,10 +6,13 @@ from pathlib import Path
 import pytest
 
 from pbi_report_validator.integrations import git as git_module
+from pbi_report_validator.integrations.archives import ArchiveLimits
 from pbi_report_validator.integrations.git import (
     GitCommandError,
+    GitTimeoutError,
     GitUnavailableError,
     NotARepositoryError,
+    SnapshotTooLargeError,
     UnknownRefError,
     changed_files,
     files_at,
@@ -149,12 +152,89 @@ def test_snapshot_without_folders_is_empty(repo: Path) -> None:
         assert list(folder.iterdir()) == []
 
 
-def test_snapshot_of_a_missing_folder_fails(repo: Path) -> None:
+def test_snapshot_of_a_missing_folder_is_empty(repo: Path) -> None:
+    with snapshot(repo, resolve_commit(repo, "base"), ["nope"]) as folder:
+        assert list(folder.iterdir()) == []
+
+
+def test_snapshot_ignores_export_attributes(repo: Path) -> None:
+    write(repo, ".gitattributes", "a/one.txt export-ignore\nb/* export-subst\n")
+    write(repo, "b/two.txt", "$Format:%H$\n")
+    head = commit(repo)
+
+    with snapshot(repo, head, ["a", "b"]) as folder:
+        assert (folder / "a/one.txt").read_text(encoding="utf-8") == "one\n"
+        assert (folder / "b/two.txt").read_text(encoding="utf-8") == "$Format:%H$\n"
+
+
+def test_snapshot_treats_folder_names_literally(repo: Path) -> None:
+    write(repo, "[ab]/file.txt", "literal\n")
+    head = commit(repo)
+
+    # As a wildcard, "[ab]" would also match the folders "a" and "b".
+    with snapshot(repo, head, ["[ab]"]) as folder:
+        assert [p.name for p in folder.iterdir()] == ["[ab]"]
+
+
+def test_snapshot_leaves_out_symbolic_links(repo: Path) -> None:
+    blob = git(repo, "hash-object", "-w", "a/one.txt").strip()
+    git(repo, "update-index", "--add", "--cacheinfo", f"120000,{blob},a/link")
+    git(repo, "commit", "-q", "-m", "link")
+
+    with snapshot(repo, resolve_commit(repo, "HEAD"), ["a"]) as folder:
+        assert sorted(p.name for p in (folder / "a").iterdir()) == ["one.txt"]
+
+
+@pytest.mark.parametrize(
+    "limits",
+    [
+        ArchiveLimits(entry_bytes=3),
+        ArchiveLimits(total_bytes=6),
+        ArchiveLimits(entries=1),
+    ],
+)
+def test_snapshot_over_the_limits_is_refused(repo: Path, limits: ArchiveLimits) -> None:
     with (
-        pytest.raises(GitCommandError, match="git archive failed"),
-        snapshot(repo, resolve_commit(repo, "base"), ["nope"]),
+        pytest.raises(SnapshotTooLargeError),
+        snapshot(repo, resolve_commit(repo, "base"), ["a", "b"], limits),
     ):
         pass
+
+
+def test_listing_works_from_a_subfolder(repo: Path) -> None:
+    write(repo, "c/new.txt", "new\n")
+    base = resolve_commit(repo, "base")
+
+    assert changed_files(repo / "a", base) == ["c/new.txt"]
+    assert sorted(working_files(repo / "a")) == ["a/one.txt", "b/two.txt", "c/new.txt"]
+    assert files_at(repo / "a", base) == ["a/one.txt", "b/two.txt"]
+
+
+def test_path_that_is_not_utf8_is_an_error(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(git_module, "_git", lambda *args, **kwargs: b"\xff\0")
+
+    with pytest.raises(GitCommandError, match="not UTF-8"):
+        files_at(repo, "base")
+
+
+def test_repo_root_keeps_other_git_errors(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def dubious(*args: object, **kwargs: object) -> bytes:
+        raise GitCommandError("git rev-parse failed: fatal: detected dubious ownership")
+
+    monkeypatch.setattr(git_module, "_git", dubious)
+
+    with pytest.raises(GitCommandError, match="dubious ownership") as raised:
+        repo_root(repo)
+    assert not isinstance(raised.value, NotARepositoryError)
+
+
+def test_repo_root_of_a_missing_folder(tmp_path: Path) -> None:
+    with pytest.raises(NotARepositoryError, match="does not exist"):
+        repo_root(tmp_path / "missing" / "deeper")
 
 
 def test_git_not_installed(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -164,4 +244,14 @@ def test_git_not_installed(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(git_module.subprocess, "run", missing)
 
     with pytest.raises(GitUnavailableError):
+        resolve_commit(repo, "base")
+
+
+def test_git_that_hangs_times_out(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def hang(*args: object, **kwargs: object) -> None:
+        raise subprocess.TimeoutExpired("git", 1)
+
+    monkeypatch.setattr(git_module.subprocess, "run", hang)
+
+    with pytest.raises(GitTimeoutError, match="took over"):
         resolve_commit(repo, "base")
