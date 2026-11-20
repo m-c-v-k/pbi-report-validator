@@ -137,6 +137,17 @@ def load_project(path: Path) -> RawProject:
     )
 
 
+def bound_model_dir(report_dir: Path) -> Path | None:
+    """The semantic model folder ``report_dir`` reads, as ``load_project`` finds it.
+
+    Raises:
+        InvalidJsonError: ``definition.pbir`` is unreadable or not valid JSON.
+        ModelOutsideProjectError: It points outside the project folder.
+    """
+    model_dir, _ = _find_model_dir(report_dir, report_dir.parent)
+    return model_dir
+
+
 def _load_pbit(path: Path) -> RawProject:
     """The legacy-format report and, if present, the TMSL model of a ``.pbit``.
 
