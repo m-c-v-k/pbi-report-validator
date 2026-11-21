@@ -281,6 +281,12 @@ def changed(
             "as info.",
         ),
     ] = FailOn.NONE,
+    json_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--json", help="Write every project and its full result as JSON here."
+        ),
+    ] = None,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show progress logging.")
     ] = False,
@@ -288,13 +294,18 @@ def changed(
     """Compare every report changed since a git ref with its version there."""
     _configure_logging(verbose)
     try:
-        runs = validate_changed(path, base)
-    except GitError as exc:
+        result = validate_changed(path, base)
+        if json_path is not None:
+            write_json(result, json_path)
+    except (GitError, OutputWriteError) as exc:
         _fail(str(exc), EXIT_ERROR)
-    typer.echo(format_projects(runs, base))
+    typer.echo(format_projects(result))
+    if json_path is not None:
+        typer.echo(f"\nJSON written to {json_path.as_posix()}")
+    runs = result.projects
     errors = [run for run in runs if run.status is ProjectStatus.ERROR]
     threshold = None if fail_on is FailOn.NONE else Severity(fail_on.value)
-    failures = run_failures(runs, threshold)
+    failures = run_failures(result, threshold)
     for failure in failures:
         typer.echo(f"\nFailed: {failure}", err=True)
     if errors:

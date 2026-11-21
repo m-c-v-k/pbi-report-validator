@@ -7,6 +7,7 @@ from collections import Counter
 
 from pbi_report_validator.domain.models import (
     Category,
+    ChangedResult,
     DiffResult,
     ProjectRun,
     Severity,
@@ -63,8 +64,9 @@ def format_summary(result: DiffResult, limit: int = DEFAULT_LIMIT) -> str:
     return "\n".join(lines)
 
 
-def format_projects(runs: list[ProjectRun], base: str) -> str:
-    """How many projects changed since ``base``, then one block per project."""
+def format_projects(result: ChangedResult) -> str:
+    """How many projects changed since the base ref, then one block per project."""
+    runs, base = result.projects, result.base
     if not runs:
         return f"No reports or semantic models changed since {base}."
     noun = "project" if len(runs) == 1 else "projects"

@@ -10,7 +10,11 @@ import logging
 from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
-from pbi_report_validator.domain.changed import ProjectRun, ProjectStatus
+from pbi_report_validator.domain.changed import (
+    ChangedResult,
+    ProjectRun,
+    ProjectStatus,
+)
 from pbi_report_validator.domain.models import Severity
 from pbi_report_validator.integrations.errors import ProjectLoadError
 from pbi_report_validator.integrations.files import model_reference
@@ -35,7 +39,7 @@ MODEL_ONLY = (
 )
 
 
-def validate_changed(path: Path, base: str) -> list[ProjectRun]:
+def validate_changed(path: Path, base: str) -> ChangedResult:
     """Compare every project under ``path`` that changed since ``base``.
 
     Args:
@@ -70,13 +74,13 @@ def validate_changed(path: Path, base: str) -> list[ProjectRun]:
     runs += [_one_sided(p, p in new_units) for p in projects if p not in compared]
     with snapshot(root, commit, _folders(compared)) as old_root:
         runs += [_compare(old_root, root, p, base) for p in compared]
-    return sorted(runs, key=lambda run: run.path)
+    return ChangedResult(base=base, projects=tuple(runs))
 
 
-def run_failures(runs: Iterable[ProjectRun], fail_on: Severity | None) -> list[str]:
+def run_failures(result: ChangedResult, fail_on: Severity | None) -> list[str]:
     """Why the run fails under ``--fail-on``, project by project."""
     reasons = []
-    for run in runs:
+    for run in result.projects:
         if run.status is ProjectStatus.REMOVED and fail_on is not None:
             reasons.append(f"{run.path}: project removed")
         if run.status is ProjectStatus.ADDED and fail_on is Severity.INFO:

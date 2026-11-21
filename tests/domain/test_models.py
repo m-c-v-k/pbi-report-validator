@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from pbi_report_validator.domain.models import (
     SCHEMA_VERSION,
     Category,
+    ChangedResult,
     ChangeKind,
     DiffResult,
     FieldKind,
@@ -19,6 +20,8 @@ from pbi_report_validator.domain.models import (
     ParseIssue,
     Position,
     Projection,
+    ProjectRun,
+    ProjectStatus,
     Report,
     SemanticModel,
     Severity,
@@ -190,10 +193,42 @@ def test_severity_counts_are_derived_from_findings() -> None:
     assert DiffResult.model_validate_json(result.model_dump_json()) == result
 
 
-def test_schema_version_literal_matches_constant() -> None:
-    annotation = DiffResult.model_fields["schema_version"].annotation
+@pytest.mark.parametrize("root", [DiffResult, ChangedResult])
+def test_schema_version_literal_matches_constant(
+    root: type[DiffResult] | type[ChangedResult],
+) -> None:
+    annotation = root.model_fields["schema_version"].annotation
 
     assert get_args(annotation) == (SCHEMA_VERSION,)
+
+
+def test_changed_result_sorts_projects_and_totals_severities() -> None:
+    finding = Finding(
+        category=Category.FILTER,
+        change=ChangeKind.REMOVED,
+        severity=Severity.CRITICAL,
+        path="p/v/filters/f",
+        message="Filter removed",
+    )
+    compared = DiffResult(old_source="o", new_source="n", findings=(finding,))
+    runs = (
+        ProjectRun(path="b/B.Report", status=ProjectStatus.CHANGED, result=compared),
+        ProjectRun(path="a/A.Report", status=ProjectStatus.CHANGED, result=compared),
+        ProjectRun(path="c/C.Report", status=ProjectStatus.REMOVED),
+    )
+
+    result = ChangedResult(
+        base="main", projects=runs, severity_counts=SeverityCounts(info=9)
+    )
+
+    assert [run.path for run in result.projects] == [
+        "a/A.Report",
+        "b/B.Report",
+        "c/C.Report",
+    ]
+    assert result.severity_counts == SeverityCounts(critical=2)
+    assert result.schema_version == SCHEMA_VERSION
+    assert ChangedResult.model_validate_json(result.model_dump_json()) == result
 
 
 def test_page_rejects_negative_ordinal() -> None:
