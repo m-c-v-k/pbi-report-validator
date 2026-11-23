@@ -209,8 +209,13 @@ pbi-validate changed --base main ./reports --fail-on critical
   `removed`, `skipped` or `error`), a `message` and, for a compared
   project, the same `result` that `diff --json` writes (`schema_version`
   1.12). `diff --json` itself is unchanged.
-- Markdown and HTML output for these runs, data validation and the AI
-  options are not available for `changed` yet.
+- `--markdown PATH` writes one summary for a pull request comment: the
+  totals, a table of every project with its status and findings per
+  severity, then each compared project's findings in a collapsible block.
+  Each project gets a fair share of GitHub's comment size limit; projects
+  that no longer fit are counted in a note.
+- HTML output for these runs, data validation and the AI options are not
+  available for `changed` yet.
 
 ### What it compares
 

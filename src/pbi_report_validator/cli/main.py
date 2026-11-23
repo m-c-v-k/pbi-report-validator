@@ -287,6 +287,13 @@ def changed(
             "--json", help="Write every project and its full result as JSON here."
         ),
     ] = None,
+    markdown_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--markdown",
+            help="Write a Markdown summary of every project (for PR comments).",
+        ),
+    ] = None,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show progress logging.")
     ] = False,
@@ -297,11 +304,14 @@ def changed(
         result = validate_changed(path, base)
         if json_path is not None:
             write_json(result, json_path)
+        if markdown_path is not None:
+            write_markdown(result, markdown_path)
     except (GitError, OutputWriteError) as exc:
         _fail(str(exc), EXIT_ERROR)
     typer.echo(format_projects(result))
-    if json_path is not None:
-        typer.echo(f"\nJSON written to {json_path.as_posix()}")
+    for label, written in (("JSON", json_path), ("Markdown", markdown_path)):
+        if written is not None:
+            typer.echo(f"\n{label} written to {written.as_posix()}")
     runs = result.projects
     errors = [run for run in runs if run.status is ProjectStatus.ERROR]
     threshold = None if fail_on is FailOn.NONE else Severity(fail_on.value)

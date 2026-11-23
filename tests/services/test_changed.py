@@ -404,3 +404,20 @@ def test_cli_json_that_cannot_be_written_exits_with_1(repo: Path) -> None:
     )
 
     assert result.exit_code == 1
+
+
+MD_SNAPSHOT = SNAPSHOTS / "changed_two_projects.md"
+
+
+def test_cli_markdown_for_two_projects_matches_snapshot(tmp_path: Path) -> None:
+    # To update after an intended change, write the output of this run to
+    # tests/snapshots/changed_two_projects.md.
+    repo = two_project_repo(tmp_path)
+    target = tmp_path / "changed.md"
+
+    args = ["changed", "--base", "base", str(repo), "--markdown", str(target)]
+    result = runner.invoke(app, args)
+
+    assert result.exit_code == 0, result.stderr
+    assert f"Markdown written to {target.as_posix()}" in result.stdout
+    assert target.read_bytes() == MD_SNAPSHOT.read_bytes()

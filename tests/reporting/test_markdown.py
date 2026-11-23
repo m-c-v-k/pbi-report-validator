@@ -4,12 +4,20 @@ from pbi_report_validator.domain.models import (
     AiExplanation,
     AiMode,
     Category,
+    ChangedResult,
     ChangeKind,
     DiffResult,
     Finding,
+    ProjectRun,
+    ProjectStatus,
     Severity,
 )
-from pbi_report_validator.reporting.markdown import NO_MENTION, escape, to_markdown
+from pbi_report_validator.reporting.markdown import (
+    NO_MENTION,
+    changed_to_markdown,
+    escape,
+    to_markdown,
+)
 
 
 def finding(path: str, **kwargs: str | None) -> Finding:
@@ -142,3 +150,77 @@ def test_ai_notes_cannot_mention_users() -> None:
 
     assert "@octocat" not in text
     assert "AI-generated: Ask @​octocat" in text
+
+
+def changed(*runs: ProjectRun) -> ChangedResult:
+    return ChangedResult(base="origin/develop", projects=runs)
+
+
+def compared(path: str, *findings: Finding) -> ProjectRun:
+    return ProjectRun(path=path, status=ProjectStatus.CHANGED, result=result(*findings))
+
+
+def test_changed_run_without_projects() -> None:
+    text = changed_to_markdown(changed())
+
+    assert text == (
+        "## Power BI report diff: changed since `origin/develop`\n\n"
+        "No reports or semantic models changed.\n"
+    )
+
+
+def test_changed_run_has_a_table_and_one_block_per_compared_project() -> None:
+    text = changed_to_markdown(
+        changed(
+            compared("b/B.Report", finding("model/T/m")),
+            ProjectRun(path="a/A.Report", status=ProjectStatus.ADDED),
+            ProjectRun(path="c/C.Report", status=ProjectStatus.ERROR, message="bad"),
+        )
+    )
+
+    assert "3 projects · Severity: 0 critical, 0 warning, 1 info" in text
+    assert text.index("| `a/A.Report` | added |  |  |  |") < text.index(
+        "| `b/B.Report` | changed | 0 | 0 | 1 |"
+    )
+    assert "- `c/C.Report` (error): bad" in text
+    assert text.count("<details><summary><code>") == 1
+    assert "<code>b/B.Report</code> · 1 finding</summary>" in text
+    assert text.count("## Power BI report diff") == 1
+
+
+def test_changed_run_escapes_paths_and_messages() -> None:
+    text = changed_to_markdown(
+        changed(
+            compared("a|b/<X>.Report"),
+            ProjectRun(path="s", status=ProjectStatus.SKIPPED, message="@team *x*"),
+        )
+    )
+
+    assert r"| `a\|b/<X>.Report` |" in text
+    assert "<code>a|b/&lt;X&gt;.Report</code>" in text
+    assert rf"{NO_MENTION}team \*x\*" in text
+
+
+def test_changed_run_shares_the_limit_between_projects() -> None:
+    many = [finding(f"model/T/m{i:04}", old="x" * 50, new="y" * 50) for i in range(300)]
+    runs = [compared(f"p{i}/P.Report", *many) for i in range(5)]
+
+    text = changed_to_markdown(changed(*runs), limit=60_000)
+
+    assert len(text) < 60_000
+    assert text.count("<details><summary><code>") == 5
+    assert text.count("more findings not shown") == 5
+    assert "not shown in detail" not in text
+
+
+def test_changed_run_counts_projects_that_do_not_fit() -> None:
+    runs = [compared(f"p{i:02}/P.Report", finding("model/T/m")) for i in range(50)]
+
+    text = changed_to_markdown(changed(*runs), limit=8_000)
+
+    assert len(text) < 8_000
+    shown = text.count("<details><summary><code>")
+    assert 0 < shown < 50
+    assert "<code>p00/P.Report</code>" in text
+    hidden = 50 - shown
+    assert f"_{hidden} more projects not shown in detail; see the JSON" in text
