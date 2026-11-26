@@ -3,7 +3,8 @@
 # an earlier run of the same comparison posted. A comment that cannot be
 # posted (no pull request, no permission on a fork) is a warning, never a
 # failure of the step.
-# Usage: comment.sh <markdown file> <old> <new>; the token comes in as GH_TOKEN.
+# Usage: comment.sh <markdown file> <old> <new>, or <markdown file> changed
+# <path> for a git-aware run; the token comes in as GH_TOKEN.
 set -euo pipefail
 
 GITHUB_COMMENT_LIMIT=65536

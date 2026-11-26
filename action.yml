@@ -1,5 +1,5 @@
 name: Power BI report validator
-description: Compare two versions of a Power BI report (PBIP) and report what changed.
+description: Compare Power BI reports (PBIP) with their earlier versions and report what changed.
 author: m-c-v-k
 branding:
   icon: bar-chart-2
@@ -11,11 +11,17 @@ branding:
 # PBI_VALIDATE_AI=disabled on the step blocks ai: api.
 inputs:
   old:
-    description: Old PBIP project, .Report folder, .pbip or .pbit file, relative to the workspace.
-    required: true
+    description: Old PBIP project, .Report folder, .pbip or .pbit file, relative to the workspace. With new, compares exactly these two (pbi-validate diff).
+    default: ""
   new:
-    description: New PBIP project, .Report folder, .pbip or .pbit file, relative to the workspace.
-    required: true
+    description: New PBIP project, .Report folder, .pbip or .pbit file, relative to the workspace. With old, compares exactly these two (pbi-validate diff).
+    default: ""
+  base:
+    description: Without old and new, compare every report changed since this git ref (pbi-validate changed). Default on pull_request events, the pull request's base commit. Fetched if missing from a shallow checkout.
+    default: ""
+  path:
+    description: Without old and new, only count changes under this folder of the workspace.
+    default: "."
   html:
     description: Write a self-contained HTML report to this path.
     default: ""
@@ -122,13 +128,16 @@ runs:
         fi
         echo "image=$image" >> "$GITHUB_OUTPUT"
 
-    - name: Run pbi-validate diff
+    - name: Run pbi-validate
       id: run
       shell: bash
       env:
         IMAGE: ${{ steps.image.outputs.image }}
         IN_OLD: ${{ inputs.old }}
         IN_NEW: ${{ inputs.new }}
+        IN_BASE: ${{ inputs.base }}
+        IN_PATH: ${{ inputs.path }}
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         IN_HTML: ${{ inputs.html }}
         IN_JSON: ${{ inputs.json }}
         IN_MARKDOWN: ${{ inputs.markdown }}

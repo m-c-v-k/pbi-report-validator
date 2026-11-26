@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Run `pbi-validate diff` in the action's image, then publish the summary and
-# outputs. Inputs come in as IN_* environment variables (never interpolated
-# into the script), credentials and AI settings as PBI_* and
+# Run `pbi-validate diff` (old and new given) or `pbi-validate changed` (every
+# report changed since a git ref) in the action's image, then publish the
+# summary and outputs. Inputs come in as IN_* environment variables (never
+# interpolated into the script), credentials and AI settings as PBI_* and
 # ANTHROPIC_API_KEY variables from the calling step.
 set -euo pipefail
 
@@ -35,6 +36,7 @@ check_path() {
 }
 check_path old "$IN_OLD"
 check_path new "$IN_NEW"
+check_path path "$IN_PATH"
 check_path html "$IN_HTML"
 check_path json "$IN_JSON"
 check_path markdown "$IN_MARKDOWN"
@@ -78,6 +80,38 @@ if [[ -n "$ai_explain_from" && "$ai_explain" != true ]]; then
   fail_usage "Input ai-explain-from needs ai-explain: true"
 fi
 
+# old and new compare exactly two versions (diff). Without them, every report
+# changed since base is compared (changed); on a pull request, base defaults
+# to the pull request's base commit.
+if [[ -n "$IN_OLD" || -n "$IN_NEW" ]]; then
+  [[ -n "$IN_OLD" && -n "$IN_NEW" ]] \
+    || fail_usage "Inputs old and new go together: set both, or neither to compare changes since base"
+  [[ -z "$IN_BASE" ]] || fail_usage "Input base cannot be combined with old and new"
+  mode=diff
+else
+  mode=changed
+  base="${IN_BASE:-${PR_BASE_SHA:-}}"
+  [[ -n "$base" ]] \
+    || fail_usage "Set old and new, or base (it defaults to the pull request base only on pull_request events)"
+  [[ "$base" != -* ]] || fail_usage "Input base must be a git ref, not '$base'"
+  if [[ "$data" == true || "$fail_on_data_error" == true || "$ai" != off ]]; then
+    fail_usage "Inputs data, fail-on-data-error and ai need old and new; runs over changed reports do not support them yet"
+  fi
+fi
+
+# The CLI never fetches. A shallow checkout (the actions/checkout default)
+# lacks the base commit, so the action fetches that one commit, or the
+# branch behind an origin/<branch> ref; anything else is left to the CLI,
+# which explains how to make the ref available.
+ensure_base() {
+  local ref="$1" spec="$1"
+  git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "$ref^{commit}" >/dev/null && return 0
+  if [[ "$ref" == origin/* ]]; then spec="+refs/heads/${ref#origin/}:refs/remotes/$ref"; fi
+  echo "Fetching $ref, which the checkout does not contain"
+  git -C "$GITHUB_WORKSPACE" fetch --quiet --no-tags --depth=1 origin "$spec" \
+    || echo "::warning::Could not fetch $ref."
+}
+
 # A folder per step, so a second run in the same job never reads the first
 # run's results.
 work_dir="$(mktemp -d "$RUNNER_TEMP/pbi-validate.XXXXXX")"
@@ -90,7 +124,13 @@ add() {
   if [[ -n "$2" ]]; then args+=("$1" "$2"); fi
 }
 
-args=(diff "$IN_OLD" "$IN_NEW" --json "$json" --markdown "$markdown")
+if [[ "$mode" == diff ]]; then
+  args=(diff "$IN_OLD" "$IN_NEW")
+else
+  ensure_base "$base"
+  args=(changed --base "$base" "${IN_PATH:-.}")
+fi
+args+=(--json "$json" --markdown "$markdown")
 add --html "$IN_HTML"
 if [[ "$IN_FAIL_ON" != "none" ]]; then add --fail-on "$IN_FAIL_ON"; fi
 if [[ "$fail_on_data_error" == true ]]; then args+=(--fail-on-data-error); fi
@@ -105,9 +145,9 @@ if [[ "$data" == true ]]; then
     echo "::warning::show-data-values is on: the job summary, outputs and any pull request comment contain unmasked row-level data."
   fi
 fi
-# Always explicit, so the input wins over a PBI_VALIDATE_AI default; the
-# disabled kill switch still blocks api in the CLI.
-args+=(--ai "$ai")
+# Always explicit with diff, so the input wins over a PBI_VALIDATE_AI
+# default; the disabled kill switch still blocks api in the CLI.
+if [[ "$mode" == diff ]]; then args+=(--ai "$ai"); fi
 if [[ "$allow_data_to_llm" == true ]]; then
   args+=(--allow-data-to-llm)
   echo "::warning::allow-data-to-llm is on: row-level values may be sent to the Anthropic API."
@@ -138,14 +178,19 @@ fi
   echo "markdown=$markdown"
   echo "html=$IN_HTML"
   if [[ -f "$json" ]]; then
-    jq -r '"findings=\(.findings | length)",
+    # A changed run has one result per project under .projects.
+    jq -r '"findings=\(if has("projects")
+        then [.projects[].result.findings // [] | length] | add // 0
+        else .findings | length end)",
       (["critical", "warning", "info"][] as $s
         | "\($s)=\(.severity_counts[$s] // 0)")' "$json"
   fi
 } >> "$GITHUB_OUTPUT"
 
 if [[ "$comment" == true && -f "$markdown" ]]; then
-  bash "$GITHUB_ACTION_PATH/action/comment.sh" "$markdown" "$IN_OLD" "$IN_NEW" \
+  # One comment per comparison: the old/new pair, or the changed folder.
+  if [[ "$mode" == diff ]]; then key=("$IN_OLD" "$IN_NEW"); else key=(changed "${IN_PATH:-.}"); fi
+  bash "$GITHUB_ACTION_PATH/action/comment.sh" "$markdown" "${key[@]}" \
     || echo "::warning::Pull request comment failed; the diff result is unaffected."
 fi
 

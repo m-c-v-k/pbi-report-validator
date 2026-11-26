@@ -240,8 +240,103 @@ jobs:
           test "$count" -eq 1
           grep -q "## Power BI report diff" <<<"$bodies"
 
+      # Git-aware run with the defaults: on a pull request, no old/new means
+      # every report changed since the pull request's base commit. The
+      # checkout is shallow, so this also checks that the base is fetched.
+      - name: Run the action against the pull request base
+        if: github.event_name == 'pull_request'
+        id: pr-base
+        uses: ./
+
+      - name: Check the pull request base run
+        if: github.event_name == 'pull_request'
+        env:
+          JSON: ${{ steps.pr-base.outputs.json }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: jq -e --arg base "$BASE" 'has("projects") and .base == $base' "$JSON"
+
+      # Outside a pull request there is no default base.
+      - name: Run the action without inputs outside a pull request
+        if: github.event_name != 'pull_request'
+        id: no-base
+        continue-on-error: true
+        uses: ./
+
+      - name: Check the run without a base
+        if: github.event_name != 'pull_request'
+        env:
+          OUTCOME: ${{ steps.no-base.outcome }}
+        run: test "$OUTCOME" = failure
+
+      # Git-aware run on this repository's fixtures: sales_v1 becomes
+      # sales_v2 in the working tree, and uncommitted changes count.
+      - name: Change a fixture in the working tree
+        run: |
+          rm -rf tests/fixtures/sales_v1
+          cp -r tests/fixtures/sales_v2 tests/fixtures/sales_v1
+
+      - name: Run the action on changes since HEAD
+        id: changed
+        uses: ./
+        with:
+          base: HEAD
+          path: tests/fixtures
+          html: out/changed.html
+          comment: ${{ github.event_name == 'pull_request' }}
+
+      - name: Check the git-aware run
+        env:
+          FINDINGS: ${{ steps.changed.outputs.findings }}
+          CRITICAL: ${{ steps.changed.outputs.critical }}
+          JSON: ${{ steps.changed.outputs.json }}
+          HTML: ${{ steps.changed.outputs.html }}
+          MARKDOWN: ${{ steps.changed.outputs.markdown }}
+        run: |
+          echo "findings=$FINDINGS critical=$CRITICAL"
+          test "$FINDINGS" -gt 0
+          test "$CRITICAL" -gt 0
+          jq -e '[.projects[] | select(.status == "changed") | .path]
+            == ["tests/fixtures/sales_v1/Sales.Report"]' "$JSON"
+          test -s "$HTML"
+          grep -q 'changed since `HEAD`' "$MARKDOWN"
+
+      - name: Restore the fixture
+        if: always()
+        run: |
+          git checkout -- tests/fixtures/sales_v1
+          git clean -fdq tests/fixtures/sales_v1
+
+      # git-aware runs do not take the data or AI inputs yet, and old and
+      # new go together.
+      - name: Run the action with base and data
+        id: base-data
+        continue-on-error: true
+        uses: ./
+        with:
+          base: HEAD
+          data: true
+
+      - name: Run the action with only old
+        id: only-old
+        continue-on-error: true
+        uses: ./
+        with:
+          old: tests/fixtures/sales_v1
+
+      - name: Check the rejected inputs
+        env:
+          BASE_DATA: ${{ steps.base-data.outcome }}
+          BASE_DATA_JSON: ${{ steps.base-data.outputs.json }}
+          ONLY_OLD: ${{ steps.only-old.outcome }}
+        run: |
+          test "$BASE_DATA" = failure
+          test -z "$BASE_DATA_JSON"
+          test "$ONLY_OLD" = failure
+
       - name: Upload HTML report
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pbi-validate-report
-          path: out/report.html
+          path: |
+            out/report.html
+            out/changed.html
