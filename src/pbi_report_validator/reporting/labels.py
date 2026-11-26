@@ -6,6 +6,7 @@ from pbi_report_validator.domain.models import (
     AiMode,
     Attribution,
     Category,
+    ChangedResult,
     DataStatus,
     DataSummary,
     DiffResult,
@@ -59,7 +60,7 @@ UNMASKED_WARNING = (
 AI_LABEL = "AI-generated"
 
 
-def severity_overview(result: DiffResult) -> str:
+def severity_overview(result: DiffResult | ChangedResult) -> str:
     """Findings per severity, most severe first: ``1 critical, 0 warning, 2 info``."""
     counts = result.severity_counts
     return f"{counts.critical} critical, {counts.warning} warning, {counts.info} info"

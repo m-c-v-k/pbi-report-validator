@@ -38,7 +38,7 @@ from pbi_report_validator.parsers.pbir import parse_report, with_issues_by_name
 from pbi_report_validator.parsers.tmdl import parse_semantic_model
 from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
 from pbi_report_validator.reporting.json_out import to_json
-from pbi_report_validator.reporting.markdown import to_markdown
+from pbi_report_validator.reporting.markdown import changed_to_markdown, to_markdown
 from pbi_report_validator.reporting.terminal import (
     format_data_failure,
     format_failure,
@@ -175,13 +175,16 @@ def write_html(result: DiffResult, path: Path, tool_version: str) -> None:
     write_text(path, to_html(result, read_template(REPORT_TEMPLATE), tool_version))
 
 
-def write_markdown(result: DiffResult, path: Path) -> None:
+def write_markdown(result: DiffResult | ChangedResult, path: Path) -> None:
     """Write the result as a Markdown summary to ``path``.
 
     Raises:
         OutputWriteError: The file could not be written.
     """
-    write_text(path, to_markdown(result))
+    if isinstance(result, ChangedResult):
+        write_text(path, changed_to_markdown(result))
+    else:
+        write_text(path, to_markdown(result))
 
 
 def _parse(project: RawProject) -> tuple[Report, SemanticModel | None]:

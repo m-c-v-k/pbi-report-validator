@@ -4,12 +4,23 @@ Findings are grouped by category. Short old/new values are shown inline;
 long or multi-line values (such as DAX expressions) go into collapsible
 ``<details>`` blocks. The text is kept under GitHub's comment size limit
 by dropping whole findings from the end and saying how many were left out.
+
+A ``changed`` run over several projects gets one table of projects, then
+each compared project's findings in a collapsible block; projects that no
+longer fit are named in a note.
 """
 
+import html
 import re
 from collections import Counter
 
-from pbi_report_validator.domain.models import Category, DiffResult, Finding
+from pbi_report_validator.domain.models import (
+    Category,
+    ChangedResult,
+    DiffResult,
+    Finding,
+    ProjectRun,
+)
 from pbi_report_validator.reporting.labels import (
     ATTRIBUTION_HEADING,
     CATEGORY_LABELS,
@@ -26,23 +37,30 @@ GITHUB_COMMENT_LIMIT = 65_536
 SAFETY_MARGIN = 1_000
 INLINE_VALUE_LIMIT = 80
 TITLE = "## Power BI report diff"
+PROJECT_TABLE = (
+    "| Project | Status | Critical | Warning | Info |",
+    "|---|---|---:|---:|---:|",
+)
 SEE_JSON = "see the JSON output for the full list."
 NO_MENTION = "@​"
 MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]|<>#~])")
 
 
-def to_markdown(result: DiffResult, limit: int = GITHUB_COMMENT_LIMIT) -> str:
+def to_markdown(
+    result: DiffResult, limit: int = GITHUB_COMMENT_LIMIT, title: str | None = TITLE
+) -> str:
     """Render the result as GitHub-flavoured Markdown.
 
     Args:
         result: The diff result.
         limit: Maximum length in characters; findings beyond it are left
             out with a note.
+        title: The heading on top; ``None`` leaves it out.
 
     Returns:
         Markdown text ending with a newline.
     """
-    header = _header(result)
+    header = _header(result, title)
     if not result.findings:
         return f"{header}No differences found.\n"
     budget = limit - SAFETY_MARGIN - len(header)
@@ -70,14 +88,88 @@ def to_markdown(result: DiffResult, limit: int = GITHUB_COMMENT_LIMIT) -> str:
     return header + "".join(sections) + footer
 
 
-def _header(result: DiffResult) -> str:
+def changed_to_markdown(
+    result: ChangedResult, limit: int = GITHUB_COMMENT_LIMIT
+) -> str:
+    """Render a ``changed`` run: a table of projects, then each one's findings.
+
+    The table and notes take at most half of ``limit``; rows past that are
+    cut with a note. Compared projects are then detailed in path order. Each
+    gets an equal share of the space left, so one large project cannot crowd
+    out the others; space a project does not use goes to the ones after it.
+    Projects whose summary no longer fits are counted in a note at the end.
+    """
+    header = _changed_header(result, (limit - SAFETY_MARGIN) // 2)
+    compared = [(run.path, run.result) for run in result.projects if run.result]
+    budget = limit - SAFETY_MARGIN - len(header)
+    blocks: list[str] = []
+    for index, (path, project) in enumerate(compared):
+        block = _project_block(path, project, budget // (len(compared) - index))
+        if len(block) > budget:
+            break
+        blocks.append(block)
+        budget -= len(block)
+    hidden = len(compared) - len(blocks)
+    noun = "project" if hidden == 1 else "projects"
+    footer = f"\n_{hidden} more {noun} not shown in detail; {SEE_JSON}_\n"
+    return header + "".join(blocks) + (footer if hidden else "")
+
+
+def _changed_header(result: ChangedResult, cap: int) -> str:
+    """Title, totals, the project table and notes, cut to ``cap`` characters."""
+    lines = [f"{TITLE}: changed since `{_code(result.base)}`", ""]
+    if not result.projects:
+        return "\n".join([*lines, "No reports or semantic models changed."]) + "\n"
+    noun = "project" if len(result.projects) == 1 else "projects"
+    lines += [
+        f"{len(result.projects)} {noun} · Severity: {severity_overview(result)}",
+        "",
+        *PROJECT_TABLE,
+    ]
+    listed = [_project_row(run) for run in result.projects] + [""]
+    listed += [
+        f"- `{_code(run.path)}` ({run.status.value}): {_unmentionable(run.message)}"
+        for run in result.projects
+        if run.message
+    ]
+    used = sum(len(line) + 1 for line in lines)
+    kept = 0
+    while kept < len(listed) and used + len(listed[kept]) + 1 <= cap:
+        used += len(listed[kept]) + 1
+        kept += 1
+    text = "\n".join([*lines, *listed[:kept]]).rstrip("\n") + "\n"
+    cut = f"\n_The list of projects is cut short; {SEE_JSON}_\n"
+    return text + (cut if kept < len(listed) else "")
+
+
+def _project_row(run: ProjectRun) -> str:
+    path = _code(run.path).replace("|", r"\|")
+    counts = run.result.severity_counts if run.result else None
+    cells = [counts.critical, counts.warning, counts.info] if counts else ["", "", ""]
+    return f"| `{path}` | {run.status.value} | " + " | ".join(map(str, cells)) + " |"
+
+
+def _project_block(path: str, result: DiffResult, budget: int) -> str:
+    """One compared project's findings, collapsed under its path."""
+    count = len(result.findings)
+    noun = "finding" if count == 1 else "findings"
+    summary = f"<code>{html.escape(path)}</code> · {count} {noun}"
+    opening = f"\n<details><summary>{summary}</summary>\n\n"
+    closing = "\n</details>\n"
+    # ``to_markdown`` keeps its own SAFETY_MARGIN inside ``room``: it covers
+    # the "more findings not shown" note it adds after filling its budget.
+    room = budget - len(opening) - len(closing)
+    return opening + to_markdown(result, limit=room, title=None) + closing
+
+
+def _header(result: DiffResult, title: str | None) -> str:
     counts = Counter(f.category for f in result.findings)
     lines: list[str] = []
     if result.data_values_shown:
         lines += ["> [!WARNING]", f"> **Unmasked data.** {UNMASKED_WARNING}", ""]
+    if title is not None:
+        lines += [title, ""]
     lines += [
-        TITLE,
-        "",
         f"`{_code(result.old_source)}` → `{_code(result.new_source)}`"
         f" · {len(result.findings)} findings",
         "",
