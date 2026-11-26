@@ -294,6 +294,12 @@ def changed(
             help="Write a Markdown summary of every project (for PR comments).",
         ),
     ] = None,
+    html_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--html", help="Write one HTML report with an index of every project."
+        ),
+    ] = None,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show progress logging.")
     ] = False,
@@ -306,10 +312,17 @@ def changed(
             write_json(result, json_path)
         if markdown_path is not None:
             write_markdown(result, markdown_path)
-    except (GitError, OutputWriteError) as exc:
+        if html_path is not None:
+            write_html(result, html_path, version(PACKAGE_NAME))
+    except (GitError, OutputWriteError, TemplateNotFoundError) as exc:
         _fail(str(exc), EXIT_ERROR)
     typer.echo(format_projects(result))
-    for label, written in (("JSON", json_path), ("Markdown", markdown_path)):
+    written_files = (
+        ("JSON", json_path),
+        ("Markdown", markdown_path),
+        ("HTML", html_path),
+    )
+    for label, written in written_files:
         if written is not None:
             typer.echo(f"\n{label} written to {written.as_posix()}")
     runs = result.projects

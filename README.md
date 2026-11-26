@@ -214,8 +214,11 @@ pbi-validate changed --base main ./reports --fail-on critical
   severity, then each compared project's findings in a collapsible block.
   Each project gets a fair share of GitHub's comment size limit; projects
   that no longer fit are counted in a note.
-- HTML output for these runs, data validation and the AI options are not
-  available for `changed` yet.
+- `--html PATH` writes one self-contained page: an index of every project
+  with its status and findings per severity, linking to each compared
+  project's full report (summary, page wireframes, visual details and
+  findings) further down.
+- Data validation and the AI options are not available for `changed` yet.
 
 ### What it compares
 

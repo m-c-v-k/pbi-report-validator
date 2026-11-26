@@ -8,12 +8,15 @@ from pbi_report_validator.domain.models import (
     SCHEMA_VERSION,
     AiMode,
     Category,
+    ChangedResult,
     ChangeKind,
     DiffResult,
     Finding,
     ItemStatus,
     PageView,
     Position,
+    ProjectRun,
+    ProjectStatus,
     Severity,
     VisualView,
 )
@@ -23,6 +26,7 @@ from pbi_report_validator.integrations.templates import (
 )
 from pbi_report_validator.reporting.html import (
     REPORT_TEMPLATE,
+    changed_to_html,
     to_html,
     visual_key,
 )
@@ -358,3 +362,57 @@ def test_drill_down_shows_one_file_when_both_versions_agree() -> None:
     assert (
         f'<div class="source">Defined in: <code>{visual}/visual.json</code></div>'
     ) in html
+
+
+def changed_html(*runs: ProjectRun) -> str:
+    result = ChangedResult(base="origin/<main>", projects=runs)
+    return changed_to_html(result, TEMPLATE, "9.9.9")
+
+
+def two_projects() -> str:
+    v1_v2 = validate(FIXTURES / "sales_v1", FIXTURES / "sales_v2")
+    v2_v3 = validate(FIXTURES / "sales_v2", FIXTURES / "sales_v3")
+    return changed_html(
+        ProjectRun(path="b/Sales.Report", status=ProjectStatus.CHANGED, result=v2_v3),
+        ProjectRun(path="a/Sales.Report", status=ProjectStatus.CHANGED, result=v1_v2),
+        ProjectRun(path="c/<X>.Report", status=ProjectStatus.ERROR, message="bad <b>"),
+    )
+
+
+def test_changed_report_has_an_index_linking_each_compared_project() -> None:
+    html = two_projects()
+
+    index = html[html.index('id="projects"') : html.index("</table>")]
+    assert '<a href="#project-1">a/Sales.Report</a>' in index
+    assert '<a href="#project-2">b/Sales.Report</a>' in index
+    assert "c/&lt;X&gt;.Report" in index
+    assert "bad &lt;b&gt;" in index
+    assert html.count('<section class="project"') == 2
+    assert "changed since <code>origin/&lt;main&gt;</code>" in html
+
+
+def test_changed_report_ids_are_unique_and_links_stay_in_their_project() -> None:
+    html = two_projects()
+    ids = re.findall(r' id="([^"]+)"', html)
+
+    assert len(ids) == len(set(ids))
+    assert 'id="p1-page-overview"' in html
+    assert 'id="p2-page-overview"' in html
+    assert (
+        '<a href="#p1-overview/slicer_year" data-open="p1-overview/slicer_year">'
+        in html
+    )
+    targets = re.findall(r'href="#([^"]+)"', html)
+    assert set(targets) <= set(ids)
+
+
+def test_changed_report_is_deterministic() -> None:
+    assert two_projects() == two_projects()
+
+
+def test_changed_report_without_projects() -> None:
+    html = changed_html()
+
+    assert "No reports or semantic models changed." in html
+    assert 'id="projects"' not in html
+    assert f"schema {SCHEMA_VERSION}" in html
