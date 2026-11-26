@@ -384,9 +384,45 @@ pbi-validate diff ./old ./new --ai api
 
 ## GitHub Action
 
-Run the diff in any repository's workflow, with no Python setup. The
+Run the validator in any repository's workflow, with no Python setup. The
 Markdown summary appears on the job's summary page. The action is available
-from v0.2.0:
+from v0.2.0.
+
+**Every report a pull request changes** (from v0.8.0). Without `old` and
+`new`, the action runs [`changed`](#everything-changed-since-a-git-ref-changed)
+against the pull request's base commit, so a workflow needs only this:
+
+```yaml
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write  # only for comment: true
+jobs:
+  reports:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: m-c-v-k/pbi-report-validator@v0.8.0
+        with:
+          comment: true
+          html: out/report.html  # optional; also json and markdown
+      - uses: actions/upload-artifact@v4
+        with:
+          name: report-diff
+          path: out/report.html
+```
+
+- The default checkout is shallow. When the base commit is missing, the
+  action fetches that one commit (or, for a `base` such as
+  `origin/develop`, that branch) before the run; the CLI itself never
+  fetches.
+- `base` compares against another git ref instead, and is required outside
+  `pull_request` events. `path` limits the run to changes under a folder.
+- Outputs, `comment` and `fail-on` cover all projects. Data validation and
+  the AI inputs need `old` and `new` for now.
+
+**Two given versions.** With `old` and `new`, the action runs `diff` on
+exactly those two, as before:
 
 ```yaml
 - uses: actions/checkout@v4
@@ -416,8 +452,9 @@ repository.
 
 To show the summary on the pull request, set `comment: true` and give the
 job `pull-requests: write`. The action posts one comment per compared pair
-of reports and updates it on later pushes (two steps with the same `old` and
-`new` share one comment, so the last one wins); very long summaries are cut,
+of reports, or per `path` for a git-aware run, and updates it on later
+pushes (two steps with the same `old` and `new` share one comment, so the
+last one wins); very long summaries are cut,
 with a link to the run. Without write permission (for example on a pull
 request from a fork) the comment is skipped with a warning:
 
@@ -461,7 +498,8 @@ CLI options and require `ai: api`. `ai-explain-from` accepts `info`, `warning`
 or `critical`, and only applies when `ai-explain: true`.
 
 Outputs: `json`, `html` and `markdown` (paths), `findings`, and the counts
-`critical`, `warning` and `info`. All inputs are listed in
+`critical`, `warning` and `info` (totals over all projects for a git-aware
+run, whose JSON is the `changed --json` result). All inputs are listed in
 [`action.yml`](action.yml).
 
 The action needs a Linux runner with Docker (such as `ubuntu-latest`) and

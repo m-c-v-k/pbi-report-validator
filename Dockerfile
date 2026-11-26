@@ -18,6 +18,10 @@ FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb
 LABEL org.opencontainers.image.source="https://github.com/m-c-v-k/pbi-report-validator" \
       org.opencontainers.image.description="Compare two versions of a Power BI report (PBIP) and report what changed." \
       org.opencontainers.image.licenses="MIT"
+# git for `pbi-validate changed`, which reads the repository mounted at /work.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home --uid 1000 app
 COPY --from=build /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
