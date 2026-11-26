@@ -93,12 +93,13 @@ def changed_to_markdown(
 ) -> str:
     """Render a ``changed`` run: a table of projects, then each one's findings.
 
-    Compared projects are detailed in path order. Each gets an equal share of
-    the space left within ``limit``, so one large project cannot crowd out
-    the others; space a project does not use goes to the ones after it.
+    The table and notes take at most half of ``limit``; rows past that are
+    cut with a note. Compared projects are then detailed in path order. Each
+    gets an equal share of the space left, so one large project cannot crowd
+    out the others; space a project does not use goes to the ones after it.
     Projects whose summary no longer fits are counted in a note at the end.
     """
-    header = _changed_header(result)
+    header = _changed_header(result, (limit - SAFETY_MARGIN) // 2)
     compared = [(run.path, run.result) for run in result.projects if run.result]
     budget = limit - SAFETY_MARGIN - len(header)
     blocks: list[str] = []
@@ -114,7 +115,8 @@ def changed_to_markdown(
     return header + "".join(blocks) + (footer if hidden else "")
 
 
-def _changed_header(result: ChangedResult) -> str:
+def _changed_header(result: ChangedResult, cap: int) -> str:
+    """Title, totals, the project table and notes, cut to ``cap`` characters."""
     lines = [f"{TITLE}: changed since `{_code(result.base)}`", ""]
     if not result.projects:
         return "\n".join([*lines, "No reports or semantic models changed."]) + "\n"
@@ -123,15 +125,21 @@ def _changed_header(result: ChangedResult) -> str:
         f"{len(result.projects)} {noun} · Severity: {severity_overview(result)}",
         "",
         *PROJECT_TABLE,
-        *[_project_row(run) for run in result.projects],
-        "",
     ]
-    lines += [
+    listed = [_project_row(run) for run in result.projects] + [""]
+    listed += [
         f"- `{_code(run.path)}` ({run.status.value}): {_unmentionable(run.message)}"
         for run in result.projects
         if run.message
     ]
-    return "\n".join(lines).rstrip("\n") + "\n"
+    used = sum(len(line) + 1 for line in lines)
+    kept = 0
+    while kept < len(listed) and used + len(listed[kept]) + 1 <= cap:
+        used += len(listed[kept]) + 1
+        kept += 1
+    text = "\n".join([*lines, *listed[:kept]]).rstrip("\n") + "\n"
+    cut = f"\n_The list of projects is cut short; {SEE_JSON}_\n"
+    return text + (cut if kept < len(listed) else "")
 
 
 def _project_row(run: ProjectRun) -> str:
@@ -146,8 +154,12 @@ def _project_block(path: str, result: DiffResult, budget: int) -> str:
     count = len(result.findings)
     noun = "finding" if count == 1 else "findings"
     summary = f"<code>{html.escape(path)}</code> · {count} {noun}"
-    body = to_markdown(result, limit=budget, title=None)
-    return f"\n<details><summary>{summary}</summary>\n\n{body}\n</details>\n"
+    opening = f"\n<details><summary>{summary}</summary>\n\n"
+    closing = "\n</details>\n"
+    # ``to_markdown`` keeps its own SAFETY_MARGIN inside ``room``: it covers
+    # the "more findings not shown" note it adds after filling its budget.
+    room = budget - len(opening) - len(closing)
+    return opening + to_markdown(result, limit=room, title=None) + closing
 
 
 def _header(result: DiffResult, title: str | None) -> str:

@@ -224,3 +224,26 @@ def test_changed_run_counts_projects_that_do_not_fit() -> None:
     assert "<code>p00/P.Report</code>" in text
     hidden = 50 - shown
     assert f"_{hidden} more projects not shown in detail; see the JSON" in text
+
+
+def test_changed_run_with_a_tiny_limit_shows_no_details() -> None:
+    runs = [compared(f"p{i}/P.Report", finding("model/T/m")) for i in range(3)]
+
+    text = changed_to_markdown(changed(*runs), limit=1_500)
+
+    assert "<details>" not in text
+    assert "_3 more projects not shown in detail; see the JSON" in text
+
+
+def test_changed_run_cuts_a_very_long_project_list() -> None:
+    runs = [
+        ProjectRun(path=f"reports/r{i:05}/R.Report", status=ProjectStatus.ADDED)
+        for i in range(5_000)
+    ]
+
+    text = changed_to_markdown(changed(*runs))
+
+    assert len(text) < 65_536
+    assert "| `reports/r00000/R.Report` | added |" in text
+    assert "r04999" not in text
+    assert "_The list of projects is cut short; see the JSON output" in text

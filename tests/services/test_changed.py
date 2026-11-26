@@ -421,3 +421,15 @@ def test_cli_markdown_for_two_projects_matches_snapshot(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stderr
     assert f"Markdown written to {target.as_posix()}" in result.stdout
     assert target.read_bytes() == MD_SNAPSHOT.read_bytes()
+
+
+def test_cli_markdown_that_cannot_be_written_exits_with_1(repo: Path) -> None:
+    put(repo, "sales_v2")
+    (repo / "missing").write_text("a file, not a folder", encoding="utf-8")
+    target = repo / "missing" / "out.md"
+
+    result = runner.invoke(
+        app, ["changed", "--base", "base", str(repo), "--markdown", str(target)]
+    )
+
+    assert result.exit_code == 1
