@@ -23,7 +23,7 @@ body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
 h1 { font-size: 1.6rem; margin: 0 0 4px; }
-h2 { font-size: 1.15rem; margin: 32px 0 12px; }
+h2, .project h3 { font-size: 1.15rem; margin: 32px 0 12px; }
 code, .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.9em; }
 .sources { color: var(--muted); margin: 0; word-break: break-all; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
@@ -67,7 +67,7 @@ footer a { color: var(--accent); }
 .legend .ghost::before { border-style: dashed; }
 .page { margin: 0 0 28px; }
 .page-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 8px; }
-.page-head h3 { margin: 0; font-size: 1rem; }
+.page-head h3, .page-head h4 { margin: 0; font-size: 1rem; }
 .badge { font-size: 0.8rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
 .badge.status-added { color: var(--added); }
 .badge.status-removed { color: var(--removed); }
@@ -106,20 +106,41 @@ footer a { color: var(--accent); }
 td a, .detail-body a { color: var(--accent); }
 .unmasked { border: 3px solid var(--removed); border-radius: 8px; padding: 12px 16px; margin: 0 0 16px; }
 .unmasked strong { color: var(--removed); }
+.project { border-top: 2px solid var(--border); margin-top: 40px; padding-top: 8px; }
 </style>
 </head>
 <body>
 <main>
+{% macro visual_box(page, v, pos, ghost, details, p) %}
+{% if pos %}
+{% set key = page.name ~ '/' ~ v.name %}
+{% if key in details %}        <a href="#{{ p }}{{ key }}" data-open="{{ p }}{{ key }}">
+{% endif %}
+        <g class="visual status-{{ v.status.value }}{{ ' ghost' if ghost }}" data-visual="{{ v.name }}">
+          <title>{{ v.visual_type }}{{ ': ' ~ v.title if v.title }} ({{ v.name }}) &ndash; {{ status_labels[v.status.value] }}{{ ', not in this version' if ghost }}</title>
+          <rect x="{{ pos.x }}" y="{{ pos.y }}" width="{{ pos.width }}" height="{{ pos.height }}" rx="6"></rect>
+          <text x="{{ pos.x + 10 }}" y="{{ pos.y + 30 }}">{{ (status_marks[v.status.value] ~ ' ' ~ (v.title or v.visual_type)) | trim }}</text>
+          <text class="sub" x="{{ pos.x + 10 }}" y="{{ pos.y + 56 }}">{{ v.visual_type }}</text>
+        </g>
+{% if key in details %}        </a>
+{% endif %}
+{% endif %}
+{% endmacro %}
+{% macro position(pos) %}{% if pos %}x {{ pos.x | round | int }}, y {{ pos.y | round | int }}, {{ pos.width | round | int }} &times; {{ pos.height | round | int }}{% else %}&ndash;{% endif %}{% endmacro %}
+{% macro project_report(r, p, level) %}
+{% set result, details, categories, severities = r.result, r.details, r.categories, r.severities %}
+{% set data_overview, ai_overview, ai_notes, data_by_path = r.data_overview, r.ai_overview, r.ai_notes, r.data_by_path %}
+{% set visual_key = r.visual_key %}
 {% if result.data_values_shown %}
 <div class="unmasked" role="alert"><strong>Warning: unmasked data.</strong> {{ unmasked_warning }}</div>
 {% endif %}
 <header>
-  <h1>Power BI report diff</h1>
+  <h{{ level }}>{{ r.title }}</h{{ level }}>
   <p class="sources"><code>{{ result.old_source }}</code> &rarr; <code>{{ result.new_source }}</code></p>
 </header>
 
-<section aria-labelledby="summary-title">
-  <h2 id="summary-title">Summary</h2>
+<section aria-labelledby="{{ p }}summary-title">
+  <h{{ level + 1 }} id="{{ p }}summary-title">Summary</h{{ level + 1 }}>
 {% if data_overview %}
   <p class="data-overview">{{ data_overview }}</p>
 {% endif %}
@@ -141,24 +162,9 @@ td a, .detail-body a { color: var(--accent); }
 {% endif %}
 </section>
 
-{% macro visual_box(page, v, pos, ghost) %}
-{% if pos %}
-{% set key = page.name ~ '/' ~ v.name %}
-{% if key in details %}        <a href="#{{ key }}" data-open="{{ key }}">
-{% endif %}
-        <g class="visual status-{{ v.status.value }}{{ ' ghost' if ghost }}" data-visual="{{ v.name }}">
-          <title>{{ v.visual_type }}{{ ': ' ~ v.title if v.title }} ({{ v.name }}) &ndash; {{ status_labels[v.status.value] }}{{ ', not in this version' if ghost }}</title>
-          <rect x="{{ pos.x }}" y="{{ pos.y }}" width="{{ pos.width }}" height="{{ pos.height }}" rx="6"></rect>
-          <text x="{{ pos.x + 10 }}" y="{{ pos.y + 30 }}">{{ (status_marks[v.status.value] ~ ' ' ~ (v.title or v.visual_type)) | trim }}</text>
-          <text class="sub" x="{{ pos.x + 10 }}" y="{{ pos.y + 56 }}">{{ v.visual_type }}</text>
-        </g>
-{% if key in details %}        </a>
-{% endif %}
-{% endif %}
-{% endmacro %}
 {% if result.pages %}
-<section aria-labelledby="pages-title">
-  <h2 id="pages-title">Pages</h2>
+<section aria-labelledby="{{ p }}pages-title">
+  <h{{ level + 1 }} id="{{ p }}pages-title">Pages</h{{ level + 1 }}>
   <ul class="legend">
     <li class="status-added">{{ status_marks['added'] }} Added</li>
     <li class="status-removed">{{ status_marks['removed'] }} Removed</li>
@@ -167,9 +173,9 @@ td a, .detail-body a { color: var(--accent); }
     <li class="status-modified ghost">Previous position / not in this version</li>
   </ul>
 {% for page in result.pages %}
-  <figure class="page" id="page-{{ page.name }}" data-page="{{ page.name }}" data-layout="new">
+  <figure class="page" id="{{ p }}page-{{ page.name }}" data-page="{{ page.name }}" data-layout="new">
     <div class="page-head">
-      <h3>{{ page.display_name }}</h3>
+      <h{{ level + 2 }}>{{ page.display_name }}</h{{ level + 2 }}>
       <span class="badge status-{{ page.status.value }}">{{ status_labels[page.status.value] }}</span>
       <span class="mono">{{ page.name }}</span>
 {% if page.status.value == 'modified' %}
@@ -187,12 +193,12 @@ td a, .detail-body a { color: var(--accent); }
 {% if v.new_position and v.old_position and v.new_position != v.old_position %}
         <rect class="previous" x="{{ v.old_position.x }}" y="{{ v.old_position.y }}" width="{{ v.old_position.width }}" height="{{ v.old_position.height }}" rx="6"></rect>
 {% endif %}
-{{ visual_box(page, v, v.new_position or v.old_position, v.new_position is none) }}
+{{ visual_box(page, v, v.new_position or v.old_position, v.new_position is none, details, p) }}
 {% endfor %}
       </g>
       <g class="layout-old">
 {% for v in page.visuals %}
-{{ visual_box(page, v, v.old_position or v.new_position, v.old_position is none) }}
+{{ visual_box(page, v, v.old_position or v.new_position, v.old_position is none, details, p) }}
 {% endfor %}
       </g>
     </svg>
@@ -201,19 +207,18 @@ td a, .detail-body a { color: var(--accent); }
 </section>
 {% endif %}
 
-{% macro position(pos) %}{% if pos %}x {{ pos.x | round | int }}, y {{ pos.y | round | int }}, {{ pos.width | round | int }} &times; {{ pos.height | round | int }}{% else %}&ndash;{% endif %}{% endmacro %}
 {% if details %}
-<section aria-labelledby="details-title">
-  <h2 id="details-title">Visual details</h2>
+<section aria-labelledby="{{ p }}details-title">
+  <h{{ level + 1 }} id="{{ p }}details-title">Visual details</h{{ level + 1 }}>
 {% for page in result.pages %}
 {% for v in page.visuals %}
 {% set key = page.name ~ '/' ~ v.name %}
 {% if key in details %}
-  <details class="visual-detail" id="{{ key }}">
+  <details class="visual-detail" id="{{ p }}{{ key }}">
     <summary>{{ status_marks[v.status.value] }} {{ v.title or v.visual_type }} <span class="mono">{{ key }}</span> &ndash; {{ status_labels[v.status.value] }}</summary>
     <div class="detail-body">
       <dl>
-        <dt>Page</dt><dd><a href="#page-{{ page.name }}">{{ page.display_name }}</a></dd>
+        <dt>Page</dt><dd><a href="#{{ p }}page-{{ page.name }}">{{ page.display_name }}</a></dd>
         <dt>Type</dt><dd>{{ v.visual_type }}</dd>
         <dt>Position</dt><dd>{{ position(v.old_position) }} &rarr; {{ position(v.new_position) }}</dd>
 {% set data = data_by_path.get(key) %}
@@ -250,8 +255,8 @@ td a, .detail-body a { color: var(--accent); }
 {% endif %}
 
 {% if result.findings %}
-<section aria-labelledby="findings-title">
-  <h2 id="findings-title">Findings</h2>
+<section aria-labelledby="{{ p }}findings-title">
+  <h{{ level + 1 }} id="{{ p }}findings-title">Findings</h{{ level + 1 }}>
   <div class="filters" role="group" aria-label="Filter by category">
     <button type="button" data-filter="all" aria-pressed="true">All</button>
 {% for key, label, count in categories %}
@@ -259,7 +264,7 @@ td a, .detail-body a { color: var(--accent); }
 {% endfor %}
   </div>
   <div class="table-wrap">
-    <table id="findings">
+    <table id="{{ p }}findings">
       <thead><tr><th>Severity</th><th>Change</th><th>Category</th><th>Where</th><th>What</th><th>Old &rarr; new</th></tr></thead>
       <tbody>
 {% for f in result.findings %}
@@ -268,7 +273,7 @@ td a, .detail-body a { color: var(--accent); }
           <td class="change change-{{ f.change.value }}">{{ f.change.value }}</td>
           <td>{{ labels[f.category.value] }}</td>
 {% set target = visual_key(f) %}
-          <td class="mono">{% if target %}<a href="#{{ target }}" data-open="{{ target }}">{{ f.path }}</a>{% else %}{{ f.path }}{% endif %}</td>
+          <td class="mono">{% if target %}<a href="#{{ p }}{{ target }}" data-open="{{ p }}{{ target }}">{{ f.path }}</a>{% else %}{{ f.path }}{% endif %}</td>
           <td>{{ f.message }}{% set explanation = ai_explanation(f) %}{% if explanation %}<div class="ai-note">{{ explanation }}</div>{% endif %}{% set note = ai_notes.get((f.category, f.path)) %}{% if note %}<div class="ai-note">{{ note }}</div>{% endif %}</td>
           <td class="values">
 {% if f.old is not none %}            <pre class="old">{{ f.old }}</pre>
@@ -283,10 +288,53 @@ td a, .detail-body a { color: var(--accent); }
   </div>
 </section>
 {% endif %}
+{% endmacro %}
+{% if changed is none %}
+{{ project_report(single, "", 1) -}}
+{% else %}
+{% set totals = changed.severity_counts %}
+<header>
+  <h1>Power BI report diff: changed since <code>{{ changed.base }}</code></h1>
+  <p class="sources">{{ changed.projects | length }} project{{ 's' if changed.projects | length != 1 }} &middot; {{ totals.critical }} critical, {{ totals.warning }} warning, {{ totals.info }} info</p>
+</header>
+
+<section aria-labelledby="projects-title">
+  <h2 id="projects-title">Projects</h2>
+{% if changed.projects %}
+  <div class="table-wrap">
+    <table id="projects">
+      <thead><tr><th>Project</th><th>Status</th><th>Critical</th><th>Warning</th><th>Info</th><th>Note</th></tr></thead>
+      <tbody>
+{% for run in changed.projects %}
+        <tr data-status="{{ run.status.value }}">
+          <td class="mono">{% if run.result %}<a href="#project-{{ loop.index }}">{{ run.path }}</a>{% else %}{{ run.path }}{% endif %}</td>
+          <td>{{ run.status.value }}</td>
+{% if run.result %}
+          <td class="severity-critical">{{ run.result.severity_counts.critical }}</td><td class="severity-warning">{{ run.result.severity_counts.warning }}</td><td class="severity-info">{{ run.result.severity_counts.info }}</td>
+{% else %}
+          <td></td><td></td><td></td>
+{% endif %}
+          <td>{{ run.message or '' }}</td>
+        </tr>
+{% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p class="empty">No reports or semantic models changed.</p>
+{% endif %}
+</section>
+{% for project in projects %}
+
+<section class="project" id="project-{{ project.index }}">
+{{ project_report(project, "p" ~ project.index ~ "-", 2) }}
+</section>
+{% endfor %}
+{% endif %}
 
 <footer>
   Generated by <a href="https://github.com/m-c-v-k/pbi-report-validator">pbi-report-validator</a>
-  {{ tool_version }} &middot; schema {{ result.schema_version }}
+  {{ tool_version }} &middot; schema {{ schema_version }}
 </footer>
 </main>
 <script>
@@ -316,10 +364,11 @@ td a, .detail-body a { color: var(--accent); }
   });
 })();
 (function () {
-  var buttons = document.querySelectorAll("[data-filter]");
-  var rows = document.querySelectorAll("#findings tbody tr");
-  buttons.forEach(function (button) {
+  document.querySelectorAll("[data-filter]").forEach(function (button) {
     button.addEventListener("click", function () {
+      var section = button.closest("section");
+      var buttons = section.querySelectorAll("[data-filter]");
+      var rows = section.querySelectorAll("tbody tr");
       var filter = button.getAttribute("data-filter");
       buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b === button)); });
       rows.forEach(function (row) {

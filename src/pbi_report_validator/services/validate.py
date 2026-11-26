@@ -36,7 +36,11 @@ from pbi_report_validator.matching.matcher import match_reports
 from pbi_report_validator.parsers.legacy import parse_legacy_report
 from pbi_report_validator.parsers.pbir import parse_report, with_issues_by_name
 from pbi_report_validator.parsers.tmdl import parse_semantic_model
-from pbi_report_validator.reporting.html import REPORT_TEMPLATE, to_html
+from pbi_report_validator.reporting.html import (
+    REPORT_TEMPLATE,
+    changed_to_html,
+    to_html,
+)
 from pbi_report_validator.reporting.json_out import to_json
 from pbi_report_validator.reporting.markdown import changed_to_markdown, to_markdown
 from pbi_report_validator.reporting.terminal import (
@@ -165,14 +169,20 @@ def write_json(result: DiffResult | ChangedResult, path: Path) -> None:
     write_text(path, to_json(result))
 
 
-def write_html(result: DiffResult, path: Path, tool_version: str) -> None:
+def write_html(
+    result: DiffResult | ChangedResult, path: Path, tool_version: str
+) -> None:
     """Write the result as a self-contained HTML report to ``path``.
 
     Raises:
         OutputWriteError: The file could not be written.
         TemplateNotFoundError: The report template is missing.
     """
-    write_text(path, to_html(result, read_template(REPORT_TEMPLATE), tool_version))
+    template = read_template(REPORT_TEMPLATE)
+    if isinstance(result, ChangedResult):
+        write_text(path, changed_to_html(result, template, tool_version))
+    else:
+        write_text(path, to_html(result, template, tool_version))
 
 
 def write_markdown(result: DiffResult | ChangedResult, path: Path) -> None:

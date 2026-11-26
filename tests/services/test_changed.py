@@ -433,3 +433,19 @@ def test_cli_markdown_that_cannot_be_written_exits_with_1(repo: Path) -> None:
     )
 
     assert result.exit_code == 1
+
+
+def test_cli_html_for_two_projects(tmp_path: Path) -> None:
+    repo = two_project_repo(tmp_path)
+    target = tmp_path / "changed.html"
+
+    args = ["changed", "--base", "base", str(repo), "--html", str(target)]
+    result = runner.invoke(app, args)
+
+    assert result.exit_code == 0, result.stderr
+    assert f"HTML written to {target.as_posix()}" in result.stdout
+    html = target.read_text(encoding="utf-8")
+    assert '<a href="#project-1">reports/a/Sales.Report</a>' in html
+    assert '<a href="#project-2">reports/b/Sales.Report</a>' in html
+    assert "<td>added</td>" in html
+    assert html.count('<section class="project"') == 2
