@@ -416,3 +416,34 @@ def test_changed_report_without_projects() -> None:
     assert "No reports or semantic models changed." in html
     assert 'id="projects"' not in html
     assert f"schema {SCHEMA_VERSION}" in html
+
+
+def test_changed_index_links_match_sections_when_an_error_comes_first() -> None:
+    v1_v2 = validate(FIXTURES / "sales_v1", FIXTURES / "sales_v2")
+    html = changed_html(
+        ProjectRun(path="a/A.Report", status=ProjectStatus.ERROR, message="bad"),
+        ProjectRun(path="b/B.Report", status=ProjectStatus.ADDED),
+        ProjectRun(path="c/C.Report", status=ProjectStatus.CHANGED, result=v1_v2),
+    )
+
+    assert '<a href="#project-3">c/C.Report</a>' in html
+    assert re.findall(r'<section class="project" id="([^"]+)"', html) == ["project-3"]
+    section = html[html.index('id="project-3"') :]
+    assert "<h2>c/C.Report</h2>" in section
+    assert 'id="p3-page-overview"' in section
+
+
+def test_changed_report_nests_headings_under_each_project() -> None:
+    html = two_projects()
+    section = html[html.index('<section class="project"') :]
+
+    assert '<h3 id="p1-summary-title">Summary</h3>' in section
+    assert "<h4>Overview</h4>" in section
+    assert "<h2 " not in section.split("</section>", 1)[0].replace("<h2>", "", 1)
+
+
+def test_single_report_keeps_its_heading_levels() -> None:
+    html = fixture_html()
+
+    assert '<h2 id="summary-title">Summary</h2>' in html
+    assert "<h3>Overview</h3>" in html

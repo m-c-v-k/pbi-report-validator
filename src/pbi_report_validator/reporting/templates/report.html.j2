@@ -23,7 +23,7 @@ body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
 h1 { font-size: 1.6rem; margin: 0 0 4px; }
-h2 { font-size: 1.15rem; margin: 32px 0 12px; }
+h2, .project h3 { font-size: 1.15rem; margin: 32px 0 12px; }
 code, .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.9em; }
 .sources { color: var(--muted); margin: 0; word-break: break-all; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
@@ -67,7 +67,7 @@ footer a { color: var(--accent); }
 .legend .ghost::before { border-style: dashed; }
 .page { margin: 0 0 28px; }
 .page-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 8px; }
-.page-head h3 { margin: 0; font-size: 1rem; }
+.page-head h3, .page-head h4 { margin: 0; font-size: 1rem; }
 .badge { font-size: 0.8rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
 .badge.status-added { color: var(--added); }
 .badge.status-removed { color: var(--removed); }
@@ -140,7 +140,7 @@ td a, .detail-body a { color: var(--accent); }
 </header>
 
 <section aria-labelledby="{{ p }}summary-title">
-  <h2 id="{{ p }}summary-title">Summary</h2>
+  <h{{ level + 1 }} id="{{ p }}summary-title">Summary</h{{ level + 1 }}>
 {% if data_overview %}
   <p class="data-overview">{{ data_overview }}</p>
 {% endif %}
@@ -164,7 +164,7 @@ td a, .detail-body a { color: var(--accent); }
 
 {% if result.pages %}
 <section aria-labelledby="{{ p }}pages-title">
-  <h2 id="{{ p }}pages-title">Pages</h2>
+  <h{{ level + 1 }} id="{{ p }}pages-title">Pages</h{{ level + 1 }}>
   <ul class="legend">
     <li class="status-added">{{ status_marks['added'] }} Added</li>
     <li class="status-removed">{{ status_marks['removed'] }} Removed</li>
@@ -175,7 +175,7 @@ td a, .detail-body a { color: var(--accent); }
 {% for page in result.pages %}
   <figure class="page" id="{{ p }}page-{{ page.name }}" data-page="{{ page.name }}" data-layout="new">
     <div class="page-head">
-      <h3>{{ page.display_name }}</h3>
+      <h{{ level + 2 }}>{{ page.display_name }}</h{{ level + 2 }}>
       <span class="badge status-{{ page.status.value }}">{{ status_labels[page.status.value] }}</span>
       <span class="mono">{{ page.name }}</span>
 {% if page.status.value == 'modified' %}
@@ -209,7 +209,7 @@ td a, .detail-body a { color: var(--accent); }
 
 {% if details %}
 <section aria-labelledby="{{ p }}details-title">
-  <h2 id="{{ p }}details-title">Visual details</h2>
+  <h{{ level + 1 }} id="{{ p }}details-title">Visual details</h{{ level + 1 }}>
 {% for page in result.pages %}
 {% for v in page.visuals %}
 {% set key = page.name ~ '/' ~ v.name %}
@@ -256,7 +256,7 @@ td a, .detail-body a { color: var(--accent); }
 
 {% if result.findings %}
 <section aria-labelledby="{{ p }}findings-title">
-  <h2 id="{{ p }}findings-title">Findings</h2>
+  <h{{ level + 1 }} id="{{ p }}findings-title">Findings</h{{ level + 1 }}>
   <div class="filters" role="group" aria-label="Filter by category">
     <button type="button" data-filter="all" aria-pressed="true">All</button>
 {% for key, label, count in categories %}
